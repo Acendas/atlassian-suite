@@ -1,10 +1,12 @@
-.venv/
-__pycache__/
-*.pyc
-.pytest_cache/
-dist/
-build/
-*.egg-info/
+node_modules/
+# Commit the bundle (dist/server.js) so plugin installs don't need a build step.
+# Skip source maps (large) and TS-compiler output (use the esbuild bundle instead).
+dist/*.map
+dist/bitbucket/
+dist/common/
+dist/confluence/
+dist/jira/
+*.log
 .env
 .env.local
 .claude/*.local.md
