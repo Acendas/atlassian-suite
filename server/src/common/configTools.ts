@@ -9,8 +9,12 @@ import {
   reloadStoredCreds,
   maskToken,
   configFileMode,
+  mergeCreds,
+  diffCreds,
+  hasBackup,
   CONFIG_FILE_PATH,
   CONFIG_DIR_PATH,
+  CONFIG_BACKUP_PATH,
   type StoredCreds,
 } from "./credStore.js";
 import {
@@ -53,37 +57,37 @@ export function registerCredentialTools(server: FastMCP): void {
       bitbucket_api_token: z.string().optional(),
     }),
     execute: async (args: any) => {
-      const existing = loadStoredCreds();
-      const merged: StoredCreds = {
-        atlassian: { ...existing.atlassian },
-        jira: { ...existing.jira },
-        confluence: { ...existing.confluence },
-        bitbucket: { ...existing.bitbucket },
+      const before = loadStoredCreds();
+
+      // Build the patch from tool args. Empty strings are filtered by mergeCreds.
+      const patch: StoredCreds = {
+        atlassian: {
+          username: args.atlassian_username,
+          api_token: args.atlassian_api_token,
+        },
+        jira: {
+          url: args.jira_url,
+          username: args.jira_username,
+          api_token: args.jira_api_token,
+          projects_filter: args.jira_projects_filter,
+        },
+        confluence: {
+          url: args.confluence_url,
+          username: args.confluence_username,
+          api_token: args.confluence_api_token,
+          spaces_filter: args.confluence_spaces_filter,
+        },
+        bitbucket: {
+          workspace: args.bitbucket_workspace,
+          username: args.bitbucket_username,
+          api_token: args.bitbucket_api_token,
+        },
       };
 
-      const setIf = (target: any, key: string, value: unknown): void => {
-        if (value !== undefined && value !== null && value !== "") target[key] = value;
-      };
+      const after = mergeCreds(before, patch);
+      const { added, updated, preserved } = diffCreds(before, after);
 
-      setIf(merged.atlassian, "username", args.atlassian_username);
-      setIf(merged.atlassian, "api_token", args.atlassian_api_token);
-
-      setIf(merged.jira, "url", args.jira_url);
-      setIf(merged.jira, "username", args.jira_username);
-      setIf(merged.jira, "api_token", args.jira_api_token);
-      if (args.jira_projects_filter) merged.jira!.projects_filter = args.jira_projects_filter;
-
-      setIf(merged.confluence, "url", args.confluence_url);
-      setIf(merged.confluence, "username", args.confluence_username);
-      setIf(merged.confluence, "api_token", args.confluence_api_token);
-      if (args.confluence_spaces_filter)
-        merged.confluence!.spaces_filter = args.confluence_spaces_filter;
-
-      setIf(merged.bitbucket, "workspace", args.bitbucket_workspace);
-      setIf(merged.bitbucket, "username", args.bitbucket_username);
-      setIf(merged.bitbucket, "api_token", args.bitbucket_api_token);
-
-      saveStoredCreds(merged);
+      saveStoredCreds(after);
       reloadStoredCreds();
 
       return JSON.stringify(
@@ -91,9 +95,18 @@ export function registerCredentialTools(server: FastMCP): void {
           ok: true,
           file: CONFIG_FILE_PATH,
           dir: CONFIG_DIR_PATH,
+          backup: hasBackup() ? CONFIG_BACKUP_PATH : null,
           file_mode: configFileMode(),
-          stored: maskAll(merged),
-          note: "Restart Claude Code (or the MCP server) for the new credentials to take effect.",
+          changes: {
+            added,
+            updated,
+            preserved,
+          },
+          stored: maskAll(after),
+          note:
+            "Existing values not provided in this call were preserved — see `changes.preserved`. " +
+            "A backup of the prior file is at ~/.acendas-atlassian/config.json.bak. " +
+            "Restart Claude Code (or the MCP server) for the new credentials to take effect.",
         },
         null,
         2,
