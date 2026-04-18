@@ -24,20 +24,41 @@ Configure credentials for the unified Acendas Atlassian Suite MCP server (Jira C
    - **Clearing credentials** → confirm, then `clear_credentials` with `confirm: true`. Tell user env vars are unaffected.
    - **Already fully configured** → skip to step 5 (verification).
 
-3. **Collect what's needed.** Ask the user for:
-   - Atlassian site URL — base for both Jira and Confluence (e.g. `https://acme.atlassian.net`). Confluence URL is typically `<base>/wiki`.
-   - Bitbucket workspace slug (visible in Bitbucket URLs as `bitbucket.org/<workspace>/...`)
-   - Atlassian account email
-   - Atlassian API token — direct them to https://id.atlassian.com/manage-profile/security/api-tokens
+3. **Collect what's needed — IMPORTANT: Jira/Confluence and Bitbucket use SEPARATE credentials.**
 
-   For most users the same email + token works for all three products. Only ask for per-product overrides (`jira_username`, `bitbucket_username`, etc.) if the user explicitly says they use different identities per product.
+   Explain this to the user upfront:
+   > Atlassian API tokens (from https://id.atlassian.com/manage-profile/security/api-tokens) authorize Jira + Confluence on a given Atlassian site. Bitbucket Cloud uses separate credentials — typically an app password, a Repository/Project/Workspace Access Token, or an Atlassian API token tied to a Bitbucket-enabled account. The two are usually scoped to different accounts and must be set separately.
 
-4. **Persist.** Call `mcp__acendas-atlassian__configure_credentials` with only the fields you collected:
-   - `atlassian_username` (the shared email)
-   - `atlassian_api_token` (the shared token)
-   - `jira_url`, `confluence_url`, `bitbucket_workspace`
-   - Optionally: `jira_projects_filter`, `confluence_spaces_filter` to scope tools
-   - Optionally: per-product overrides if needed
+   Ask per product. Skip a section if the user isn't configuring it this run.
+
+   **For Jira + Confluence** (shared — same Atlassian site + same account + same token):
+   - Atlassian site URL — e.g. `https://ventek.atlassian.net`. Confluence URL is typically `<base>/wiki`.
+   - Atlassian account email on that site.
+   - Atlassian API token for that account (https://id.atlassian.com/manage-profile/security/api-tokens — must be generated while logged in as that account).
+
+   **For Bitbucket** (always separate):
+   - Bitbucket workspace slug (visible in URLs as `bitbucket.org/<workspace>/...`).
+   - Account email tied to Bitbucket (may differ from Jira/Confluence email).
+   - Bitbucket credential — one of:
+     - Atlassian API token from an account that has Bitbucket access (works for Basic Auth), OR
+     - Bitbucket app password (legacy but still works), OR
+     - Repository / Project / Workspace Access Token (recommended by Atlassian for programmatic access).
+
+4. **Persist.** Call `mcp__acendas-atlassian__configure_credentials` with fields scoped to the product they belong to:
+
+   For Jira + Confluence — use the shared `atlassian.*` fields (they fan out):
+   - `atlassian_username` (the Atlassian-site email)
+   - `atlassian_api_token` (the Atlassian API token)
+   - `jira_url`, `confluence_url`
+
+   For Bitbucket — use per-product `bitbucket.*` fields (so it doesn't accidentally get used for Jira/Confluence):
+   - `bitbucket_workspace`
+   - `bitbucket_username`
+   - `bitbucket_api_token`
+
+   Optionally: `jira_projects_filter`, `confluence_spaces_filter` to scope tools.
+
+   **Do NOT put the Bitbucket token in `atlassian_api_token`** unless the user explicitly confirms that ONE token works for all three products (rare — typically only when one Atlassian account has access to Jira + Confluence + a Bitbucket-linked workspace).
 
    The tool merges into the existing config: values you don't pass are preserved. A backup of the prior file is kept at `~/.acendas-atlassian/config.json.bak`. The tool's response includes a `changes` block showing exactly which fields were `added`, `updated`, or `preserved` — read this back to the user as confirmation.
 
@@ -61,6 +82,7 @@ For every credential value:
 
 ## Notes
 
+- **Bitbucket credentials are separate from Jira/Confluence.** Always set `bitbucket_username` + `bitbucket_api_token` explicitly. Don't rely on `atlassian.*` fallback for Bitbucket unless the user confirms one identity works for all three.
 - Env vars are useful for CI / temporary overrides without touching the file.
 - File path: `~/.acendas-atlassian/config.json`, mode 0600 (owner read/write only).
 - Backup file: `~/.acendas-atlassian/config.json.bak` — refreshed on every `configure_credentials` call. Recover from a mistake with `mv config.json.bak config.json`.

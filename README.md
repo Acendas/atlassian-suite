@@ -94,14 +94,28 @@ Use via `/atlassian-suite:review-pr <pr-id> [--high] [--quick]` or by dispatchin
    **Option B — Env vars.** Set in `~/.zshrc` / `~/.bashrc` / project `.env`:
 
    ```bash
+   # Jira + Confluence — shared Atlassian account
    export JIRA_URL="https://acme.atlassian.net"
    export CONFLUENCE_URL="https://acme.atlassian.net/wiki"
-   export BITBUCKET_WORKSPACE="acme"
    export ATLASSIAN_USERNAME="you@example.com"
    export ATLASSIAN_API_TOKEN="ATATT3xFfGF0..."
+
+   # Bitbucket — separate credential (usually a separate account/token)
+   export BITBUCKET_WORKSPACE="acme"
+   export BITBUCKET_USERNAME="you@example.com"
+   export BITBUCKET_API_TOKEN="ATATT3xFfGF0..."   # or app-password / access token
    ```
 
    Env vars take precedence over the file when set. Use them for CI or per-session overrides.
+
+### Credential separation
+
+Jira + Confluence share one Atlassian account + one Atlassian API token (from https://id.atlassian.com/manage-profile/security/api-tokens). Bitbucket Cloud is **separate** — it uses an app password, a Repository / Project / Workspace Access Token, or an Atlassian API token tied to a Bitbucket-enabled account, and usually under a different email/identity than Jira/Confluence.
+
+- For Jira + Confluence, use the shared `atlassian.*` block (or `ATLASSIAN_USERNAME` + `ATLASSIAN_API_TOKEN`).
+- For Bitbucket, ALWAYS use the per-product `bitbucket.*` block (or `BITBUCKET_USERNAME` + `BITBUCKET_API_TOKEN`) so an Atlassian-only token never leaks through to Bitbucket calls.
+
+The `atlassian.*` shared fallback only activates when per-product fields are unset — so if you have a single token that legitimately works for all three, setting just `atlassian.*` works. If you have separate tokens (the common case), set Bitbucket explicitly.
 
 4. Restart Claude Code. The MCP server starts automatically on first use and reads credentials at startup.
 
