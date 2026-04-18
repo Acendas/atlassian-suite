@@ -1,5 +1,11 @@
 node_modules/
-dist/
+# Commit the bundle (dist/server.js); skip source maps and stale tsc output.
+dist/*.map
+dist/bitbucket/
+dist/common/
+dist/confluence/
+dist/jira/
+dist/types/
 *.log
 .env
 .env.local
