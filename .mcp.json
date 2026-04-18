@@ -3,14 +3,7 @@
     "acendas-atlassian": {
       "type": "stdio",
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/server/dist/server.js"],
-      "env": {
-        "JIRA_URL": "${JIRA_URL}",
-        "CONFLUENCE_URL": "${CONFLUENCE_URL}",
-        "ATLASSIAN_USERNAME": "${ATLASSIAN_USERNAME}",
-        "ATLASSIAN_API_TOKEN": "${ATLASSIAN_API_TOKEN}",
-        "BITBUCKET_WORKSPACE": "${BITBUCKET_WORKSPACE}"
-      }
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server/dist/server.js"]
     }
   }
 }
