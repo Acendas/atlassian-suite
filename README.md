@@ -21,7 +21,7 @@ Comprehensive Claude Code plugin for **Jira Cloud + Confluence Cloud + Bitbucket
 
 ### Skills (29)
 
-**Cross-product (11):** `setup`, `link-pr-to-issue`, `pr-summary-to-jira`, `sprint-status`, `standup-notes`, `sprint-retro`, `release-notes`, `publish-release-notes`, `review-pr`, `create-issue`, `triage-issue`
+**Cross-product (11):** `init`, `link-pr-to-issue`, `pr-summary-to-jira`, `sprint-status`, `standup-notes`, `sprint-retro`, `release-notes`, `publish-release-notes`, `review-pr`, `create-issue`, `triage-issue`
 
 **Bitbucket (8):** `pr-list`, `pr-create`, `pipeline-status`, `pipeline-trigger`, `deployments`, `code-search`, `commit-show`, `branch-protection`
 
@@ -89,7 +89,7 @@ Use via `/atlassian-suite:review-pr <pr-id> [--high] [--quick]` or by dispatchin
 
 3. Configure credentials. **Two options** — pick one:
 
-   **Option A — File (recommended).** Run `/atlassian-suite:setup` after first launch. The skill walks you through it and persists to `~/.acendas-atlassian/config.json` (mode 0600, owner-only). One source of truth, easy rotation, no shell-profile clutter.
+   **Option A — File (recommended).** Run `/atlassian-suite:init` after first launch. The skill walks you through it and persists to `~/.acendas-atlassian/config.json` (mode 0600, owner-only, atomic write with rolling backup). One source of truth, easy rotation, no shell-profile clutter.
 
    **Option B — Env vars.** Set in `~/.zshrc` / `~/.bashrc` / project `.env`:
 
