@@ -485,8 +485,27 @@ async function whoamiProbe(product, creds) {
   }
   const res = await httpFetch({ url, username: creds.username, token: creds.apiToken });
   if (res.kind === "network") return { status: "network", detail: res.detail };
-  if (res.status === 401) return { status: "auth-failed", detail: "401 — email or token wrong" };
-  if (res.status === 404) return { status: "url-wrong", detail: "404 — check the URL" };
+
+  // For non-200 responses, capture Atlassian's actual error body so the user
+  // sees something like "Token is invalid, expired, or not supported for this
+  // endpoint" instead of our generic "401 — email or token wrong". Real error
+  // text is the difference between 5 minutes of self-diagnosis and a support
+  // ticket.
+  if (res.status === 401 || res.status === 403 || res.status === 404) {
+    const body = await safeText(res.response);
+    const atlasMsg = extractAtlasError(body);
+    const baseMap = {
+      401: "401 Unauthorized",
+      403: "403 Forbidden — token likely missing required scopes",
+      404: "404 — endpoint URL wrong (check site URL / cloudId / workspace)",
+    };
+    const base = baseMap[res.status];
+    return {
+      status: res.status === 404 ? "url-wrong" : "auth-failed",
+      detail: atlasMsg ? `${base} — ${atlasMsg}` : base,
+    };
+  }
+
   if (res.status >= 200 && res.status < 300) {
     const body = await safeJson(res.response);
     const who =
@@ -500,9 +519,44 @@ async function whoamiProbe(product, creds) {
       "(ok)";
     return { status: "ok", who };
   }
-  // 403 on whoami is unusual but can indicate the token has NO scopes at all.
-  if (res.status === 403) return { status: "auth-failed", detail: "403 — token likely has no scopes at all" };
   return { status: "auth-failed", detail: `HTTP ${res.status}` };
+}
+
+// Extract the human-readable error from an Atlassian API response body.
+// Handles all three product flavours:
+//   - Jira/Confluence:  {"errorMessages": ["..."], "errors": {...}}
+//   - Bitbucket:        {"type": "error", "error": {"message": "..."}}
+//   - Plain text:       "Client must be authenticated to access this resource."
+async function safeText(response) {
+  try {
+    return await response.text();
+  } catch {
+    return "";
+  }
+}
+
+function extractAtlasError(text) {
+  if (!text) return null;
+  const trimmed = text.trim();
+  // Try JSON shapes first.
+  if (trimmed.startsWith("{")) {
+    try {
+      const j = JSON.parse(trimmed);
+      // Bitbucket: {"type":"error","error":{"message":"..."}}
+      if (j?.error?.message) return String(j.error.message);
+      // Jira/Confluence: {"errorMessages":["..."]}
+      if (Array.isArray(j?.errorMessages) && j.errorMessages.length > 0) {
+        return String(j.errorMessages[0]);
+      }
+      // OAuth-style: {"message":"..."}
+      if (typeof j?.message === "string") return j.message;
+    } catch {
+      // fall through to plain-text handling
+    }
+  }
+  // Plain text. Cap to one line / 120 chars so we don't dump HTML pages.
+  const oneLine = trimmed.replace(/\s+/g, " ").slice(0, 120);
+  return oneLine || null;
 }
 
 async function scopeProbe(product, creds, spec) {
@@ -525,12 +579,18 @@ async function scopeProbe(product, creds, spec) {
   if (s === 401) return "auth";
   // 403 → scope missing, or other permission issue.
   if (s === 403) return "missing";
-  // 404 → URL mismatch. ONLY auto-pass for Bitbucket reads — those endpoints
-  // can legitimately 404 when a workspace has no repos or a user has no PRs.
-  // Jira and Confluence 404s are URL drift bugs (e.g. the prior /wiki/wiki/
-  // doubling) and must NOT be silently reclassified as OK.
+  // 404 handling is heuristic and product/scope-specific:
+  // - Bitbucket /workspaces/{ws} endpoint: 404 = wrong workspace slug, NOT
+  //   "no data" — must surface as MISSING so the user knows to fix the slug.
+  // - Bitbucket /repositories/{ws} or /pullrequests/{user}: 404 can legitimately
+  //   mean "workspace has no repos" / "user has no PRs" — auto-pass for reads.
+  // - Jira / Confluence: 404 is always URL drift — never silently auto-pass.
   if (s === 404) {
-    if (product === "bitbucket" && spec.scope.startsWith("read:")) return "ok";
+    if (product === "bitbucket" && spec.scope.startsWith("read:")) {
+      // Workspace probe specifically: 404 means workspace doesn't exist.
+      if (spec.scope === "read:workspace:bitbucket") return "missing";
+      return "ok";
+    }
     return "missing";
   }
   // Anything else → unknown.
@@ -1429,10 +1489,14 @@ function buildHtml(secret) {
     <section class="section" data-step="3">
       <h1>Generate your <span id="step3-product">…</span> token</h1>
       <p class="lede">Create a scoped API token on Atlassian's identity page, then paste it on the next screen.</p>
+      <div class="privacy-note" style="background: rgba(251, 191, 36, 0.07); border-color: rgba(251, 191, 36, 0.25);">
+        <b>⚠️</b>
+        <span>Each product needs its <b>own token</b>. A token created under the Jira app won't work for Confluence or Bitbucket — the scopes are app-bound. Make sure you pick the <b id="step3-app-warn">…</b> app on the next page, not whatever app is selected by default.</span>
+      </div>
       <ol class="steps">
         <li>Click <b>Open token page</b> below — it opens in a new tab.</li>
         <li>Click <b>Create API token with scopes</b>.</li>
-        <li>Pick the <b id="step3-app">…</b> app.</li>
+        <li>Pick the <b id="step3-app">…</b> app (this is the easy step to get wrong).</li>
         <li>Tick the scopes shown below, then create the token.</li>
         <li>Copy the token to your clipboard — you won't see it again after closing the dialog.</li>
       </ol>
@@ -1550,6 +1614,7 @@ function renderStep3() {
   const p = state.product;
   Q("#step3-product").textContent = PRODUCT_LABEL[p];
   Q("#step3-app").textContent = PRODUCT_LABEL[p];
+  Q("#step3-app-warn").textContent = PRODUCT_LABEL[p];
   const scopes = (state.scopes && state.scopes[p]) || [];
   const required = scopes.filter(s => s.required);
   const optional = scopes.filter(s => !s.required);
