@@ -89,7 +89,7 @@ Use via `/atlassian-suite:review-pr <pr-id> [--high] [--quick]` or by dispatchin
 
 3. Configure credentials. **Two options** — pick one:
 
-   **Option A — File (recommended).** Run `/atlassian-suite:init` after first launch. The skill walks you through it and persists to `~/.acendas-atlassian/config.json` (mode 0600, owner-only, atomic write with rolling backup). One source of truth, easy rotation, no shell-profile clutter.
+   **Option A — File (recommended).** Run `/atlassian-suite:init` after first launch. The skill runs an interactive wizard: it opens the Atlassian token page in your browser, prints the exact OAuth scopes to tick per product (Jira / Confluence / Bitbucket), collects URL/email/workspace/token via in-chat prompts, persists to `~/.acendas-atlassian/config.json` (mode 0600, atomic write with rolling backup), and self-tests each product against its API. **Note:** tokens entered in the wizard appear in your Claude Code transcript — if that's a concern, use Option B (env vars) instead.
 
    **Option B — Env vars.** Set in `~/.zshrc` / `~/.bashrc` / project `.env`:
 
