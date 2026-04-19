@@ -1,6 +1,6 @@
 {
   "name": "atlassian-suite",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Acendas Atlassian Suite — unified Jira Cloud, Confluence Cloud, and Bitbucket Cloud integration for Claude Code. 190 MCP tools, 31 workflow skills, and a multi-scanner PR review pipeline.",
   "author": {
     "name": "Acendas",
