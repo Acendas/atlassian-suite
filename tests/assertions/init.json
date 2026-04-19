@@ -1,8 +1,8 @@
 [
   {
-    "name": "uses_AskUserQuestion",
+    "name": "hands_off_to_auth_web",
     "type": "contains",
-    "pattern": "AskUserQuestion"
+    "pattern": "auth\\.mjs[\\s\"']+web"
   },
   {
     "name": "checks_state_via_auth_status",
@@ -10,24 +10,19 @@
     "pattern": "auth\\.mjs[\\s\"']+status"
   },
   {
-    "name": "shows_scopes_via_auth_scopes",
-    "type": "contains",
-    "pattern": "auth\\.mjs[\\s\"']+scopes"
-  },
-  {
     "name": "self_tests_via_auth_verify",
     "type": "contains",
     "pattern": "auth\\.mjs[\\s\"']+verify"
   },
   {
-    "name": "opens_browser_via_auth_open_url",
+    "name": "explains_localhost_only",
     "type": "contains",
-    "pattern": "auth\\.mjs[\\s\"']+open-url"
+    "pattern": "127\\.0\\.0\\.1|localhost-only"
   },
   {
-    "name": "persists_via_mcp_configure_credentials",
+    "name": "warns_token_not_in_transcript",
     "type": "contains",
-    "pattern": "mcp__acendas-atlassian__configure_credentials"
+    "pattern": "transcript"
   },
   {
     "name": "has_iron_or_hard_rules_directive",
@@ -35,24 +30,14 @@
     "pattern": "(?:iron|hard)\\s+rules?"
   },
   {
-    "name": "loops_per_product_in_order",
-    "type": "contains",
-    "pattern": "Jira\\s*(?:\u2192|->|then)\\s*Confluence\\s*(?:\u2192|->|then)\\s*Bitbucket"
-  },
-  {
     "name": "tells_user_to_restart_claude_code",
     "type": "contains",
     "pattern": "Restart Claude Code"
   },
   {
-    "name": "verifies_after_each_product",
+    "name": "explains_missing_scope_recovery",
     "type": "contains",
-    "pattern": "verify\\s+<product>"
-  },
-  {
-    "name": "warns_token_appears_in_transcript",
-    "type": "contains",
-    "pattern": "transcript"
+    "pattern": "scopes? (?:added after creation|cannot have scopes added)"
   },
   {
     "name": "no_chat_form_paste_whichever",
@@ -67,18 +52,20 @@
   {
     "name": "no_chat_form_i_need_the_following",
     "type": "not_contains",
+    "_comment": "The original failure transcript opened with 'I need the following'.",
     "pattern": "I\\s+need\\s+the\\s+following"
   },
   {
     "name": "no_numbered_credential_form",
     "type": "not_contains",
+    "_comment": "Catches the bad numbered list of credential fields from the original failed transcript.",
     "pattern": "1\\.\\s*[^\\n]{0,80}(?:site URL|atlassian site)[\\s\\S]{0,300}\\n[\\s\\S]{0,40}2\\.\\s*[^\\n]{0,80}(?:email|account)[\\s\\S]{0,300}\\n[\\s\\S]{0,40}3\\.\\s*[^\\n]{0,80}(?:API token|credential)",
     "dotall": true
   },
   {
     "name": "no_ask_user_to_paste_in_chat",
     "type": "not_contains",
-    "_comment": "Anchored to start-of-sentence (line start or after period). Negations like 'never invent a paste...here message' are lowercase mid-sentence and don't match.",
+    "_comment": "Anchored to start-of-sentence. Negations like 'never ask the user to paste...' are mid-sentence and don't match.",
     "pattern": "(?:^|\\.\\s+|\\n\\s*)Paste[^.\\n]{0,30}(?:token|credentials?|api[\\s-]?key)[^.\\n]{0,40}(?:here|in (?:the )?chat|in (?:the )?message)"
   },
   {
@@ -93,14 +80,16 @@
     "value": "Bash"
   },
   {
-    "name": "frontmatter_allows_AskUserQuestion",
-    "type": "frontmatter_contains",
+    "name": "frontmatter_does_not_allow_AskUserQuestion",
+    "type": "frontmatter_not_contains",
+    "_comment": "Init hands off to the web wizard for credentials. Other skills are free to use AskUserQuestion in their own frontmatter — this only constrains init.",
     "field": "allowed-tools",
     "value": "AskUserQuestion"
   },
   {
-    "name": "frontmatter_allows_configure_credentials",
-    "type": "frontmatter_contains",
+    "name": "frontmatter_does_not_allow_configure_credentials",
+    "type": "frontmatter_not_contains",
+    "_comment": "The wizard's /save endpoint persists directly via auth.mjs atomic-write. Allowing the MCP configure tool here would create a parallel write path.",
     "field": "allowed-tools",
     "value": "mcp__acendas-atlassian__configure_credentials"
   },

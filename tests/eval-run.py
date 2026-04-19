@@ -262,6 +262,25 @@ def check_skill_assertions(result, skill_filter=None):
                         f"field '{field}' does not contain {needle!r}; got {hay!r}",
                     )
 
+            elif check_type == "frontmatter_not_contains":
+                # Inverse of frontmatter_contains. If the field is missing,
+                # treat that as "trivially does not contain" → pass.
+                fm, _ = parse_frontmatter(skill_dir / "SKILL.md")
+                field = case.get("field", "")
+                needle = case.get("value", "")
+                if not fm or field not in fm:
+                    result.ok(check_id)
+                    continue
+                raw = fm[field]
+                hay = ", ".join(raw) if isinstance(raw, list) else str(raw)
+                if needle in hay:
+                    result.fail(
+                        check_id,
+                        f"field '{field}' must NOT contain {needle!r}; got {hay!r}",
+                    )
+                else:
+                    result.ok(check_id)
+
             elif check_type == "file_exists":
                 path = case.get("path", "")
                 full = PROJECT_ROOT / path
