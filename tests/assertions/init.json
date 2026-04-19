@@ -1,0 +1,112 @@
+[
+  {
+    "name": "uses_AskUserQuestion",
+    "type": "contains",
+    "pattern": "AskUserQuestion"
+  },
+  {
+    "name": "checks_state_via_auth_status",
+    "type": "contains",
+    "pattern": "auth\\.mjs[\\s\"']+status"
+  },
+  {
+    "name": "shows_scopes_via_auth_scopes",
+    "type": "contains",
+    "pattern": "auth\\.mjs[\\s\"']+scopes"
+  },
+  {
+    "name": "self_tests_via_auth_verify",
+    "type": "contains",
+    "pattern": "auth\\.mjs[\\s\"']+verify"
+  },
+  {
+    "name": "opens_browser_via_auth_open_url",
+    "type": "contains",
+    "pattern": "auth\\.mjs[\\s\"']+open-url"
+  },
+  {
+    "name": "persists_via_mcp_configure_credentials",
+    "type": "contains",
+    "pattern": "mcp__acendas-atlassian__configure_credentials"
+  },
+  {
+    "name": "has_iron_or_hard_rules_directive",
+    "type": "contains",
+    "pattern": "(?:iron|hard)\\s+rules?"
+  },
+  {
+    "name": "loops_per_product_in_order",
+    "type": "contains",
+    "pattern": "Jira\\s*(?:\u2192|->|then)\\s*Confluence\\s*(?:\u2192|->|then)\\s*Bitbucket"
+  },
+  {
+    "name": "tells_user_to_restart_claude_code",
+    "type": "contains",
+    "pattern": "Restart Claude Code"
+  },
+  {
+    "name": "verifies_after_each_product",
+    "type": "contains",
+    "pattern": "verify\\s+<product>"
+  },
+  {
+    "name": "warns_token_appears_in_transcript",
+    "type": "contains",
+    "pattern": "transcript"
+  },
+  {
+    "name": "no_chat_form_paste_whichever",
+    "type": "not_contains",
+    "pattern": "Paste\\s+whichever"
+  },
+  {
+    "name": "no_chat_form_please_provide_token",
+    "type": "not_contains",
+    "pattern": "please\\s+provide\\s+(?:your|the|what).{0,40}(?:token|credentials?)"
+  },
+  {
+    "name": "no_chat_form_i_need_the_following",
+    "type": "not_contains",
+    "pattern": "I\\s+need\\s+the\\s+following"
+  },
+  {
+    "name": "no_numbered_credential_form",
+    "type": "not_contains",
+    "pattern": "1\\.\\s*[^\\n]{0,80}(?:site URL|atlassian site)[\\s\\S]{0,300}\\n[\\s\\S]{0,40}2\\.\\s*[^\\n]{0,80}(?:email|account)[\\s\\S]{0,300}\\n[\\s\\S]{0,40}3\\.\\s*[^\\n]{0,80}(?:API token|credential)",
+    "dotall": true
+  },
+  {
+    "name": "no_ask_user_to_paste_in_chat",
+    "type": "not_contains",
+    "_comment": "Anchored to start-of-sentence (line start or after period). Negations like 'never invent a paste...here message' are lowercase mid-sentence and don't match.",
+    "pattern": "(?:^|\\.\\s+|\\n\\s*)Paste[^.\\n]{0,30}(?:token|credentials?|api[\\s-]?key)[^.\\n]{0,40}(?:here|in (?:the )?chat|in (?:the )?message)"
+  },
+  {
+    "name": "no_walk_you_through_setup_prose",
+    "type": "not_contains",
+    "pattern": "I'll walk you through setup"
+  },
+  {
+    "name": "frontmatter_allows_Bash",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "Bash"
+  },
+  {
+    "name": "frontmatter_allows_AskUserQuestion",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "AskUserQuestion"
+  },
+  {
+    "name": "frontmatter_allows_configure_credentials",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "mcp__acendas-atlassian__configure_credentials"
+  },
+  {
+    "name": "auth_script_exists",
+    "type": "file_exists",
+    "path": "server/scripts/auth.mjs"
+  }
+]
