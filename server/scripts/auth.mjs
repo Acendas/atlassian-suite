@@ -77,29 +77,33 @@ const SCOPES = {
     },
   ],
   confluence: [
+    // NB: paths here MUST NOT start with /wiki — resolveProbeUrl() routes
+    // confluence through wikiBase() which already appends /wiki to the base
+    // URL. Leading /wiki here would produce /wiki/wiki/... → 404 → silently
+    // reclassified as OK by the 404 heuristic, masking real failures.
     {
       scope: "read:confluence-space.summary",
       required: true,
       why: "list spaces",
-      probe: { method: "GET", path: "/wiki/api/v2/spaces?limit=1" },
+      probe: { method: "GET", path: "/api/v2/spaces?limit=1" },
     },
     {
       scope: "read:confluence-content.all",
       required: true,
       why: "read pages + attachments",
-      probe: { method: "GET", path: "/wiki/api/v2/pages?limit=1" },
+      probe: { method: "GET", path: "/api/v2/pages?limit=1" },
     },
     {
       scope: "write:confluence-content",
       required: true,
       why: "create/edit pages, add comments",
-      probe: { method: "POST", path: "/wiki/api/v2/pages", body: "{}" },
+      probe: { method: "POST", path: "/api/v2/pages", body: "{}" },
     },
     {
       scope: "read:confluence-user",
       required: false,
       why: "look up users",
-      probe: { method: "GET", path: "/wiki/rest/api/user/current" },
+      probe: { method: "GET", path: "/rest/api/user/current" },
     },
   ],
   bitbucket: [
@@ -506,8 +510,14 @@ async function scopeProbe(product, creds, spec) {
   if (s === 401) return "auth";
   // 403 → scope missing, or other permission issue.
   if (s === 403) return "missing";
-  // 404 → URL mismatch. Usually workspace has no repos yet or user has no PRs — treat as ok-ish.
-  if (s === 404) return spec.scope.startsWith("read:") ? "ok" : "missing";
+  // 404 → URL mismatch. ONLY auto-pass for Bitbucket reads — those endpoints
+  // can legitimately 404 when a workspace has no repos or a user has no PRs.
+  // Jira and Confluence 404s are URL drift bugs (e.g. the prior /wiki/wiki/
+  // doubling) and must NOT be silently reclassified as OK.
+  if (s === 404) {
+    if (product === "bitbucket" && spec.scope.startsWith("read:")) return "ok";
+    return "missing";
+  }
   // Anything else → unknown.
   return `HTTP ${s}`;
 }
@@ -989,9 +999,10 @@ function buildHtml(secret) {
     font: 15px/1.55 var(--sans);
     min-height: 100vh;
     display: flex;
-    align-items: flex-start;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
     padding: 32px 16px;
+    gap: 0;
   }
   .wizard {
     width: 100%;
@@ -1001,7 +1012,9 @@ function buildHtml(secret) {
     border-radius: 12px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.4);
     overflow: hidden;
+    flex-shrink: 0;
   }
+  .footer-meta-wrap { flex-shrink: 0; }
   header {
     padding: 18px 24px 14px;
     border-bottom: 1px solid var(--border);
@@ -1145,6 +1158,8 @@ function buildHtml(secret) {
     font-family: var(--mono);
     font-size: 12px;
     line-height: 1.7;
+    max-height: 280px;
+    overflow-y: auto;
   }
   .scope-box .group-label {
     color: var(--muted);
@@ -1270,10 +1285,12 @@ function buildHtml(secret) {
   a.btn-link::after { content: "↗"; color: var(--muted); margin-left: 4px; }
 
   .footer-meta {
+    width: 100%;
+    max-width: 620px;
     text-align: center;
     color: var(--muted-2);
     font-size: 11px;
-    padding: 12px;
+    padding: 14px 12px 0;
   }
   .file-path { font-family: var(--mono); }
 </style>
