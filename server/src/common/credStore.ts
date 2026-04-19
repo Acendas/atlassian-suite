@@ -46,12 +46,14 @@ export interface StoredCreds {
     url?: string;
     username?: string;
     api_token?: string;
+    cloud_id?: string;
     projects_filter?: string[];
   };
   confluence?: {
     url?: string;
     username?: string;
     api_token?: string;
+    cloud_id?: string;
     spaces_filter?: string[];
   };
   bitbucket?: { workspace?: string; username?: string; api_token?: string };

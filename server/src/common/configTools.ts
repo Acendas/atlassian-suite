@@ -44,6 +44,12 @@ export function registerCredentialTools(server: FastMCP): void {
       jira_url: z.string().url().optional(),
       jira_username: z.string().optional().describe("Per-product override (rarely needed)"),
       jira_api_token: z.string().optional(),
+      jira_cloud_id: z
+        .string()
+        .optional()
+        .describe(
+          "Atlassian tenant cloudId — required for scoped API tokens. Auto-discovered by the credential wizard via /_edge/tenant_info; also accepts manual override here.",
+        ),
       jira_projects_filter: z
         .array(z.string())
         .optional()
@@ -51,6 +57,7 @@ export function registerCredentialTools(server: FastMCP): void {
       confluence_url: z.string().url().optional(),
       confluence_username: z.string().optional(),
       confluence_api_token: z.string().optional(),
+      confluence_cloud_id: z.string().optional().describe("Atlassian tenant cloudId for Confluence — same as Jira's typically."),
       confluence_spaces_filter: z.array(z.string()).optional(),
       bitbucket_workspace: z.string().optional(),
       bitbucket_username: z.string().optional(),
@@ -69,12 +76,14 @@ export function registerCredentialTools(server: FastMCP): void {
           url: args.jira_url,
           username: args.jira_username,
           api_token: args.jira_api_token,
+          cloud_id: args.jira_cloud_id,
           projects_filter: args.jira_projects_filter,
         },
         confluence: {
           url: args.confluence_url,
           username: args.confluence_username,
           api_token: args.confluence_api_token,
+          cloud_id: args.confluence_cloud_id,
           spaces_filter: args.confluence_spaces_filter,
         },
         bitbucket: {
@@ -135,6 +144,9 @@ export function registerCredentialTools(server: FastMCP): void {
             jira: jira
               ? {
                   base_url: jira.baseUrl,
+                  site_url: jira.siteUrl,
+                  cloud_id: jira.cloudId ?? null,
+                  via: jira.cloudId ? "api.atlassian.com gateway (scoped-token compatible)" : "legacy site URL (unscoped tokens only)",
                   username: jira.username,
                   api_token: maskToken(jira.apiToken),
                   projects_filter: jira.projectsFilter ?? null,
@@ -144,6 +156,9 @@ export function registerCredentialTools(server: FastMCP): void {
             confluence: confluence
               ? {
                   base_url: confluence.baseUrl,
+                  site_url: confluence.siteUrl,
+                  cloud_id: confluence.cloudId ?? null,
+                  via: confluence.cloudId ? "api.atlassian.com gateway (scoped-token compatible)" : "legacy site URL (unscoped tokens only)",
                   username: confluence.username,
                   api_token: maskToken(confluence.apiToken),
                   spaces_filter: confluence.spacesFilter ?? null,

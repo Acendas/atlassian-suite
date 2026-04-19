@@ -61,7 +61,11 @@ const SCOPES = {
       scope: "read:jira-work",
       required: true,
       why: "list/read issues, projects, comments",
-      probe: { method: "GET", path: "/rest/api/3/search/jql?jql=order+by+created&fields=summary&maxResults=0" },
+      // Was /rest/api/3/search/jql?maxResults=0 — but the new search endpoint
+      // requires maxResults between 1 and 5000 (returns 400). The legacy
+      // /rest/api/3/search is 410 Gone. /project is the cleanest scope-bearing
+      // read endpoint that doesn't actually execute a search.
+      probe: { method: "GET", path: "/rest/api/3/project?recent=1" },
     },
     {
       scope: "write:jira-work",
@@ -317,6 +321,7 @@ function resolveCreds(product, cfg) {
     product === "bitbucket"
       ? process.env.BITBUCKET_WORKSPACE
       : process.env[`${envUpper}_URL`];
+  const envCloudId = process.env[`${envUpper}_CLOUD_ID`];
 
   const section = cfg[product] || {};
   const shared = cfg.atlassian || {};
@@ -329,6 +334,7 @@ function resolveCreds(product, cfg) {
     workspace: product === "bitbucket" ? envUrl || section.workspace : undefined,
     username: envUser || section.username || shared.username,
     apiToken: envToken || section.api_token || shared.api_token,
+    cloudId: envCloudId || section.cloud_id,
   };
 }
 
@@ -462,9 +468,18 @@ async function verifyProduct(product, cfg) {
 async function whoamiProbe(product, creds) {
   let url;
   if (product === "jira") {
-    url = `${stripTrailingSlash(creds.url)}/rest/api/3/myself`;
+    // Scoped tokens REQUIRE the api.atlassian.com gateway URL with cloudId.
+    // Legacy /rest/... on yoursite.atlassian.net only works for unscoped
+    // tokens (which Atlassian deprecates Mar–May 2026). If we have a cloudId
+    // (auto-discovered on save), use the gateway. Otherwise fall back to
+    // legacy and let the user see the resulting failure verbatim.
+    url = creds.cloudId
+      ? `https://api.atlassian.com/ex/jira/${creds.cloudId}/rest/api/3/myself`
+      : `${stripTrailingSlash(creds.url)}/rest/api/3/myself`;
   } else if (product === "confluence") {
-    url = `${wikiBase(creds.url)}/rest/api/user/current`;
+    url = creds.cloudId
+      ? `https://api.atlassian.com/ex/confluence/${creds.cloudId}/wiki/rest/api/user/current`
+      : `${wikiBase(creds.url)}/rest/api/user/current`;
   } else {
     url = "https://api.bitbucket.org/2.0/user";
   }
@@ -528,7 +543,21 @@ function resolveProbeUrl(product, creds, path) {
       .replace("{workspace}", encodeURIComponent(creds.workspace || ""))
       .replace("{username}", encodeURIComponent(creds.username || ""));
   }
-  const base = product === "confluence" ? wikiBase(creds.url) : stripTrailingSlash(creds.url);
+  // Prefer the api.atlassian.com gateway when we have a cloudId — that's the
+  // only URL pattern that accepts scoped API tokens via Basic auth. Legacy
+  // {site}.atlassian.net is the fallback for tokens that pre-date scoping.
+  let base;
+  if (product === "jira") {
+    base = creds.cloudId
+      ? `https://api.atlassian.com/ex/jira/${creds.cloudId}`
+      : stripTrailingSlash(creds.url);
+  } else if (product === "confluence") {
+    base = creds.cloudId
+      ? `https://api.atlassian.com/ex/confluence/${creds.cloudId}/wiki`
+      : wikiBase(creds.url);
+  } else {
+    base = stripTrailingSlash(creds.url);
+  }
   return (
     base +
     path.replace("{workspace}", encodeURIComponent(creds.workspace || ""))
@@ -562,6 +591,27 @@ async function safeJson(response) {
 function wikiBase(url) {
   const base = stripTrailingSlash(url);
   return /\/wiki$/i.test(base) ? base : `${base}/wiki`;
+}
+
+// Strip /wiki suffix from a Confluence URL to get the bare site URL needed
+// for tenant_info discovery (which is /_edge/tenant_info on the site root).
+function siteBase(url) {
+  return stripTrailingSlash(url).replace(/\/wiki$/i, "");
+}
+
+// Atlassian's cloudId is required to use scoped API tokens via the
+// api.atlassian.com gateway. It can be fetched without auth from
+// {site}/_edge/tenant_info. Returns null on any failure (network, parse).
+async function discoverCloudId(siteUrl) {
+  try {
+    const url = `${siteBase(siteUrl)}/_edge/tenant_info`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return typeof body?.cloudId === "string" ? body.cloudId : null;
+  } catch {
+    return null;
+  }
 }
 
 function printScopeSuggestion(product) {
@@ -877,13 +927,30 @@ async function runWebWizard() {
             res.statusCode = 400;
             return res.end(JSON.stringify({ ok: false, error: "url, email, token are required" }));
           }
-          patch.jira = { url: data.url.trim(), username: data.email.trim(), api_token: data.token };
+          // Discover cloudId so the MCP server (and verify probes) can hit
+          // the api.atlassian.com gateway, which is the only path that
+          // accepts scoped API tokens. Failure is non-fatal — falls back
+          // to legacy yoursite.atlassian.net Basic auth (works only for
+          // unscoped tokens, which Atlassian deprecates Mar–May 2026).
+          const cloudId = await discoverCloudId(data.url.trim());
+          patch.jira = {
+            url: data.url.trim(),
+            username: data.email.trim(),
+            api_token: data.token,
+            ...(cloudId ? { cloud_id: cloudId } : {}),
+          };
         } else if (product === "confluence") {
           if (!data.url || !data.email || !data.token) {
             res.statusCode = 400;
             return res.end(JSON.stringify({ ok: false, error: "url, email, token are required" }));
           }
-          patch.confluence = { url: data.url.trim(), username: data.email.trim(), api_token: data.token };
+          const cloudId = await discoverCloudId(data.url.trim());
+          patch.confluence = {
+            url: data.url.trim(),
+            username: data.email.trim(),
+            api_token: data.token,
+            ...(cloudId ? { cloud_id: cloudId } : {}),
+          };
         } else if (product === "bitbucket") {
           if (!data.workspace || !data.email || !data.token) {
             res.statusCode = 400;
