@@ -33,28 +33,29 @@ Parse which of `jira` / `confluence` / `bitbucket` already have entries. Report 
 
 If the user said "remove credentials" / "clear credentials" / "log out of atlassian", call `mcp__acendas-atlassian__clear_credentials` with `confirm: true` and stop.
 
-### 2. Hand off to the browser wizard
+### 2. Launch the browser wizard directly
 
-Tell the user to run, with the leading `!` so Claude Code executes it in their shell:
+Run the wizard via Bash with `run_in_background: true` — the script is a long-running HTTP server, not a one-shot, so do NOT block on it:
 
 ```sh
-! node "${CLAUDE_PLUGIN_ROOT}/server/scripts/auth.mjs" web
+node "${CLAUDE_PLUGIN_ROOT}/server/scripts/auth.mjs" web
 ```
+
+The script auto-opens the user's default browser via `open` (macOS) / `start` (Windows) / `xdg-open` (Linux), so the wizard window pops up on its own. There is no TTY requirement — the HTTP server doesn't need stdin.
+
+Then read stdout via `BashOutput` once (after a short beat, ~1–2 seconds is enough) and pull the line that starts with `Open: http://127.0.0.1:`. That's the one-time-secret-bound URL. Show it to the user as a fallback in case the browser didn't auto-open.
 
 What the wizard does:
 - Spins up an HTTP server on `127.0.0.1` at a random port, bound to a one-time URL secret (other localhost processes can't probe it).
-- Opens the user's default browser to that URL.
-- Shows three panels — Jira, Confluence, Bitbucket — each with the canonical scope list inline, fields for URL/email/workspace, and a real `<textarea>` for the token.
-- "Save & Test" per product → atomically writes that product's section to `~/.acendas-atlassian/config.json` → runs `auth.mjs verify <product>` → renders the per-scope OK/MISSING result inline.
-- "Done" shuts the server down. 30-min inactivity timeout otherwise.
+- Stepped UI: Welcome → Pick product → Generate token (with scope checklist) → Paste credentials → Verify result. One product at a time.
+- "Save & Test" per product → atomically writes that product's section to `~/.acendas-atlassian/config.json` → runs the same per-scope self-test the CLI verify uses → renders the result inline.
+- "Done" in the browser shuts the server down. 30-min inactivity timeout otherwise.
 
-The script prints the wizard URL on stdout. If the browser doesn't auto-open, the user can copy that URL.
-
-If `stdin`/`stdout` aren't attached to a TTY when invoked via `!`, the wizard still works — the HTTP server doesn't need a TTY, only the legacy `auth.mjs jira`/`confluence`/`bitbucket` interactive subcommands do.
+**Do NOT** prefix the command with `!` and ask the user to paste it. **Do NOT** wait for the script to exit (it won't, until the user clicks Done in the browser). Run it in the background and let it do its thing.
 
 ### 3. Wait for the user
 
-Once you've told the user to run the command, wait for them to come back with "done" / "saved" / similar. Don't poll — the user closes the wizard themselves by clicking Done.
+After launching the wizard, tell the user something like "Wizard is open in your browser — set up your credentials there, then come back and tell me 'done'." Then wait. Don't poll the background process; don't repeatedly call `BashOutput`. The user explicitly tells you when they're finished by their next message.
 
 ### 4. Final verify + restart reminder
 

@@ -5,6 +5,18 @@
     "pattern": "auth\\.mjs[\\s\"']+web"
   },
   {
+    "name": "runs_wizard_in_background_directly",
+    "type": "contains",
+    "_comment": "Skill must instruct Claude to run the wizard via Bash run_in_background, not ask the user to paste a ! command. Catches regression to the friction-y user-paste flow.",
+    "pattern": "run_in_background"
+  },
+  {
+    "name": "no_user_paste_bang_command",
+    "type": "not_contains",
+    "_comment": "The old flow asked the user to paste `! node ...auth.mjs web` themselves. Claude has Bash — it should just run it.",
+    "pattern": "!\\s*node\\s+\"\\$\\{CLAUDE_PLUGIN_ROOT\\}"
+  },
+  {
     "name": "checks_state_via_auth_status",
     "type": "contains",
     "pattern": "auth\\.mjs[\\s\"']+status"
