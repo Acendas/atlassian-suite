@@ -16,7 +16,7 @@ import {
 
 const server = new FastMCP({
   name: "Acendas Atlassian Suite",
-  version: "0.1.8",
+  version: "0.2.0",
 });
 
 const jiraReady = loadJiraConfig() !== null;
