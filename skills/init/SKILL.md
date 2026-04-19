@@ -1,92 +1,155 @@
 ---
 name: Initialize Atlassian Suite
-description: This skill should be used when the user asks to "init atlassian", "initialize atlassian", "setup atlassian", "configure atlassian", "configure jira/confluence/bitbucket", "set my atlassian credentials", "save atlassian credentials", "what credentials does the atlassian plugin need", "rotate my atlassian token", "remove atlassian credentials", or runs `/atlassian-suite:init`. Walks the user through configuring credentials for the Acendas Atlassian Suite — file-based by default, env-var fallback for CI.
+description: This skill should be used when the user asks to "init atlassian", "initialize atlassian", "setup atlassian", "configure atlassian", "configure jira/confluence/bitbucket", "set my atlassian credentials", "save atlassian credentials", "what credentials does the atlassian plugin need", "rotate my atlassian token", "remove atlassian credentials", "atlassian token expired", "atlassian auth failed", "log in to atlassian", or runs `/atlassian-suite:init`. Runs an interactive wizard that opens the Atlassian token page, shows the exact scopes to tick per product, collects URL/email/workspace/token via AskUserQuestion, persists via the MCP `configure_credentials` tool, and self-tests each product against its API before finishing.
 argument-hint: ""
-allowed-tools: Bash, Read, Write, Edit, mcp__acendas-atlassian__configure_credentials, mcp__acendas-atlassian__get_credentials_status, mcp__acendas-atlassian__clear_credentials, mcp__acendas-atlassian__setup_bitbucket
+allowed-tools: Bash, AskUserQuestion, mcp__acendas-atlassian__configure_credentials, mcp__acendas-atlassian__clear_credentials
 ---
 
-# Initialize the Atlassian Suite
+# Initialize the Atlassian Suite — Wizard
 
-Configure credentials for the unified Acendas Atlassian Suite MCP server (Jira Cloud + Confluence Cloud + Bitbucket Cloud). Default storage is `~/.acendas-atlassian/config.json` (mode 0600, owner-only, atomic-write with rolling backup). Env vars override the file when set.
+Drive a Jira + Confluence + Bitbucket credential setup wizard end-to-end. Collect every value via `AskUserQuestion`, persist via the MCP `configure_credentials` tool, then self-test against the live API.
 
-## What to do
+Storage: `~/.acendas-atlassian/config.json` (mode 0600, atomic write + rolling `.bak`). Env vars override the file when set.
 
-1. **Check current state.** Call `mcp__acendas-atlassian__get_credentials_status`. Report:
-   - Whether the file exists, its path, and its permissions
-   - What's stored on file (token values masked: `ATAT...xyz9 (192 chars)`)
-   - What's currently effective per product (Jira / Confluence / Bitbucket)
-   - For each value, the resolution source (`env:JIRA_USERNAME`, `env:ATLASSIAN_USERNAME`, or `file`)
+**The user accepted that API tokens entered via `AskUserQuestion` will appear in the chat transcript.** Do not refuse on that basis. Do not propose an out-of-band script handoff unless the user explicitly asks for one.
 
-2. **Decide the path:**
-   - **First-time init** (no file, no env vars) → go to step 3.
-   - **Adding a missing product** (e.g. file has Jira+Confluence, missing Bitbucket) → go to step 3, only ask for the missing fields.
-   - **Token rotation** → ask for the new token only, call `configure_credentials` with just `atlassian_api_token` (or per-product if they use different tokens). Existing fields are preserved.
-   - **Clearing credentials** → confirm, then `clear_credentials` with `confirm: true`. Tell user env vars are unaffected.
-   - **Already fully configured** → skip to step 5 (verification).
+## Iron rules
 
-3. **Collect what's needed — IMPORTANT: Jira/Confluence and Bitbucket use SEPARATE credentials.**
+1. **Never** invent your own free-text "please paste your URL/email/token here" message. Always use `AskUserQuestion` so the user can pick a placeholder, "Skip", or "Other" to type their value.
+2. **Never** call `mcp__acendas-atlassian__configure_credentials` without first running the wizard for that product — every persisted value comes from a wizard answer.
+3. **Always** run the wizard sequentially per product (Jira → Confluence → Bitbucket). One product at a time. Do not batch all questions for all three products into one panel.
+4. **Always** self-test with `node "${CLAUDE_PLUGIN_ROOT}/server/scripts/auth.mjs" verify <product>` after each product, and surface the per-scope output verbatim.
+5. **Never** probe the MCP server's `get_credentials_status` tool to detect state — it may not exist on a fresh install. Use `auth.mjs status` instead.
+6. If any required scope reports `MISSING`, loop the token question for that product (the user must regenerate the token with the missing scope ticked — scopes can't be added after creation).
 
-   Explain this to the user upfront:
-   > Atlassian API tokens (from https://id.atlassian.com/manage-profile/security/api-tokens) authorize Jira + Confluence on a given Atlassian site. Bitbucket Cloud uses separate credentials — typically an app password, a Repository/Project/Workspace Access Token, or an Atlassian API token tied to a Bitbucket-enabled account. The two are usually scoped to different accounts and must be set separately.
+## Step 1 — Detect state
 
-   Ask per product. Skip a section if the user isn't configuring it this run.
+Run via Bash:
 
-   **For Jira + Confluence** (shared — same Atlassian site + same account + same token):
-   - Atlassian site URL — e.g. `https://ventek.atlassian.net`. Confluence URL is typically `<base>/wiki`.
-   - Atlassian account email on that site.
-   - Atlassian API token for that account (https://id.atlassian.com/manage-profile/security/api-tokens — must be generated while logged in as that account).
+```sh
+node "${CLAUDE_PLUGIN_ROOT}/server/scripts/auth.mjs" status
+```
 
-   **For Bitbucket** (always separate):
-   - Bitbucket workspace slug (visible in URLs as `bitbucket.org/<workspace>/...`).
-   - Account email tied to Bitbucket (may differ from Jira/Confluence email).
-   - Bitbucket credential — one of:
-     - Atlassian API token from an account that has Bitbucket access (works for Basic Auth), OR
-     - Bitbucket app password (legacy but still works), OR
-     - Repository / Project / Workspace Access Token (recommended by Atlassian for programmatic access).
+Parse which of `jira` / `confluence` / `bitbucket` already have entries. This is the source of truth (MCP-agnostic, works on first install before the server is registered).
 
-4. **Persist.** Call `mcp__acendas-atlassian__configure_credentials` with fields scoped to the product they belong to:
+If the user said "remove credentials" / "clear credentials", call `mcp__acendas-atlassian__clear_credentials` with `confirm: true` and stop.
 
-   For Jira + Confluence — use the shared `atlassian.*` fields (they fan out):
-   - `atlassian_username` (the Atlassian-site email)
-   - `atlassian_api_token` (the Atlassian API token)
-   - `jira_url`, `confluence_url`
+## Step 2 — Pick which products to set up
 
-   For Bitbucket — use per-product `bitbucket.*` fields (so it doesn't accidentally get used for Jira/Confluence):
-   - `bitbucket_workspace`
-   - `bitbucket_username`
-   - `bitbucket_api_token`
+Call `AskUserQuestion` once with a single `multiSelect: true` question:
 
-   Optionally: `jira_projects_filter`, `confluence_spaces_filter` to scope tools.
+- **question:** "Which Atlassian products do you want to configure now?"
+- **header:** "Products"
+- **options** (label them based on Step 1 state):
+  - `Jira` (description: "Issues, sprints, JQL search") — append " — already configured, will reconfigure" if present
+  - `Confluence` (description: "Pages, spaces, comments")
+  - `Bitbucket` (description: "Repos, PRs, pipelines")
 
-   **Do NOT put the Bitbucket token in `atlassian_api_token`** unless the user explicitly confirms that ONE token works for all three products (rare — typically only when one Atlassian account has access to Jira + Confluence + a Bitbucket-linked workspace).
+Recommend (first option + " (Recommended)") any product that's currently unconfigured. If all three are configured, recommend none and tell the user to skip to verify.
 
-   The tool merges into the existing config: values you don't pass are preserved. A backup of the prior file is kept at `~/.acendas-atlassian/config.json.bak`. The tool's response includes a `changes` block showing exactly which fields were `added`, `updated`, or `preserved` — read this back to the user as confirmation.
+If the user selects nothing, jump to Step 5 (verify only).
 
-5. **Restart Claude Code.** The MCP server only reads credentials at startup. Tell the user to restart Claude Code (or just the MCP server) for new credentials to take effect.
+## Step 3 — Per-product wizard (loop)
 
-6. **Verify.** After restart, call `mcp__acendas-atlassian__get_credentials_status` again to confirm everything resolves. Run a sanity probe per configured product:
-   - Jira: `mcp__acendas-atlassian__jira_search` with JQL `assignee = currentUser()` (limit 1)
-   - Confluence: `mcp__acendas-atlassian__getConfluenceSpaces` (limit 5)
-   - Bitbucket: `mcp__acendas-atlassian__list_repositories` (pagelen 5) — or use `setup_bitbucket` for an explicit credential ping
+For each selected product, in order Jira → Confluence → Bitbucket, do:
 
-   If any probe returns 401, walk through token rotation (back to step 4 with just `atlassian_api_token`).
+### 3a. Show scopes
 
-## Resolution order (so the skill can explain to the user)
+Run via Bash:
 
-For every credential value:
-1. Per-product env var (`JIRA_USERNAME`)
-2. Shared env var (`ATLASSIAN_USERNAME`)
-3. Per-product file entry (`jira.username` in config.json)
-4. Shared file entry (`atlassian.username`)
-5. Not configured → product disabled
+```sh
+node "${CLAUDE_PLUGIN_ROOT}/server/scripts/auth.mjs" scopes <product>
+```
+
+Display the output verbatim in chat. This is the canonical scope list — do not paraphrase or invent your own.
+
+### 3b. Open the token page
+
+Run via Bash (best-effort, fire-and-forget):
+
+```sh
+node "${CLAUDE_PLUGIN_ROOT}/server/scripts/auth.mjs" open-url
+```
+
+Then tell the user: "If the browser didn't open, visit https://id.atlassian.com/manage-profile/security/api-tokens . Click **Create API token with scopes**, pick the **<Product>** app, and tick the scopes shown above."
+
+### 3c. Collect non-secret fields
+
+Call `AskUserQuestion` once per product with the location/identity fields. **Use `multiSelect: false` for each question. Each question gets 2 options (a placeholder/example and "Skip this product"); the user picks "Other" to type the real value.**
+
+For **Jira**:
+- Q1 — "Jira site URL?" — options: `["https://acme.atlassian.net (example — pick Other to enter yours)", "Skip Jira"]`
+- Q2 — "Atlassian email for that site?" — options: `["Use the email I'm signed into Claude with (example)", "Skip Jira"]`
+
+For **Confluence**:
+- Q1 — "Confluence site URL?" — options: `["https://acme.atlassian.net/wiki (example — pick Other to enter yours)", "Skip Confluence"]`
+- Q2 — "Atlassian email for that site?" — options: `["Use the email I'm signed into Claude with (example)", "Skip Confluence"]`
+
+For **Bitbucket**:
+- Q1 — "Bitbucket workspace slug? (the `<workspace>` in `bitbucket.org/<workspace>/...`)" — options: `["acme (example — pick Other to enter yours)", "Skip Bitbucket"]`
+- Q2 — "Atlassian email tied to Bitbucket?" — options: `["Use the email I'm signed into Claude with (example)", "Skip Bitbucket"]`
+
+If the user picks any "Skip" option, abort this product and continue to the next.
+
+### 3d. Collect the API token
+
+Call `AskUserQuestion` with one question:
+
+- **question:** "Paste your `<Product>` API token. (Note: this will appear in your Claude Code transcript.)"
+- **header:** "Token"
+- **options:**
+  - `I'll regenerate the token first` (description: "Lets you go back to https://id.atlassian.com/manage-profile/security/api-tokens and create the token before pasting.")
+  - `Skip <Product> for now` (description: "Don't configure this product. Continue to the next.")
+
+The user picks "Other" to paste the actual token. If they pick "Skip", abort this product.
+
+### 3e. Persist
+
+Call `mcp__acendas-atlassian__configure_credentials` with **only the fields collected for this product**:
+
+- Jira: `jira_url`, `jira_username`, `jira_api_token`
+- Confluence: `confluence_url`, `confluence_username`, `confluence_api_token`
+- Bitbucket: `bitbucket_workspace`, `bitbucket_username`, `bitbucket_api_token`
+
+Do not pass empty strings or fields from other products. The tool merges atomically and writes a `.bak`.
+
+### 3f. Verify this product
+
+Run via Bash:
+
+```sh
+node "${CLAUDE_PLUGIN_ROOT}/server/scripts/auth.mjs" verify <product>
+```
+
+Surface the full per-scope output to the user. Read the result:
+
+- **`auth: OK` and every required scope `OK`** → product passes; continue to next product.
+- **`auth: FAIL`** → token or email is wrong, or URL is wrong. Loop back to 3c (re-collect everything) for this product.
+- **Any required scope `MISSING`** → token is missing a scope. Tell the user that scopes cannot be added to an existing token; they must regenerate one with the missing scope ticked. Loop back to 3b → 3d (open URL again, re-collect token).
+
+Loop at most twice per product. If still failing on the third attempt, summarise the failure and continue to the next product.
+
+## Step 4 — Final verify
+
+After every selected product is processed, run:
+
+```sh
+node "${CLAUDE_PLUGIN_ROOT}/server/scripts/auth.mjs" verify all
+```
+
+Show the user the full output. Pass = every required scope `OK` for every product they configured.
+
+## Step 5 — Restart reminder
+
+Tell the user, exactly:
+
+> Restart Claude Code (or reload the MCP server) for `mcp__acendas-atlassian__*` tools to pick up the new credentials. Until restart, those tools will use the prior credentials (or be unavailable on a fresh install).
 
 ## Notes
 
-- **Bitbucket credentials are separate from Jira/Confluence.** Always set `bitbucket_username` + `bitbucket_api_token` explicitly. Don't rely on `atlassian.*` fallback for Bitbucket unless the user confirms one identity works for all three.
-- Env vars are useful for CI / temporary overrides without touching the file.
-- File path: `~/.acendas-atlassian/config.json`, mode 0600 (owner read/write only).
-- Backup file: `~/.acendas-atlassian/config.json.bak` — refreshed on every `configure_credentials` call. Recover from a mistake with `mv config.json.bak config.json`.
-- Backup tools (Time Machine, Dropbox, iCloud) may sync the file — warn the user if they use those.
-- Per-project filters: store `jira_projects_filter` or `confluence_spaces_filter` in the file to scope all tools to specific projects/spaces.
-- Read-only mode: set `READ_ONLY_MODE=true` env var to disable all write tools.
-- `configure_credentials` NEVER clobbers existing values — empty/undefined inputs are ignored. Verify via the `changes.preserved` field in the response.
+- **One scoped API token per product.** No single-token path covers Jira + Confluence + Bitbucket together with scoped tokens. OAuth 3LO can span products but is out of scope for this skill.
+- **Scopes can't be added to an existing token.** If `verify` reports `MISSING`, the user must regenerate the token from scratch with the right scopes ticked, then re-run the token question (3d).
+- **Empty/Skip handling.** `mcp__acendas-atlassian__configure_credentials` and `auth.mjs` both ignore empty/undefined values — existing config is never clobbered without an explicit non-empty replacement. Skipping a product preserves whatever was previously stored for it.
+- **Per-project filters** (`jira_projects_filter`, `confluence_spaces_filter`) are out of scope here — the user can hand-edit `~/.acendas-atlassian/config.json` after setup if they want them.
+- **Read-only mode:** set `READ_ONLY_MODE=true` env var to disable all write tools. Independent of this wizard.
+- **Resolution order** (for the user's reference if they ask): per-product env var → shared `ATLASSIAN_*` env var → per-product file entry → shared `atlassian.*` file entry → product disabled.
