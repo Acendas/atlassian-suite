@@ -6,6 +6,7 @@ import { registerSearchTools } from "./search.js";
 import { registerIssueTools } from "./issues.js";
 import { registerProjectTools } from "./projects.js";
 import { registerAgileTools } from "./agile.js";
+import { registerJiraAttachmentTools } from "./attachments.js";
 
 export interface RegisterOptions {
   readOnly: boolean;
@@ -20,4 +21,5 @@ export function registerJiraTools(server: FastMCP, opts: RegisterOptions): void 
   registerIssueTools(server, opts);
   registerProjectTools(server, opts);
   registerAgileTools(server, opts);
+  registerJiraAttachmentTools(server, opts);
 }

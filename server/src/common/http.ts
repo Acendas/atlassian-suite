@@ -92,6 +92,45 @@ export function createAtlassianHttp(opts: CreateAtlassianHttpOpts): AtlassianHtt
     }
   };
 
+  // Rate-limit / transient-error retry policy.
+  //
+  // Atlassian can return 429 with a Retry-After header (seconds or
+  // HTTP-date) when we hit rate limits, and transient 502/503/504 on
+  // gateway hiccups. Without retries, a heavy /review-pr session that
+  // fans out 6-12 parallel scanner calls against one tenant can start
+  // failing half its tools. The retry policy here:
+  //
+  //   - retryable status codes: 429, 502, 503, 504
+  //   - honors Retry-After if present (seconds OR HTTP-date)
+  //   - otherwise exponential backoff starting at 400ms, doubling,
+  //     capped at 8s per attempt
+  //   - max 3 retries (so up to 4 total attempts)
+  //   - non-retryable statuses (auth, scope, not-found, validation)
+  //     throw immediately — retrying won't help
+  //
+  // We do NOT retry non-idempotent methods (POST/PUT/PATCH/DELETE) on
+  // 5xx by default — at-most-once semantics matters more than best-
+  // effort delivery for writes. 429 we DO retry on all methods since
+  // the request didn't reach the handler.
+  const RETRYABLE = new Set([429, 502, 503, 504]);
+  const MAX_RETRIES = 3;
+  const BASE_DELAY_MS = 400;
+  const CAP_DELAY_MS = 8_000;
+
+  const parseRetryAfter = (headerVal: string | null): number | null => {
+    if (!headerVal) return null;
+    const asNum = Number(headerVal);
+    if (Number.isFinite(asNum)) return Math.max(0, asNum) * 1000;
+    const asDate = Date.parse(headerVal);
+    if (!Number.isNaN(asDate)) return Math.max(0, asDate - Date.now());
+    return null;
+  };
+
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+  const isIdempotent = (method: string): boolean =>
+    method === "GET" || method === "HEAD" || method === "OPTIONS";
+
   const doFetch = async <T>(
     method: string,
     path: string,
@@ -99,18 +138,40 @@ export function createAtlassianHttp(opts: CreateAtlassianHttpOpts): AtlassianHtt
     query: Query | undefined,
   ): Promise<T> => {
     const url = buildUrl(path, query);
-    const res = await fetch(url, init);
-    const text = await res.text();
-    const parsed = parseBody(text);
-    if (!res.ok) {
-      throw new AtlassianHttpError(
+    let lastErr: AtlassianHttpError | null = null;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const res = await fetch(url, init);
+      const text = await res.text();
+      const parsed = parseBody(text);
+      if (res.ok) return parsed as T;
+
+      const err = new AtlassianHttpError(
         res.status,
         res.statusText,
         parsed,
         `${label} ${method} ${path} failed: ${res.status} ${res.statusText}`,
       );
+      lastErr = err;
+
+      // Don't retry on non-retryable status codes.
+      if (!RETRYABLE.has(res.status)) throw err;
+      // Don't retry 5xx on non-idempotent writes — the request may have
+      // been partially applied. 429 is always safe to retry since the
+      // request didn't reach the handler.
+      if (res.status !== 429 && !isIdempotent(method)) throw err;
+      // Out of retries?
+      if (attempt === MAX_RETRIES) throw err;
+
+      // Compute delay: Retry-After wins if present; otherwise exponential
+      // backoff with mild jitter (±25%) to avoid thundering-herd.
+      const retryAfterMs = parseRetryAfter(res.headers.get("Retry-After"));
+      const expMs = Math.min(BASE_DELAY_MS * 2 ** attempt, CAP_DELAY_MS);
+      const jittered = expMs * (0.75 + Math.random() * 0.5);
+      const delay = retryAfterMs != null ? retryAfterMs : jittered;
+      await sleep(delay);
     }
-    return parsed as T;
+    // Unreachable: loop either returns or throws.
+    throw lastErr!;
   };
 
   const request = <T>(

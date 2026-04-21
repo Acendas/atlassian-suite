@@ -19,6 +19,7 @@ import { registerWatcherTools } from "./watchers.js";
 import { registerCopyTools } from "./copy.js";
 import { registerPropertyTools } from "./properties.js";
 import { registerVersionTools } from "./versions.js";
+import { registerPageLinkTools } from "./pageLinks.js";
 
 export interface RegisterOptions {
   readOnly: boolean;
@@ -42,4 +43,5 @@ export function registerConfluenceTools(server: FastMCP, opts: RegisterOptions):
   registerCopyTools(server, opts);
   registerPropertyTools(server, opts);
   registerVersionTools(server, opts);
+  registerPageLinkTools(server);
 }

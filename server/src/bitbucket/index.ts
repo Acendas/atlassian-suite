@@ -28,6 +28,8 @@ import { registerDeploymentTools } from "./deployments.js";
 import { registerBranchRestrictionTools } from "./branchRestrictions.js";
 import { registerKeyTools } from "./deployKeys.js";
 import { registerPipelineExtraTools } from "./pipelineExtras.js";
+import { registerPullRequestTaskTools } from "./pullRequestTasks.js";
+import { registerSourceTools } from "./source.js";
 
 export interface RegisterOptions {
   readOnly: boolean;
@@ -61,7 +63,9 @@ export function registerBitbucketTools(server: FastMCP, opts: RegisterOptions): 
   registerTagTools(server, ctx);
   registerCommitTools(server, ctx);
   registerPullRequestTools(server, ctx);
+  registerPullRequestTaskTools(server, ctx);
   registerCommentTools(server, ctx);
+  registerSourceTools(server, ctx);
   registerPipelineTools(server, ctx);
   registerPipelineExtraTools(server, ctx);
   registerCodeInsightsTools(server, ctx);

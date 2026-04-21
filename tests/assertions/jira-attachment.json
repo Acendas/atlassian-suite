@@ -1,0 +1,32 @@
+[
+  {
+    "name": "allows_list",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_list_issue_attachments"
+  },
+  {
+    "name": "allows_get",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_get_attachment"
+  },
+  {
+    "name": "allows_download",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_download_attachment"
+  },
+  {
+    "name": "allows_upload",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_add_attachment"
+  },
+  {
+    "name": "allows_delete",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_delete_attachment"
+  }
+]

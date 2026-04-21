@@ -290,6 +290,25 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
       }),
   });
 
+  server.addTool({
+    name: "jira_delete_comment",
+    description:
+      "Permanently delete a comment from an issue. Destructive — Jira has no comment trash.",
+    parameters: z.object({
+      issue_key: z.string(),
+      comment_id: z.string(),
+    }),
+    execute: async (args: { issue_key: string; comment_id: string }) =>
+      safeJira(async () => {
+        ensureWritable(opts.readOnly);
+        await jiraClient().issueComments.deleteComment({
+          issueIdOrKey: args.issue_key,
+          id: args.comment_id,
+        } as never);
+        return { deleted: true, issue_key: args.issue_key, comment_id: args.comment_id };
+      }),
+  });
+
   // ---------- Worklog ----------
 
   server.addTool({
@@ -413,6 +432,61 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
             icon: args.icon_url ? { url16x16: args.icon_url } : undefined,
           },
         } as never);
+      }),
+  });
+
+  server.addTool({
+    name: "jira_list_remote_issue_links",
+    description:
+      "List all remote (web) links on an issue — useful for investigating what PRs, docs, or external resources are attached. Returns an array of {id, self, relationship, object: {url, title, icon, ...}}.",
+    parameters: z.object({
+      issue_key: z.string(),
+      global_id: z
+        .string()
+        .optional()
+        .describe(
+          "Filter by an app-specific globalId (e.g. Bitbucket PR links use a deterministic globalId). Leave unset to list all.",
+        ),
+    }),
+    execute: async (args: { issue_key: string; global_id?: string }) =>
+      safeJira(() =>
+        jiraClient().issueRemoteLinks.getRemoteIssueLinks({
+          issueIdOrKey: args.issue_key,
+          globalId: args.global_id,
+        } as never),
+      ),
+  });
+
+  server.addTool({
+    name: "jira_delete_remote_issue_link",
+    description:
+      "Remove a remote (web) link from an issue. Accepts either the numeric link_id (from jira_list_remote_issue_links) OR a globalId via the global_id arg. Destructive.",
+    parameters: z.object({
+      issue_key: z.string(),
+      link_id: z.string().optional(),
+      global_id: z
+        .string()
+        .optional()
+        .describe("Alternative to link_id — delete the link matching this globalId"),
+    }),
+    execute: async (args: { issue_key: string; link_id?: string; global_id?: string }) =>
+      safeJira(async () => {
+        ensureWritable(opts.readOnly);
+        if (!args.link_id && !args.global_id) {
+          throw new Error("jira_delete_remote_issue_link requires link_id or global_id");
+        }
+        if (args.link_id) {
+          await jiraClient().issueRemoteLinks.deleteRemoteIssueLinkById({
+            issueIdOrKey: args.issue_key,
+            linkId: args.link_id,
+          } as never);
+          return { deleted: true, issue_key: args.issue_key, link_id: args.link_id };
+        }
+        await jiraClient().issueRemoteLinks.deleteRemoteIssueLinkByGlobalId({
+          issueIdOrKey: args.issue_key,
+          globalId: args.global_id,
+        } as never);
+        return { deleted: true, issue_key: args.issue_key, global_id: args.global_id };
       }),
   });
 
