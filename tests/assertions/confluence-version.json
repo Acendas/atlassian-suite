@@ -1,0 +1,30 @@
+[
+  {
+    "name": "allows_history",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_get_page_history"
+  },
+  {
+    "name": "allows_diff",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_get_page_diff"
+  },
+  {
+    "name": "allows_restore",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_restore_version"
+  },
+  {
+    "name": "documents_restore_is_non_destructive",
+    "type": "contains",
+    "pattern": "nothing is deleted|new version|writes it as"
+  },
+  {
+    "name": "documents_restore_is_v1",
+    "type": "contains",
+    "pattern": "v1|classic|write:confluence-content"
+  }
+]

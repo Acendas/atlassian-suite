@@ -1,0 +1,30 @@
+[
+  {
+    "name": "allows_copy_page",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_copy_page"
+  },
+  {
+    "name": "allows_hierarchy_start",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_copy_page_hierarchy_start"
+  },
+  {
+    "name": "allows_hierarchy_status",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_copy_page_hierarchy_status"
+  },
+  {
+    "name": "explains_async_task",
+    "type": "contains",
+    "pattern": "long[-\\s]?task|async"
+  },
+  {
+    "name": "warns_about_expensive_op",
+    "type": "contains",
+    "pattern": "confirm|expensive"
+  }
+]

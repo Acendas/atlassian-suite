@@ -83,7 +83,10 @@ Tell them this verbatim if you see `MISSING` — don't try to work around it.
 
 ## Notes
 
-- **One scoped API token per product.** No single-token path covers Jira + Confluence + Bitbucket together with scoped tokens. OAuth 3LO can span products but is out of scope for this skill.
+- **Two token modes — picked on the wizard's product-picker step.**
+  - **Atlassian Cloud (classic token)** — one unscoped token covers both Jira + Confluence (Bitbucket still needs its own). Simpler, inherits full account permissions. Recommended if you don't care about least-privilege.
+  - **Scoped tokens** — one token per product (Jira-only, Confluence-only, Bitbucket-only). Pick the individual product cards for this flow. Atlassian's token UI forces a single product per scoped token, so this path is intentionally one-at-a-time.
+- **Bitbucket is always separate.** Bitbucket tokens are issued at `bitbucket.org/account/settings/api-tokens/`, not `id.atlassian.com`, regardless of classic vs scoped.
 - **Localhost-only.** The wizard binds to `127.0.0.1` exclusively — never `0.0.0.0`. The URL secret prevents other processes on the same machine from posting to `/save`.
 - **Token never in transcript.** The token travels: browser textarea → `POST http://127.0.0.1:<port>/save/<product>` → atomic file write. The wizard returns only structured pass/fail to the page, never echoes the token.
 - **Empty/skip handling.** Leaving a panel blank in the wizard does nothing — existing config for that product is preserved. The user can run the wizard again any time to add or rotate one product without touching the others.

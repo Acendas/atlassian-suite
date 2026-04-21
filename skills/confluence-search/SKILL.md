@@ -32,3 +32,8 @@ Translate intent → CQL, run the search, summarize.
    ```
 
 5. **Offer follow-up:** "Want to read one? Use `/atlassian-suite:confluence-page <id-or-title>`."
+
+## Notes
+
+- CQL runs via the v1 `/rest/api/search` endpoint — Confluence Cloud has no v2 CQL equivalent, so this tool stays on v1 and requires the classic `search:confluence` scope.
+- If you already know the exact page title and space, skip CQL — call `confluence_get_page_by_title(space_id, title)` directly (one v2 call, cheaper).

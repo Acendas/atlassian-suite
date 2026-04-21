@@ -1,0 +1,42 @@
+[
+  {
+    "name": "allows_get_page",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_get_page"
+  },
+  {
+    "name": "allows_get_page_by_title",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_get_page_by_title"
+  },
+  {
+    "name": "allows_create_page",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_create_page"
+  },
+  {
+    "name": "allows_update_page",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_update_page"
+  },
+  {
+    "name": "explains_space_id_not_space_key",
+    "type": "contains",
+    "_comment": "v2 create_page requires numeric space_id — skills that still say space_key are drifted.",
+    "pattern": "space_id"
+  },
+  {
+    "name": "documents_version_bump_pattern",
+    "type": "contains",
+    "pattern": "version"
+  },
+  {
+    "name": "routes_granular_edits_to_edit_skill",
+    "type": "contains",
+    "pattern": "confluence-edit"
+  }
+]

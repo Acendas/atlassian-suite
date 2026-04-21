@@ -79,25 +79,13 @@ export function registerDeploymentTools(server: FastMCP, ctx: BitbucketContext):
       ),
   });
 
-  server.addTool({
-    name: "create_environment",
-    description: "Create a deployment environment.",
-    parameters: z.object({
-      repo_slug: z.string(),
-      name: z.string(),
-      environment_type: z.enum(["Test", "Staging", "Production"]),
-      rank: z.number().int().min(0).optional(),
-      workspace: z.string().optional(),
-    }),
-    execute: async (args: any) =>
-      safeExecute(() => {
-        ensureWritable(ctx);
-        return ctx.http.post(`${repoBase(args.workspace, args.repo_slug)}/environments/`, {
-          name: args.name,
-          environment_type: { name: args.environment_type, rank: args.rank ?? 0 },
-        });
-      }),
-  });
+  // create_environment was removed in v0.3.0. Bitbucket Cloud does not
+  // expose a public API endpoint for creating deployment environments —
+  // POST to /repositories/{ws}/{repo}/environments/ returns 404
+  // "Resource not found" (verified April 2026). Environments must be
+  // created through the Bitbucket UI or defined implicitly via
+  // `bitbucket-pipelines.yml` deployment steps. list/get/delete still
+  // work on environments created by those paths.
 
   server.addTool({
     name: "delete_environment",

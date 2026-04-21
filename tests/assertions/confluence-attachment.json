@@ -1,0 +1,30 @@
+[
+  {
+    "name": "allows_get_attachments",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_get_attachments"
+  },
+  {
+    "name": "allows_upload_attachment",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_upload_attachment"
+  },
+  {
+    "name": "allows_delete_attachment",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_delete_attachment"
+  },
+  {
+    "name": "explains_upload_is_v1",
+    "type": "contains",
+    "pattern": "v1|classic|write:confluence-file|write:confluence-content"
+  },
+  {
+    "name": "warns_confirm_destructive",
+    "type": "contains",
+    "pattern": "confirm.*(?:delete|purge)|destructive"
+  }
+]

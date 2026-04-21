@@ -26,11 +26,14 @@ runner is generic across atlassian-suite skills.
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = PROJECT_ROOT / "skills"
+SERVER_SRC = PROJECT_ROOT / "server" / "src"
+AUTH_MJS = PROJECT_ROOT / "server" / "scripts" / "auth.mjs"
 ASSERTIONS_DIR = Path(__file__).resolve().parent / "assertions"
 
 
@@ -293,6 +296,252 @@ def check_skill_assertions(result, skill_filter=None):
                 result.warn(check_id, f"unknown check type: {check_type}")
 
 
+# ─── Check 4: Tool / skill cross-reference ───
+#
+# Every MCP tool named in a skill's allowed-tools must actually be
+# registered somewhere in server/src/**.ts. And every tool a skill body
+# calls (matching the `mcp__acendas-atlassian__<name>` form) must also
+# exist. Catches the "renamed a tool, forgot a skill" regression.
+
+TOOL_FRONTMATTER_PREFIX = "mcp__acendas-atlassian__"
+TOOL_REG_RE = re.compile(r'name:\s*"([a-zA-Z_][a-zA-Z0-9_]*)"')
+TOOL_BODY_REF_RE = re.compile(
+    r"mcp__acendas-atlassian__([a-zA-Z_][a-zA-Z0-9_]*)"
+)
+
+
+def collect_registered_tools():
+    """Walk server/src/**.ts for `server.addTool({ name: "..." })`. Returns set of tool names."""
+    tools = set()
+    if not SERVER_SRC.exists():
+        return tools
+    for ts in SERVER_SRC.rglob("*.ts"):
+        try:
+            text = ts.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        # Restrict matches to lines that look like they're inside an addTool
+        # block to avoid matching unrelated `name:` keys. Cheap heuristic:
+        # require the match to appear within 4 lines after "addTool" or
+        # an open brace whose preceding token is addTool.
+        for m in re.finditer(
+            r"server\.addTool\s*\(\s*\{\s*name:\s*\"([a-zA-Z_][a-zA-Z0-9_]*)\"",
+            text,
+        ):
+            tools.add(m.group(1))
+    return tools
+
+
+def check_tool_skill_crossref(result, skill_filter=None):
+    registered = collect_registered_tools()
+    if not registered:
+        # If we can't find any registered tools, the server src must be
+        # unreadable — fail one summary check rather than flooding.
+        result.fail(
+            "crossref:server_src_discovery",
+            f"no tool registrations found under {SERVER_SRC}",
+        )
+        return
+
+    for dirname, skill_file in list_skill_dirs():
+        if skill_filter and dirname != skill_filter:
+            continue
+        content = read_file(skill_file)
+        fm, _ = parse_frontmatter(skill_file)
+
+        seen_in_allowed = set()
+        raw_allowed = (fm or {}).get("allowed-tools", "")
+        if isinstance(raw_allowed, list):
+            for entry in raw_allowed:
+                s = str(entry).strip()
+                if s.startswith(TOOL_FRONTMATTER_PREFIX):
+                    seen_in_allowed.add(s[len(TOOL_FRONTMATTER_PREFIX) :])
+        elif isinstance(raw_allowed, str):
+            for entry in raw_allowed.split(","):
+                s = entry.strip()
+                if s.startswith(TOOL_FRONTMATTER_PREFIX):
+                    seen_in_allowed.add(s[len(TOOL_FRONTMATTER_PREFIX) :])
+
+        for tool in seen_in_allowed:
+            check_id = f"crossref:{dirname}:{tool}"
+            if tool in registered:
+                result.ok(check_id)
+            else:
+                result.fail(
+                    check_id,
+                    f"allowed-tools lists {tool!r} but no server.addTool({{name: \"{tool}\"}}) found",
+                )
+
+        # Body references (rare, but we check)
+        in_body = set(TOOL_BODY_REF_RE.findall(content))
+        for tool in in_body:
+            if tool in seen_in_allowed:
+                continue  # already covered
+            check_id = f"crossref:{dirname}:body:{tool}"
+            if tool in registered:
+                # Body mentions a tool not in allowed-tools — warn; the skill
+                # can't actually use it unless added.
+                result.warn(
+                    check_id,
+                    f"body references {tool!r} but it's not in allowed-tools",
+                )
+            else:
+                result.fail(
+                    check_id,
+                    f"body references {tool!r} but no tool by that name is registered",
+                )
+
+
+# ─── Check 5: Scope list structural validation ───
+#
+# Every entry in SCOPES.confluence (and .jira, .bitbucket) must have
+# scope, required, why. Confluence entries must also have family. Probes
+# are optional but their shape is validated when present.
+
+SCOPE_BLOCK_RE = re.compile(
+    r"^\s*(jira|confluence|bitbucket):\s*\[(.*?)^\s*\],?\s*$",
+    re.DOTALL | re.MULTILINE,
+)
+SCOPE_ENTRY_RE = re.compile(
+    r"\{\s*(?:scope|family|required|why|probe)\b.*?\n\s*\}",
+    re.DOTALL,
+)
+
+
+def check_scope_list(result):
+    """Lightweight structural check of SCOPES in auth.mjs. Not a full JS
+    parser — regex-based, meant to catch drift (missing `family` on a
+    new Confluence entry, typo in required, …). Runs auth.mjs itself
+    under `node --check` as a syntax gate first."""
+    if not AUTH_MJS.exists():
+        result.fail("scopes:auth_mjs_exists", f"auth.mjs not found at {AUTH_MJS}")
+        return
+
+    # Syntax gate: node --check catches typos that break require("auth.mjs")
+    try:
+        syntax = subprocess.run(
+            ["node", "--check", str(AUTH_MJS)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except Exception as e:
+        result.fail("scopes:auth_mjs_syntax", f"failed to run node --check: {e}")
+        return
+    if syntax.returncode != 0:
+        result.fail(
+            "scopes:auth_mjs_syntax",
+            syntax.stderr.strip() or "node --check failed",
+        )
+        return
+    result.ok("scopes:auth_mjs_syntax")
+
+    text = read_file(AUTH_MJS)
+    # Extract each product's scope block via brace-balanced scan. Regex
+    # doesn't handle nested braces cleanly; we fall back to a simple
+    # "first `[` after `confluence:` up to the matching `]`" scan.
+
+    def extract_block(product):
+        anchor = re.search(rf"\b{product}:\s*\[", text)
+        if not anchor:
+            return None
+        i = anchor.end() - 1  # position of '['
+        depth = 0
+        for j in range(i, len(text)):
+            ch = text[j]
+            if ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    return text[i + 1 : j]
+        return None
+
+    # Confluence: every entry must have family ∈ {granular, classic}.
+    conf_block = extract_block("confluence")
+    if conf_block is None:
+        result.fail("scopes:confluence:block", "could not locate SCOPES.confluence block")
+    else:
+        # Cheap entry split: top-level objects are separated by `}, {`.
+        # This works for our known shape.
+        entries = re.findall(r"\{([^{}]*)\}", conf_block)
+        if not entries:
+            result.fail("scopes:confluence:entries", "no entries parsed — shape changed?")
+        else:
+            for entry in entries:
+                scope_m = re.search(r"scope:\s*\"([^\"]+)\"", entry)
+                if not scope_m:
+                    # Skip entries without a scope field — not a scope entry.
+                    continue
+                scope_name = scope_m.group(1)
+                check_id = f"scopes:confluence:{scope_name}"
+                if "family:" not in entry:
+                    result.fail(check_id + ":family", "missing family field")
+                else:
+                    fam_m = re.search(r"family:\s*\"(granular|classic)\"", entry)
+                    if fam_m:
+                        result.ok(check_id + ":family")
+                    else:
+                        result.fail(
+                            check_id + ":family",
+                            "family value must be 'granular' or 'classic'",
+                        )
+                for field in ("required", "why"):
+                    if re.search(rf"\b{field}:", entry):
+                        result.ok(f"{check_id}:has_{field}")
+                    else:
+                        result.fail(
+                            f"{check_id}:has_{field}",
+                            f"missing {field} field",
+                        )
+
+
+# ─── Check 6: Storage unit tests ───
+#
+# _storage.ts has its own test runner embedded. Invoke via tsx and
+# fail the eval suite if any unit test fails.
+
+STORAGE_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_storage.test.ts"
+
+
+def check_storage_unit_tests(result):
+    if not STORAGE_TEST.exists():
+        # Absent file → skip silently; other checks will flag missing tests.
+        return
+    try:
+        proc = subprocess.run(
+            ["npx", "tsx", str(STORAGE_TEST)],
+            capture_output=True,
+            text=True,
+            cwd=str(PROJECT_ROOT / "server"),
+            timeout=60,
+        )
+    except Exception as e:
+        result.fail("storage:unit_tests", f"failed to spawn: {e}")
+        return
+
+    out = (proc.stdout or "") + (proc.stderr or "")
+    # Parse the "N passed, M failed" summary the runner emits.
+    summary = re.search(r"(\d+)\s+passed,\s+(\d+)\s+failed", out)
+    if not summary:
+        result.fail(
+            "storage:unit_tests",
+            f"could not parse test output\n{out.strip()[:400]}",
+        )
+        return
+    passed = int(summary.group(1))
+    failed = int(summary.group(2))
+    if failed == 0:
+        result.ok(f"storage:unit_tests ({passed} tests)")
+    else:
+        # Show the FAIL lines from the test output.
+        fails = "\n".join(l for l in out.splitlines() if "FAIL:" in l)
+        result.fail(
+            "storage:unit_tests",
+            f"{failed} of {passed + failed} tests failed\n{fails}",
+        )
+
+
 # ─── Report ───
 
 def print_report(result, verbose=False):
@@ -368,6 +617,10 @@ def main():
     check_frontmatter(result, skill_filter)
     check_file_references(result, skill_filter)
     check_skill_assertions(result, skill_filter)
+    check_tool_skill_crossref(result, skill_filter)
+    if skill_filter is None:
+        check_scope_list(result)
+        check_storage_unit_tests(result)
 
     sys.exit(print_report(result, verbose))
 

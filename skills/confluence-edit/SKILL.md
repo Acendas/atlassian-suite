@@ -2,7 +2,7 @@
 name: Confluence Granular Edits
 description: This skill should be used when the user asks to "edit a section of a confluence page", "append to confluence page", "replace text on confluence", "update one paragraph on confluence", "fix typo on confluence page", "insert section after heading", "remove section from page", or runs `/atlassian-suite:confluence-edit`. Performs SURGICAL edits that preserve all other content (images, macros, charts). Always preferred over full-page rewrites unless replacing the entire page.
 argument-hint: "<page-id-or-title> <op: append|prepend|replace-section|insert-after|replace-text|remove-section> [args...]"
-allowed-tools: mcp__acendas-atlassian__confluence_append_to_page, mcp__acendas-atlassian__confluence_prepend_to_page, mcp__acendas-atlassian__confluence_replace_section, mcp__acendas-atlassian__confluence_insert_after_heading, mcp__acendas-atlassian__confluence_replace_text, mcp__acendas-atlassian__confluence_remove_section, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_search, mcp__acendas-atlassian__confluence_upload_attachment, mcp__acendas-atlassian__confluence_render_image_macro
+allowed-tools: mcp__acendas-atlassian__confluence_append_to_page, mcp__acendas-atlassian__confluence_prepend_to_page, mcp__acendas-atlassian__confluence_replace_section, mcp__acendas-atlassian__confluence_insert_after_heading, mcp__acendas-atlassian__confluence_replace_text, mcp__acendas-atlassian__confluence_remove_section, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title, mcp__acendas-atlassian__confluence_search, mcp__acendas-atlassian__confluence_upload_attachment, mcp__acendas-atlassian__confluence_render_image_macro
 ---
 
 # Confluence Granular Edits
@@ -53,5 +53,6 @@ Surgical Confluence page edits that preserve everything not touched — images, 
 
 - All ops increment the page version. Multiple edits = multiple versions. For coordinated multi-step edits, batch them into one storage-format payload and use `replace-section` once instead of multiple appends.
 - Heading match is case-insensitive substring. If the user says "Update the 'Setup' section" and there's also "Setup notes", the first match wins — confirm the exact heading before applying.
-- `replace-text` operates on raw storage XML — careful with regex that crosses tag boundaries.
+- `replace-text` operates on raw storage XML — careful with regex that crosses tag boundaries. Patterns that assume specific attribute ordering can be brittle across pages (Confluence rewrites attribute order on some edits); prefer `replace-section` when possible.
+- Both read and write of storage format go through v2 endpoints (`/api/v2/pages/{id}?body-format=storage` for read, `PUT /pages/{id}` for write). Never mix v1 + v2 for these tools — the storage XML serialization differs subtly between versions and mixed round-trips can corrupt macro-ids.
 - For full page rewrite, route to `/atlassian-suite:confluence-page` action `rewrite`.

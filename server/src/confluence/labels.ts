@@ -1,116 +1,92 @@
-// Confluence labels + attachments (list/upload/delete).
+// Confluence labels — v2 list, v1 write.
+//
+// v2's label API is read-only (`GET /pages/{id}/labels`). Adding and
+// removing labels still go through v1 endpoints. Attachments moved out
+// to attachments.ts.
 
 import { z } from "zod";
-import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
 import type { FastMCP } from "fastmcp";
-import { confluenceClient } from "../common/confluenceClient.js";
-import { safeConfluence, ensureWritable } from "./_helpers.js";
+import { confluenceV1, confluenceV2 } from "../common/confluenceClient.js";
+import {
+  safeConfluence,
+  ensureWritable,
+  toLabelProjection,
+  extractNextCursor,
+  type PagedResponse,
+} from "./_helpers.js";
 
 export interface LabelOpts {
   readOnly: boolean;
 }
 
-export function registerLabelAndAttachmentTools(server: FastMCP, opts: LabelOpts): void {
-  // ---------- Labels ----------
+export function registerLabelTools(server: FastMCP, opts: LabelOpts): void {
+  // ---------------- List (v2) ----------------
 
   server.addTool({
     name: "confluence_get_labels",
-    description: "List labels on a Confluence page.",
-    parameters: z.object({ page_id: z.string() }),
-    execute: async (args: { page_id: string }) =>
-      safeConfluence(() =>
-        confluenceClient().contentLabels.getLabelsForContent({
-          id: args.page_id,
-        } as never),
-      ),
+    description:
+      "List labels on a Confluence page. Returns LabelProjection[] ({id, name, prefix}).",
+    parameters: z.object({
+      page_id: z.string(),
+      limit: z.number().int().min(1).max(250).default(250),
+      cursor: z.string().optional(),
+    }),
+    execute: async (args: { page_id: string; limit: number; cursor?: string }) =>
+      safeConfluence(async () => {
+        const res = await confluenceV2().get<PagedResponse<unknown>>(
+          `/pages/${encodeURIComponent(args.page_id)}/labels`,
+          { limit: args.limit, cursor: args.cursor },
+        );
+        return {
+          labels: (res.results ?? []).map(toLabelProjection),
+          nextCursor: extractNextCursor(res),
+        };
+      }),
   });
+
+  // ---------------- Add (v1) ----------------
 
   server.addTool({
     name: "confluence_add_label",
-    description: "Add one or more labels to a Confluence page.",
-    parameters: z.object({
-      page_id: z.string(),
-      labels: z.array(z.string()).min(1),
-    }),
-    execute: async (args: { page_id: string; labels: string[] }) =>
-      safeConfluence(() => {
-        ensureWritable(opts.readOnly);
-        return confluenceClient().contentLabels.addLabelsToContent({
-          id: args.page_id,
-          body: args.labels.map((name) => ({ prefix: "global", name })),
-        } as never);
-      }),
-  });
-
-  // ---------- Attachments ----------
-
-  server.addTool({
-    name: "confluence_get_attachments",
-    description: "List attachments on a Confluence page.",
-    parameters: z.object({
-      page_id: z.string(),
-      limit: z.number().int().min(1).max(100).default(50),
-    }),
-    execute: async (args: { page_id: string; limit: number }) =>
-      safeConfluence(() =>
-        confluenceClient().contentAttachments.getAttachments({
-          id: args.page_id,
-          limit: args.limit,
-        } as never),
-      ),
-  });
-
-  server.addTool({
-    name: "confluence_upload_attachment",
     description:
-      "Upload (or replace) an attachment on a Confluence page from a local file path. Returns the attachment id and download link — use the filename with confluence_render_image_macro to embed in page content.",
+      "Add one or more labels to a Confluence page. v1-backed (v2 labels are read-only). Requires `write:confluence-content`.",
     parameters: z.object({
       page_id: z.string(),
-      file_path: z.string().describe("Absolute path to the local file"),
-      filename: z
-        .string()
-        .optional()
-        .describe("Filename to store in Confluence (default: basename of file_path)"),
-      content_type: z.string().optional().describe("MIME type, e.g. image/png"),
-      comment: z.string().optional(),
-      minor_edit: z.boolean().default(true),
+      labels: z.array(z.string()).min(1).describe("Label names (no leading '#')"),
+      prefix: z.enum(["global", "my", "team"]).default("global"),
     }),
-    execute: async (args: {
-      page_id: string;
-      file_path: string;
-      filename?: string;
-      content_type?: string;
-      comment?: string;
-      minor_edit: boolean;
-    }) =>
+    execute: async (args: { page_id: string; labels: string[]; prefix: "global" | "my" | "team" }) =>
       safeConfluence(async () => {
         ensureWritable(opts.readOnly);
-        const buffer = await readFile(args.file_path);
-        const filename = args.filename ?? basename(args.file_path);
-        return confluenceClient().contentAttachments.createOrUpdateAttachments({
-          id: args.page_id,
-          attachments: [
-            {
-              file: buffer,
-              filename,
-              minorEdit: args.minor_edit,
-              contentType: args.content_type,
-              comment: args.comment,
-            },
-          ],
-        } as never);
+        const body = args.labels.map((name) => ({ prefix: args.prefix, name }));
+        return confluenceV1().post<unknown>(
+          `/content/${encodeURIComponent(args.page_id)}/label`,
+          body,
+        );
       }),
   });
 
+  // ---------------- Remove (v1) ----------------
+
   server.addTool({
-    name: "confluence_delete_attachment",
-    description: "Delete an attachment by content id.",
-    parameters: z.object({ attachment_id: z.string() }),
-    execute: async (args: { attachment_id: string }) =>
-      safeConfluence(() => {
+    name: "confluence_remove_label",
+    description:
+      "Remove a single label from a Confluence page. v1-backed (v2 labels are read-only). Requires `write:confluence-content`.",
+    parameters: z.object({
+      page_id: z.string(),
+      name: z.string().describe("Label name to remove (no leading '#')"),
+      prefix: z
+        .enum(["global", "my", "team"])
+        .optional()
+        .describe("Label prefix — usually 'global'; omit to let Confluence pick"),
+    }),
+    execute: async (args: { page_id: string; name: string; prefix?: "global" | "my" | "team" }) =>
+      safeConfluence(async () => {
         ensureWritable(opts.readOnly);
-        return confluenceClient().content.deleteContent({ id: args.attachment_id } as never);
+        const path = `/content/${encodeURIComponent(args.page_id)}/label/${encodeURIComponent(args.name)}`;
+        const query = args.prefix ? { prefix: args.prefix } : undefined;
+        await confluenceV1().delete<unknown>(path, query);
+        return { removed: args.name, from_page: args.page_id };
       }),
   });
 }

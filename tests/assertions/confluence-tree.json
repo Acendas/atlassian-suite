@@ -1,0 +1,19 @@
+[
+  {
+    "name": "allows_space_page_tree",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_get_space_page_tree"
+  },
+  {
+    "name": "uses_root_page_id_not_space_key",
+    "type": "contains",
+    "_comment": "v2-aligned API takes root_page_id, not space_key.",
+    "pattern": "root_page_id"
+  },
+  {
+    "name": "mentions_cursor_pagination",
+    "type": "contains",
+    "pattern": "cursor|nextCursor"
+  }
+]

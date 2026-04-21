@@ -83,31 +83,124 @@ const SCOPES = {
   confluence: [
     // NB: paths here MUST NOT start with /wiki — resolveProbeUrl() routes
     // confluence through wikiBase() which already appends /wiki to the base
-    // URL. Leading /wiki here would produce /wiki/wiki/... → 404 → silently
-    // reclassified as OK by the 404 heuristic, masking real failures.
+    // URL. Leading /wiki here would produce /wiki/wiki/... → 404.
+    //
+    // The plugin is v2-first + v1-targeted-fallback:
+    //   - v2 endpoints (/api/v2/…) use the GRANULAR scope family
+    //     (read:page:confluence, write:page:confluence, …).
+    //   - v1 endpoints (/rest/api/…) use the CLASSIC scope family
+    //     (search:confluence, write:confluence-content, …).
+    // A single scoped API token can hold scopes from both families, so
+    // the user ticks one set of boxes on the token-creation page.
+    //
+    // The `family` field distinguishes them so the wizard can present
+    // them in two labeled groups — users shouldn't have to decode
+    // scope-name conventions to understand which group a scope belongs
+    // to.
+
+    // ---------------- GRANULAR (for v2 endpoints) ----------------
     {
-      scope: "read:confluence-space.summary",
+      scope: "read:page:confluence",
+      family: "granular",
       required: true,
-      why: "list spaces",
-      probe: { method: "GET", path: "/api/v2/spaces?limit=1" },
-    },
-    {
-      scope: "read:confluence-content.all",
-      required: true,
-      why: "read pages + attachments",
+      why: "read pages, children, descendants, versions, labels, attachments-on-page",
       probe: { method: "GET", path: "/api/v2/pages?limit=1" },
     },
     {
-      scope: "write:confluence-content",
+      scope: "write:page:confluence",
+      family: "granular",
       required: true,
-      why: "create/edit pages, add comments",
+      why: "create, update, and edit pages (including surgical edits)",
+      // Empty body → 400 "authorized:true" when scope ok; 401 when missing.
       probe: { method: "POST", path: "/api/v2/pages", body: "{}" },
     },
     {
-      scope: "read:confluence-user",
+      scope: "read:space:confluence",
+      family: "granular",
+      required: true,
+      why: "list and get spaces (getConfluenceSpaces, confluence_get_space)",
+      probe: { method: "GET", path: "/api/v2/spaces?limit=1" },
+    },
+    {
+      scope: "read:comment:confluence",
+      family: "granular",
+      required: true,
+      why: "list footer and inline comments",
+      probe: { method: "GET", path: "/api/v2/footer-comments?limit=1" },
+    },
+    {
+      scope: "write:comment:confluence",
+      family: "granular",
+      required: true,
+      why: "add/reply/resolve footer and inline comments",
+      probe: { method: "POST", path: "/api/v2/footer-comments", body: "{}" },
+    },
+    {
+      scope: "read:attachment:confluence",
+      family: "granular",
+      required: true,
+      why: "list and read attachments (uploads use a classic scope — see below)",
+      probe: { method: "GET", path: "/api/v2/attachments?limit=1" },
+    },
+    // read:user:confluence is DELIBERATELY NOT REQUIRED. Empirical testing
+    // (April 2026) showed Atlassian's scoped-token implementation rejects
+    // this granular scope on every /users/* and /user/* endpoint we tried,
+    // both v1 and v2 — the "overlap" claimed in older docs does not exist.
+    // All user tools (confluence_get_current_user, confluence_get_user,
+    // confluence_search_user) have been reimplemented to use CQL search
+    // via /rest/api/search, which works with the `search:confluence`
+    // classic scope below. See tests/fixtures/scope-matrix.md if that
+    // ever gets added.
+    //
+    // Optional granular — destructive. Users who never delete don't need these.
+    {
+      scope: "delete:page:confluence",
+      family: "granular",
       required: false,
-      why: "look up users",
-      probe: { method: "GET", path: "/rest/api/user/current" },
+      why: "trash and purge pages (confluence_delete_page)",
+      probe: null,
+    },
+    {
+      scope: "delete:comment:confluence",
+      family: "granular",
+      required: false,
+      why: "delete comments (not yet exposed as a tool, reserve for future)",
+      probe: null,
+    },
+    {
+      scope: "delete:attachment:confluence",
+      family: "granular",
+      required: false,
+      why: "trash and purge attachments (confluence_delete_attachment)",
+      probe: null,
+    },
+
+    // ---------------- CLASSIC (for v1 fallbacks) ----------------
+    // These scopes power tools that v2 doesn't offer: CQL search, label
+    // add/remove, attachment upload, page copy, version restore,
+    // watch/unwatch. Keep this set minimal.
+    {
+      scope: "search:confluence",
+      family: "classic",
+      required: true,
+      why: "CQL search — confluence_search, confluence_search_user (v2 has no CQL)",
+      probe: { method: "GET", path: "/rest/api/content/search?cql=type%3Dpage&limit=1" },
+    },
+    {
+      scope: "write:confluence-content",
+      family: "classic",
+      required: true,
+      why: "label add/remove, page move, page copy, version restore, watch/unwatch (v2 lacks these)",
+      probe: { method: "POST", path: "/rest/api/content", body: "{}" },
+    },
+    {
+      scope: "write:confluence-file",
+      family: "classic",
+      required: false,
+      why: "upload attachments (confluence_upload_attachment — v2 has no upload endpoint)",
+      // Multipart probe without a real page id isn't meaningful; surface
+      // the scope in the required list and let runtime errors guide fix-ups.
+      probe: null,
     },
   ],
   bitbucket: [
@@ -359,6 +452,35 @@ async function verifyAll(target) {
 // Structured verifier — used by both the CLI verify path (which prints the
 // results) and the web wizard (which serialises the same shape as JSON).
 async function runVerifyStructured(product, cfg) {
+  // "atlassian" mode verifies a single classic (unscoped) token against
+  // BOTH Jira and Confluence endpoints. Classic tokens carry full
+  // permissions for whichever Atlassian products the user has access
+  // to; scoped tokens are one-product-only and use the per-product
+  // paths below.
+  if (product === "atlassian") {
+    const jiraR = await runVerifyStructured("jira", cfg);
+    const confR = await runVerifyStructured("confluence", cfg);
+    const allSkipped = jiraR.skipped && confR.skipped;
+    // Merged scope list, each tagged with `_product` so the UI can
+    // render them under separate headings.
+    const scopes = [
+      ...jiraR.scopes.map((s) => ({ ...s, _product: "jira" })),
+      ...confR.scopes.map((s) => ({ ...s, _product: "confluence" })),
+    ];
+    return {
+      product: "atlassian",
+      skipped: allSkipped,
+      skipReason: allSkipped
+        ? (jiraR.skipReason || confR.skipReason)
+        : undefined,
+      // Prefer a successful auth for the "who" display; fall back to Jira's.
+      auth: jiraR.auth?.status === "ok" ? jiraR.auth : (confR.auth || jiraR.auth),
+      scopes,
+      requiredOk: jiraR.requiredOk && confR.requiredOk,
+      sub: { jira: jiraR, confluence: confR },
+    };
+  }
+
   const creds = resolveCreds(product, cfg);
 
   if (product === "bitbucket") {
@@ -477,9 +599,16 @@ async function whoamiProbe(product, creds) {
       ? `https://api.atlassian.com/ex/jira/${creds.cloudId}/rest/api/3/myself`
       : `${stripTrailingSlash(creds.url)}/rest/api/3/myself`;
   } else if (product === "confluence") {
+    // Was /rest/api/user/current — but that endpoint requires read:confluence-user,
+    // which we mark optional. A token with only the required read scopes
+    // 401s here and the verifier short-circuits before probing anything
+    // else. Use /rest/api/space?limit=1 instead: requires
+    // read:confluence-space.summary (required scope #1), validates auth +
+    // site URL + cloudId in one shot. "who" falls back to configured email
+    // since the response has no identity info.
     url = creds.cloudId
-      ? `https://api.atlassian.com/ex/confluence/${creds.cloudId}/wiki/rest/api/user/current`
-      : `${wikiBase(creds.url)}/rest/api/user/current`;
+      ? `https://api.atlassian.com/ex/confluence/${creds.cloudId}/wiki/rest/api/space?limit=1`
+      : `${wikiBase(creds.url)}/rest/api/space?limit=1`;
   } else {
     url = "https://api.bitbucket.org/2.0/user";
   }
@@ -508,6 +637,10 @@ async function whoamiProbe(product, creds) {
 
   if (res.status >= 200 && res.status < 300) {
     const body = await safeJson(res.response);
+    // Confluence whoami uses /rest/api/space (no identity in response) —
+    // fall back to the configured email so the user sees something
+    // meaningful on the "auth: OK" line.
+    const fallback = product === "confluence" ? creds.username : "(ok)";
     const who =
       body?.emailAddress ||
       body?.email ||
@@ -516,7 +649,7 @@ async function whoamiProbe(product, creds) {
       body?.displayName ||
       body?.accountId ||
       body?.account_id ||
-      "(ok)";
+      fallback;
     return { status: "ok", who };
   }
   return { status: "auth-failed", detail: `HTTP ${res.status}` };
@@ -575,8 +708,16 @@ async function scopeProbe(product, creds, spec) {
   // 400 on our intentional empty POST → we got past auth+scope, server rejected payload.
   //   That means the write scope IS granted.
   if (spec.probe.method === "POST" && (s === 400 || s === 422)) return "ok";
-  // 401 → bad auth (we already passed whoami though, so this is weird; still report).
-  if (s === 401) return "auth";
+  // 401 → ambiguous in theory (bad auth vs missing scope), but Atlassian's
+  // scoped tokens 401 with "Unauthorized; scope does not match" when the
+  // token is valid but lacks the scope for this endpoint. Since whoami has
+  // already passed by the time we call scopeProbe, we know auth is good —
+  // so a 401 with that marker is always missing-scope, not bad creds.
+  if (s === 401) {
+    const body = await safeText(res.response);
+    if (/scope\s+does\s+not\s+match/i.test(body)) return "missing";
+    return "auth";
+  }
   // 403 → scope missing, or other permission issue.
   if (s === 403) return "missing";
   // 404 handling is heuristic and product/scope-specific:
@@ -677,25 +818,63 @@ async function discoverCloudId(siteUrl) {
 function printScopeSuggestion(product) {
   const list = SCOPES[product];
   if (!list) return;
-  const required = list.filter((s) => s.required);
-  const optional = list.filter((s) => !s.required);
+
+  // Group by family when present (Confluence uses granular + classic).
+  // For products without a `family` field (Jira, Bitbucket), fall back to
+  // the flat required/optional layout.
+  const hasFamilies = list.some((s) => s.family);
+
   console.log("");
   console.log(`  ┌─ Scopes to tick on the token-creation page (${product})`);
   console.log("  │");
-  console.log("  │  Required:");
-  for (const s of required) {
-    console.log(`  │    • ${s.scope}`);
-    console.log(`  │        ${s.why}`);
-  }
-  if (optional.length > 0) {
-    console.log("  │");
-    console.log("  │  Optional:");
-    for (const s of optional) {
+
+  if (hasFamilies) {
+    // Confluence: two-family grouping.
+    const groups = [
+      { label: "GRANULAR family (for v2 endpoints)", key: "granular" },
+      { label: "CLASSIC family (for v1 fallbacks)", key: "classic" },
+    ];
+    for (const g of groups) {
+      const inGroup = list.filter((s) => s.family === g.key);
+      if (inGroup.length === 0) continue;
+      const req = inGroup.filter((s) => s.required);
+      const opt = inGroup.filter((s) => !s.required);
+      console.log(`  │  ${g.label}`);
+      if (req.length > 0) {
+        console.log("  │    Required:");
+        for (const s of req) {
+          console.log(`  │      • ${s.scope}`);
+          console.log(`  │          ${s.why}`);
+        }
+      }
+      if (opt.length > 0) {
+        console.log("  │    Optional:");
+        for (const s of opt) {
+          console.log(`  │      • ${s.scope}`);
+          console.log(`  │          ${s.why}`);
+        }
+      }
+      console.log("  │");
+    }
+  } else {
+    const required = list.filter((s) => s.required);
+    const optional = list.filter((s) => !s.required);
+    console.log("  │  Required:");
+    for (const s of required) {
       console.log(`  │    • ${s.scope}`);
       console.log(`  │        ${s.why}`);
     }
+    if (optional.length > 0) {
+      console.log("  │");
+      console.log("  │  Optional:");
+      for (const s of optional) {
+        console.log(`  │    • ${s.scope}`);
+        console.log(`  │        ${s.why}`);
+      }
+    }
+    console.log("  │");
   }
-  console.log("  │");
+
   console.log(
     "  │  On the page: click 'Create API token with scopes' →",
   );
@@ -967,7 +1146,7 @@ async function runWebWizard() {
 
       if (req.method === "POST" && url.pathname.startsWith("/save/")) {
         const product = url.pathname.slice("/save/".length);
-        if (!["jira", "confluence", "bitbucket"].includes(product)) {
+        if (!["jira", "confluence", "bitbucket", "atlassian"].includes(product)) {
           res.statusCode = 400;
           return res.end(JSON.stringify({ ok: false, error: "unknown product" }));
         }
@@ -982,7 +1161,36 @@ async function runWebWizard() {
 
         const before = loadConfig();
         const patch = {};
-        if (product === "jira") {
+        if (product === "atlassian") {
+          // Classic-token mode: one token for both Jira + Confluence.
+          // Writes:
+          //   - atlassian.username, atlassian.api_token (shared)
+          //   - jira.url + jira.cloud_id (per-product URL, no token — resolves via atlassian.*)
+          //   - confluence.url + confluence.cloud_id (same idea, /wiki appended)
+          // Config.ts resolves per-product-token-first-then-shared, so leaving
+          // jira.api_token and confluence.api_token unset means the tools will
+          // use the shared atlassian token automatically.
+          if (!data.url || !data.email || !data.token) {
+            res.statusCode = 400;
+            return res.end(JSON.stringify({ ok: false, error: "url, email, token are required" }));
+          }
+          // Normalise tenant URL: strip trailing slash + trailing /wiki so we
+          // have a clean tenant root (e.g. https://acme.atlassian.net).
+          const tenantUrl = stripTrailingSlash(data.url.trim()).replace(/\/wiki$/i, "");
+          const cloudId = await discoverCloudId(tenantUrl);
+          patch.atlassian = {
+            username: data.email.trim(),
+            api_token: data.token,
+          };
+          patch.jira = {
+            url: tenantUrl,
+            ...(cloudId ? { cloud_id: cloudId } : {}),
+          };
+          patch.confluence = {
+            url: `${tenantUrl}/wiki`,
+            ...(cloudId ? { cloud_id: cloudId } : {}),
+          };
+        } else if (product === "jira") {
           if (!data.url || !data.email || !data.token) {
             res.statusCode = 400;
             return res.end(JSON.stringify({ ok: false, error: "url, email, token are required" }));
@@ -1024,6 +1232,19 @@ async function runWebWizard() {
         }
 
         const after = mergeCreds(before, patch);
+        // In atlassian (classic) mode, remove any stale per-product token
+        // and username entries so the resolver falls back to the shared
+        // atlassian.* credentials. Without this, a user who previously set
+        // scoped tokens and then switches to classic would keep using the
+        // old per-product tokens (per-product wins in resolution order).
+        if (product === "atlassian") {
+          for (const p of ["jira", "confluence"]) {
+            if (after[p]) {
+              delete after[p].api_token;
+              delete after[p].username;
+            }
+          }
+        }
         saveConfig(after);
 
         const verify = await runVerifyStructured(product, after);
@@ -1440,6 +1661,7 @@ function buildHtml(secret) {
       <h1>Welcome</h1>
       <p class="lede">Set up your Atlassian credentials for Claude Code. Tokens stay on your machine — they're posted to localhost only and never enter the chat transcript.</p>
       <div class="chip-row" id="status-chips">
+        <span class="chip" data-product="atlassian"><span class="check">●</span> Atlassian Cloud</span>
         <span class="chip" data-product="jira"><span class="check">●</span> Jira</span>
         <span class="chip" data-product="confluence"><span class="check">●</span> Confluence</span>
         <span class="chip" data-product="bitbucket"><span class="check">●</span> Bitbucket</span>
@@ -1450,32 +1672,23 @@ function buildHtml(secret) {
     </section>
 
     <section class="section" data-step="2">
-      <h1>Pick a product</h1>
-      <p class="lede">Configure one product at a time. You can come back for the others.</p>
+      <h1>What are you configuring?</h1>
+      <p class="lede">Jira + Confluence come from the same Atlassian tenant and share auth. Bitbucket uses a separate issuer and always needs its own token.</p>
       <div class="product-list">
-        <button class="product-card" onclick="pickProduct('jira')">
-          <div class="icon">J</div>
+        <button class="product-card" onclick="pickSurface('atlassian')">
+          <div class="icon">A</div>
           <div class="text-col">
-            <div class="name">Jira</div>
-            <div class="desc">Issues, sprints, JQL search, comments</div>
-            <div class="meta" id="meta-jira"></div>
+            <div class="name">Jira + Confluence</div>
+            <div class="desc">One tenant. You'll pick between a single classic token or two scoped tokens on the next step.</div>
+            <div class="meta" id="meta-atlassian"></div>
           </div>
-          <div class="right" id="badge-jira">not set</div>
+          <div class="right" id="badge-atlassian">not set</div>
         </button>
-        <button class="product-card" onclick="pickProduct('confluence')">
-          <div class="icon">C</div>
-          <div class="text-col">
-            <div class="name">Confluence</div>
-            <div class="desc">Pages, spaces, comments, attachments</div>
-            <div class="meta" id="meta-confluence"></div>
-          </div>
-          <div class="right" id="badge-confluence">not set</div>
-        </button>
-        <button class="product-card" onclick="pickProduct('bitbucket')">
+        <button class="product-card" onclick="pickSurface('bitbucket')">
           <div class="icon">B</div>
           <div class="text-col">
             <div class="name">Bitbucket</div>
-            <div class="desc">Repositories, pull requests, pipelines</div>
+            <div class="desc">Separate Bitbucket API token (bitbucket.org/account/settings/api-tokens/). Repositories, pull requests, pipelines.</div>
             <div class="meta" id="meta-bitbucket"></div>
           </div>
           <div class="right" id="badge-bitbucket">not set</div>
@@ -1486,14 +1699,40 @@ function buildHtml(secret) {
       </div>
     </section>
 
+    <section class="section" data-step="2b">
+      <h1>Classic or scoped?</h1>
+      <p class="lede">Both work. Classic is simpler; scoped is least-privilege.</p>
+      <div class="product-list">
+        <button class="product-card" onclick="pickMode('classic')">
+          <div class="icon">1</div>
+          <div class="text-col">
+            <div class="name">Classic — one-shot (recommended)</div>
+            <div class="desc">One unscoped Atlassian API token covers Jira + Confluence. Single form. Full account permissions.</div>
+          </div>
+          <div class="right">1 token</div>
+        </button>
+        <button class="product-card" onclick="pickMode('scoped')">
+          <div class="icon">2</div>
+          <div class="text-col">
+            <div class="name">Scoped — separate tokens per product</div>
+            <div class="desc">Two scoped tokens (Jira-only and Confluence-only). You'll configure Jira first, then Confluence. Least-privilege.</div>
+          </div>
+          <div class="right">2 tokens</div>
+        </button>
+      </div>
+      <div class="actions">
+        <button class="ghost" onclick="back()">← Back</button>
+      </div>
+    </section>
+
     <section class="section" data-step="3">
       <h1>Generate your <span id="step3-product">…</span> token</h1>
-      <p class="lede">Create a scoped API token on Atlassian's identity page, then paste it on the next screen.</p>
-      <div class="privacy-note" style="background: rgba(251, 191, 36, 0.07); border-color: rgba(251, 191, 36, 0.25);">
+      <p class="lede" id="step3-lede">Create a scoped API token on Atlassian's identity page, then paste it on the next screen.</p>
+      <div class="privacy-note" id="step3-warn" style="background: rgba(251, 191, 36, 0.07); border-color: rgba(251, 191, 36, 0.25);">
         <b>⚠️</b>
         <span>Each product needs its <b>own token</b>. A token created under the Jira app won't work for Confluence or Bitbucket — the scopes are app-bound. Make sure you pick the <b id="step3-app-warn">…</b> app on the next page, not whatever app is selected by default.</span>
       </div>
-      <ol class="steps">
+      <ol class="steps" id="step3-steps">
         <li>Click <b>Open token page</b> below — it opens in a new tab.</li>
         <li>Click <b>Create API token with scopes</b>.</li>
         <li>Pick the <b id="step3-app">…</b> app (this is the easy step to get wrong).</li>
@@ -1556,15 +1795,33 @@ const SECRET = "__SECRET__";
 const Q = (s, root) => (root || document).querySelector(s);
 const QA = (s, root) => Array.from((root || document).querySelectorAll(s));
 
-const PRODUCT_LABEL = { jira: "Jira", confluence: "Confluence", bitbucket: "Bitbucket" };
+const PRODUCT_LABEL = {
+  jira: "Jira",
+  confluence: "Confluence",
+  bitbucket: "Bitbucket",
+  atlassian: "Atlassian Cloud",
+};
 const PRODUCT_HINTS = {
   jira: { url: "Site URL", urlHint: "e.g. https://acme.atlassian.net", showWorkspace: false },
   confluence: { url: "Site URL", urlHint: "Typically https://acme.atlassian.net/wiki", showWorkspace: false },
   bitbucket: { url: null, urlHint: "", showWorkspace: true },
+  // Atlassian (classic) mode: single tenant URL covers both Jira + Confluence.
+  // We auto-derive confluence.url = tenant/wiki on the backend.
+  atlassian: { url: "Atlassian tenant URL", urlHint: "e.g. https://acme.atlassian.net (no /wiki)", showWorkspace: false },
 };
 
 let state = {
   step: 1,
+  // surface: "atlassian" (Jira + Confluence) or "bitbucket". Drives whether
+  // the mode-picker step (2b) is shown.
+  surface: null,
+  // mode: for surface=atlassian, "classic" (single token covers both) or
+  // "scoped" (two tokens, configured sequentially — Jira then Confluence).
+  mode: null,
+  // product: the concrete product the current step is saving creds for.
+  //   surface=atlassian + mode=classic  → product="atlassian" (shared)
+  //   surface=atlassian + mode=scoped   → product="jira" then "confluence"
+  //   surface=bitbucket                 → product="bitbucket"
   product: null,
   scopes: null,
   config: null,
@@ -1580,14 +1837,41 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
+// Steps the user walks through, in order. "2b" is the mode-picker,
+// only visited when surface=atlassian. Total dots shown on the progress
+// bar is derived from this list so Bitbucket doesn't see a phantom dot.
+function pathForSurface(surface) {
+  if (surface === "bitbucket") return [1, 2, 3, 4, 5];
+  return [1, 2, "2b", 3, 4, 5];
+}
+
 function gotoStep(n) {
   state.step = n;
-  QA(".section").forEach(s => s.classList.toggle("active", Number(s.dataset.step) === n));
-  QA(".dot").forEach((d, i) => {
-    d.classList.toggle("done", i + 1 < n);
-    d.classList.toggle("current", i + 1 === n);
-  });
-  Q("#step-label").textContent = "Step " + n + " of 5";
+  QA(".section").forEach(s => s.classList.toggle("active", String(s.dataset.step) === String(n)));
+  // Render progress dots based on the current path.
+  const path = pathForSurface(state.surface);
+  const total = path.length;
+  const idx = path.indexOf(n);
+  const progress = Q(".progress");
+  if (progress) {
+    const dots = QA(".dot", progress);
+    // Ensure enough dots exist (HTML ships with 5; mode-picker path needs 6).
+    while (dots.length < total) {
+      const d = document.createElement("span");
+      d.className = "dot";
+      progress.insertBefore(d, Q("#step-label"));
+      dots.push(d);
+    }
+    QA(".dot", progress).forEach((d, i) => {
+      const visible = i < total;
+      d.style.display = visible ? "" : "none";
+      d.classList.toggle("done", visible && i < idx);
+      d.classList.toggle("current", visible && i === idx);
+    });
+  }
+  Q("#step-label").textContent = idx >= 0
+    ? "Step " + (idx + 1) + " of " + total
+    : "";
   window.scrollTo({ top: 0, behavior: "smooth" });
   if (n === 3) renderStep3();
   if (n === 4) renderStep4();
@@ -1599,14 +1883,38 @@ function next() {
 }
 
 function back() {
-  if (state.step === 2) gotoStep(1);
-  else if (state.step === 3) gotoStep(2);
-  else if (state.step === 4) gotoStep(3);
-  else if (state.step === 5) gotoStep(2);
+  const p = state.step;
+  if (p === 2) return gotoStep(1);
+  if (p === "2b") return gotoStep(2);
+  if (p === 3) return gotoStep(state.surface === "atlassian" ? "2b" : 2);
+  if (p === 4) return gotoStep(3);
+  if (p === 5) return gotoStep(2);
 }
 
-function pickProduct(p) {
-  state.product = p;
+// Outer pick: Atlassian (Jira + Confluence) or Bitbucket.
+function pickSurface(s) {
+  state.surface = s;
+  if (s === "bitbucket") {
+    state.mode = null;
+    state.product = "bitbucket";
+    gotoStep(3);
+  } else {
+    // Go to mode picker.
+    gotoStep("2b");
+  }
+}
+
+// Mode pick (only meaningful when surface=atlassian).
+function pickMode(m) {
+  state.mode = m;
+  // Classic mode → one "atlassian" product step. Scoped → start with jira.
+  state.product = m === "classic" ? "atlassian" : "jira";
+  gotoStep(3);
+}
+
+// Continue to the next product after a scoped-mode save (Jira → Confluence).
+function continueScoped() {
+  state.product = "confluence";
   gotoStep(3);
 }
 
@@ -1615,18 +1923,76 @@ function renderStep3() {
   Q("#step3-product").textContent = PRODUCT_LABEL[p];
   Q("#step3-app").textContent = PRODUCT_LABEL[p];
   Q("#step3-app-warn").textContent = PRODUCT_LABEL[p];
-  const scopes = (state.scopes && state.scopes[p]) || [];
-  const required = scopes.filter(s => s.required);
-  const optional = scopes.filter(s => !s.required);
-  let html = '<div class="group-label">Required — tick all of these</div>';
-  for (const s of required) {
-    html += '<div class="scope-line"><span class="check">☐</span><span class="name">' + escapeHtml(s.scope) + '</span><span class="why">' + escapeHtml(s.why) + '</span></div>';
+
+  // Atlassian (classic) mode: no scope picker. Classic tokens aren't
+  // scope-bound — they inherit the user's full Atlassian permissions.
+  // Show a simpler instruction card instead of a scope checklist, and
+  // rewrite the lede + steps so the wording matches the classic flow.
+  if (p === "atlassian") {
+    Q("#step3-lede").innerHTML =
+      "Create a classic (unscoped) Atlassian API token — one token that works for both Jira and Confluence.";
+    Q("#step3-warn").innerHTML =
+      '<b>ℹ️</b><span>Classic tokens carry your full Atlassian account permissions. If you need least-privilege scoping, go back and pick Jira + Confluence individually (scoped tokens are one-product-only).</span>';
+    Q("#step3-steps").innerHTML =
+      "<li>Click <b>Open token page</b> below — it opens in a new tab.</li>" +
+      "<li>Click <b>Create API token</b> (<i>not</i> &ldquo;Create API token with scopes&rdquo;).</li>" +
+      "<li>Give it any label (e.g. &ldquo;Claude Code&rdquo;). Expiration is up to you.</li>" +
+      "<li>Copy the token — you won't see it again after closing the dialog.</li>";
+    Q("#scope-checklist").innerHTML =
+      '<div class="group-label">No scopes to tick</div>' +
+      '<div class="scope-line"><span class="check">ℹ</span><span class="name">Classic Atlassian API tokens have no scope selection — they inherit your account permissions. Jira + Confluence both work with this single token.</span></div>';
+    return;
   }
-  if (optional.length) {
-    html += '<div class="group-label optional">Optional — tick if you want the matching tools</div>';
-    for (const s of optional) {
-      html += '<div class="scope-line optional"><span class="check">☐</span><span class="name">' + escapeHtml(s.scope) + '</span><span class="why">' + escapeHtml(s.why) + '</span></div>';
+
+  // Scoped mode: restore the default lede/warn/steps text in case the
+  // user toggled back from atlassian mode.
+  Q("#step3-lede").innerHTML =
+    "Create a scoped API token on Atlassian's identity page, then paste it on the next screen.";
+  Q("#step3-warn").innerHTML =
+    '<b>⚠️</b><span>Each product needs its <b>own token</b>. A token created under the Jira app won\'t work for Confluence or Bitbucket — the scopes are app-bound. Make sure you pick the <b>' +
+    escapeHtml(PRODUCT_LABEL[p]) +
+    '</b> app on the next page, not whatever app is selected by default.</span>';
+  Q("#step3-steps").innerHTML =
+    "<li>Click <b>Open token page</b> below — it opens in a new tab.</li>" +
+    "<li>Click <b>Create API token with scopes</b>.</li>" +
+    "<li>Pick the <b>" + escapeHtml(PRODUCT_LABEL[p]) + "</b> app (this is the easy step to get wrong).</li>" +
+    "<li>Tick the scopes shown below, then create the token.</li>" +
+    "<li>Copy the token to your clipboard — you won't see it again after closing the dialog.</li>";
+
+  const scopes = (state.scopes && state.scopes[p]) || [];
+  const hasFamilies = scopes.some(s => s.family);
+
+  const renderGroup = (label, items, extraClass) => {
+    if (!items.length) return "";
+    let h = '<div class="group-label ' + (extraClass || "") + '">' + escapeHtml(label) + '</div>';
+    for (const s of items) {
+      h += '<div class="scope-line' + (extraClass === "optional" ? " optional" : "") +
+        '"><span class="check">☐</span><span class="name">' + escapeHtml(s.scope) +
+        '</span><span class="why">' + escapeHtml(s.why) + '</span></div>';
     }
+    return h;
+  };
+
+  let html = "";
+  if (hasFamilies) {
+    // Confluence — split by family so users see "these are for v2, these
+    // are for v1 fallback" without parsing scope-name prefixes.
+    const families = [
+      { key: "granular", label: "GRANULAR family (modern v2 endpoints)" },
+      { key: "classic",  label: "CLASSIC family (v1 fallbacks)" },
+    ];
+    for (const f of families) {
+      const inFam = scopes.filter(s => s.family === f.key);
+      if (!inFam.length) continue;
+      html += '<div class="group-label family">' + escapeHtml(f.label) + '</div>';
+      html += renderGroup("Required — tick all of these", inFam.filter(s => s.required));
+      html += renderGroup("Optional — tick if you want the matching tools",
+                          inFam.filter(s => !s.required), "optional");
+    }
+  } else {
+    html += renderGroup("Required — tick all of these", scopes.filter(s => s.required));
+    html += renderGroup("Optional — tick if you want the matching tools",
+                        scopes.filter(s => !s.required), "optional");
   }
   Q("#scope-checklist").innerHTML = html;
 }
@@ -1728,8 +2094,18 @@ function renderResult(v) {
 
   let btns = "";
   if (v.requiredOk) {
-    btns += '<button class="secondary" onclick="gotoStep(2)">Configure another product</button>';
-    btns += '<button class="primary" onclick="finish()">Done — close wizard</button>';
+    // In scoped mode after finishing Jira, offer to continue with Confluence.
+    const needsConfluenceNext =
+      state.surface === "atlassian" &&
+      state.mode === "scoped" &&
+      state.product === "jira";
+    if (needsConfluenceNext) {
+      btns += '<button class="secondary" onclick="gotoStep(2)">Back to start</button>';
+      btns += '<button class="primary" onclick="continueScoped()">Next: Configure Confluence →</button>';
+    } else {
+      btns += '<button class="secondary" onclick="gotoStep(2)">Configure another surface</button>';
+      btns += '<button class="primary" onclick="finish()">Done — close wizard</button>';
+    }
   } else if (v.auth.status === "ok") {
     btns += '<button class="ghost" onclick="window.open(\'https://id.atlassian.com/manage-profile/security/api-tokens\', \'_blank\')">Open token page</button>';
     btns += '<button class="primary" onclick="gotoStep(3)">Generate a new token</button>';
@@ -1740,17 +2116,34 @@ function renderResult(v) {
 }
 
 function renderScopeRows(scopes) {
-  return scopes.map(s => {
-    let cls = "row";
-    let tag = "";
-    if (s.status === "ok") { cls += " ok"; tag = "OK"; }
-    else if (s.status === "missing") { cls += " miss"; tag = "MISSING"; }
-    else if (s.status === "auth_fail") { cls += " miss"; tag = "AUTH FAIL"; }
-    else if (s.status === "not_tested") { cls += " nt"; tag = "NOT TESTED"; }
-    else { cls += " unknown"; tag = "?"; }
-    const opt = s.required ? "" : ' <span style="color:var(--muted-2)">(optional)</span>';
-    return '<div class="' + cls + '"><span class="status">' + tag + '</span><span class="scope-name">' + escapeHtml(s.scope) + opt + '</span><span class="scope-why">' + escapeHtml(s.why || "") + '</span></div>';
-  }).join("");
+  // When scopes come from "atlassian" mode they carry _product tags so
+  // the UI can group by product. Split + render under headings.
+  const hasProductTags = scopes.some(s => s._product);
+  if (hasProductTags) {
+    const groups = { jira: [], confluence: [] };
+    for (const s of scopes) groups[s._product || "jira"].push(s);
+    let html = "";
+    for (const key of ["jira", "confluence"]) {
+      if (!groups[key].length) continue;
+      html += '<div class="group-label" style="color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 4px">' +
+        escapeHtml(PRODUCT_LABEL[key]) + '</div>';
+      html += groups[key].map(renderOneScopeRow).join("");
+    }
+    return html;
+  }
+  return scopes.map(renderOneScopeRow).join("");
+}
+
+function renderOneScopeRow(s) {
+  let cls = "row";
+  let tag = "";
+  if (s.status === "ok") { cls += " ok"; tag = "OK"; }
+  else if (s.status === "missing") { cls += " miss"; tag = "MISSING"; }
+  else if (s.status === "auth_fail") { cls += " miss"; tag = "AUTH FAIL"; }
+  else if (s.status === "not_tested") { cls += " nt"; tag = "NOT TESTED"; }
+  else { cls += " unknown"; tag = "?"; }
+  const opt = s.required ? "" : ' <span style="color:var(--muted-2)">(optional)</span>';
+  return '<div class="' + cls + '"><span class="status">' + tag + '</span><span class="scope-name">' + escapeHtml(s.scope) + opt + '</span><span class="scope-why">' + escapeHtml(s.why || "") + '</span></div>';
 }
 
 async function finish() {
@@ -1759,10 +2152,17 @@ async function finish() {
 }
 
 function refreshChips() {
+  // Per-product chips + cards.
   for (const p of ["jira", "confluence", "bitbucket"]) {
     const chip = Q('#status-chips .chip[data-product="' + p + '"]');
     const cfg = state.config && state.config[p];
-    const isSet = cfg && cfg.api_token;
+    const shared = state.config && state.config.atlassian;
+    // A product counts as "set" if it has its own api_token OR the shared
+    // atlassian.api_token is set AND the product has a url (Jira+Confluence).
+    const hasOwnToken = cfg && cfg.api_token;
+    const inheritsFromShared =
+      shared && shared.api_token && (p === "jira" || p === "confluence") && cfg && cfg.url;
+    const isSet = !!(hasOwnToken || inheritsFromShared);
     if (chip) {
       chip.classList.toggle("set", !!isSet);
       chip.querySelector(".check").textContent = isSet ? "✓" : "●";
@@ -1770,16 +2170,42 @@ function refreshChips() {
     const badge = Q("#badge-" + p);
     const meta = Q("#meta-" + p);
     if (badge) {
-      badge.textContent = isSet ? "configured" : "not set";
+      badge.textContent = isSet
+        ? (inheritsFromShared && !hasOwnToken ? "via Atlassian token" : "configured")
+        : "not set";
       badge.classList.toggle("set", !!isSet);
     }
     if (meta) {
       if (isSet) {
         const detail = cfg.url || cfg.workspace || "";
-        meta.textContent = (detail ? detail + "  •  " : "") + (cfg.api_token || "");
+        const tokenBit = hasOwnToken ? cfg.api_token : (inheritsFromShared ? shared.api_token : "");
+        meta.textContent = (detail ? detail + "  •  " : "") + (tokenBit || "");
       } else {
         meta.textContent = "";
       }
+    }
+  }
+
+  // Atlassian (classic) card on step 2 + chip on step 1.
+  const aBadge = Q("#badge-atlassian");
+  const aMeta = Q("#meta-atlassian");
+  const shared = state.config && state.config.atlassian;
+  const atlSet = !!(shared && shared.api_token);
+  const aChip = Q('#status-chips .chip[data-product="atlassian"]');
+  if (aChip) {
+    aChip.classList.toggle("set", atlSet);
+    aChip.querySelector(".check").textContent = atlSet ? "✓" : "●";
+  }
+  if (aBadge) {
+    aBadge.textContent = atlSet ? "configured" : "not set";
+    aBadge.classList.toggle("set", atlSet);
+  }
+  if (aMeta) {
+    if (atlSet) {
+      const j = state.config.jira || {};
+      aMeta.textContent = (j.url || "") + (j.url ? "  •  " : "") + (shared.api_token || "");
+    } else {
+      aMeta.textContent = "";
     }
   }
 }

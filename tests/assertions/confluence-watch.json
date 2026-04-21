@@ -1,0 +1,30 @@
+[
+  {
+    "name": "allows_watch_page",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_watch_page"
+  },
+  {
+    "name": "allows_unwatch_page",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_unwatch_page"
+  },
+  {
+    "name": "allows_watch_space",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_watch_space"
+  },
+  {
+    "name": "documents_v1_scope",
+    "type": "contains",
+    "pattern": "write:confluence-content|classic|v1"
+  },
+  {
+    "name": "mentions_idempotent_behavior",
+    "type": "contains",
+    "pattern": "idempotent|twice"
+  }
+]

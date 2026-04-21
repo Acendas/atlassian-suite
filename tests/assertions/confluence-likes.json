@@ -1,0 +1,8 @@
+[
+  {
+    "name": "allows_get_likes",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_get_page_likes"
+  }
+]

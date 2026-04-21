@@ -1,0 +1,41 @@
+[
+  {
+    "name": "allows_add_inline",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_add_inline_comment"
+  },
+  {
+    "name": "allows_reply_inline",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_reply_to_inline_comment"
+  },
+  {
+    "name": "allows_resolve_inline",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_resolve_inline_comment"
+  },
+  {
+    "name": "allows_get_inline",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_get_inline_comments"
+  },
+  {
+    "name": "explains_text_anchoring",
+    "type": "contains",
+    "pattern": "selection_text|anchor|text-anchored"
+  },
+  {
+    "name": "handles_duplicate_selections",
+    "type": "contains",
+    "pattern": "selection_match_count|occurrence"
+  },
+  {
+    "name": "warns_to_pre_validate_selection",
+    "type": "contains",
+    "pattern": "validate|pre-validate|grep"
+  }
+]

@@ -1,0 +1,53 @@
+[
+  {
+    "name": "allows_append",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_append_to_page"
+  },
+  {
+    "name": "allows_replace_section",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_replace_section"
+  },
+  {
+    "name": "allows_insert_after_heading",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_insert_after_heading"
+  },
+  {
+    "name": "allows_replace_text",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_replace_text"
+  },
+  {
+    "name": "allows_remove_section",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_remove_section"
+  },
+  {
+    "name": "allows_render_image_macro",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_render_image_macro"
+  },
+  {
+    "name": "mentions_storage_format",
+    "type": "contains",
+    "pattern": "storage(?:\\s+format|\\s+XML|-format)"
+  },
+  {
+    "name": "mentions_macros_preservation",
+    "type": "contains",
+    "pattern": "macro"
+  },
+  {
+    "name": "warns_about_regex_brittleness",
+    "type": "contains",
+    "pattern": "attribute|regex"
+  }
+]

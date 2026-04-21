@@ -1,0 +1,25 @@
+[
+  {
+    "name": "allows_get_labels",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_get_labels"
+  },
+  {
+    "name": "allows_add_label",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_add_label"
+  },
+  {
+    "name": "allows_remove_label",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_remove_label"
+  },
+  {
+    "name": "documents_v2_label_read_only",
+    "type": "contains",
+    "pattern": "v2.*read-only|labels are read-only|v1"
+  }
+]

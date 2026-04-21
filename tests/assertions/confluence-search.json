@@ -1,0 +1,13 @@
+[
+  {
+    "name": "allows_search",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_search"
+  },
+  {
+    "name": "documents_cql_is_v1",
+    "type": "contains",
+    "pattern": "v1|classic"
+  }
+]

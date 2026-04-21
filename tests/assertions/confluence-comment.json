@@ -1,0 +1,30 @@
+[
+  {
+    "name": "allows_add_comment",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_add_comment"
+  },
+  {
+    "name": "allows_reply_to_comment",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_reply_to_comment"
+  },
+  {
+    "name": "allows_get_comments",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_get_comments"
+  },
+  {
+    "name": "distinguishes_footer_from_inline",
+    "type": "contains",
+    "pattern": "footer.*inline|inline.*footer"
+  },
+  {
+    "name": "routes_inline_to_inline_skill",
+    "type": "contains",
+    "pattern": "confluence-inline-comment"
+  }
+]

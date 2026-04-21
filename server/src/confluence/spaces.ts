@@ -1,40 +1,62 @@
-// Confluence spaces + user search.
+// Confluence spaces — v2 list + get.
+//
+// User search moved to users.ts; that endpoint path/scope is different.
 
 import { z } from "zod";
 import type { FastMCP } from "fastmcp";
-import { confluenceClient } from "../common/confluenceClient.js";
-import { safeConfluence } from "./_helpers.js";
+import { confluenceV2 } from "../common/confluenceClient.js";
+import {
+  safeConfluence,
+  toSpaceProjection,
+  extractNextCursor,
+  type PagedResponse,
+} from "./_helpers.js";
 
 export function registerSpaceTools(server: FastMCP): void {
   server.addTool({
     name: "getConfluenceSpaces",
-    description: "List Confluence spaces visible to the authenticated user.",
+    description:
+      "List Confluence spaces visible to the authenticated user. Cursor-paginated. Returns SpaceProjection[] ({id, key, name, type, homepageId}). The numeric `id` is needed for v2 create-page calls.",
     parameters: z.object({
-      type: z.enum(["global", "personal"]).optional(),
+      type: z.enum(["global", "personal", "collaboration", "knowledge_base"]).optional(),
+      status: z.enum(["current", "archived"]).optional(),
       limit: z.number().int().min(1).max(250).default(50),
+      cursor: z.string().optional(),
     }),
-    execute: async (args: { type?: "global" | "personal"; limit: number }) =>
-      safeConfluence(() =>
-        confluenceClient().space.getSpaces({
-          type: args.type,
+    execute: async (args: {
+      type?: "global" | "personal" | "collaboration" | "knowledge_base";
+      status?: "current" | "archived";
+      limit: number;
+      cursor?: string;
+    }) =>
+      safeConfluence(async () => {
+        const query: Record<string, string | number | undefined> = {
           limit: args.limit,
-        } as never),
-      ),
+          cursor: args.cursor,
+          type: args.type,
+          status: args.status,
+        };
+        const res = await confluenceV2().get<PagedResponse<unknown>>("/spaces", query);
+        return {
+          spaces: (res.results ?? []).map(toSpaceProjection),
+          nextCursor: extractNextCursor(res),
+        };
+      }),
   });
 
   server.addTool({
-    name: "confluence_search_user",
-    description: "Search Confluence users by query (email or display name).",
+    name: "confluence_get_space",
+    description:
+      "Get a single Confluence space by id (or, if you only have a key, use getConfluenceSpaces to find the id first). Returns a SpaceProjection including homepageId — useful as the `root_page_id` input to confluence_get_space_page_tree.",
     parameters: z.object({
-      query: z.string(),
-      limit: z.number().int().min(1).max(50).default(10),
+      space_id: z.string().describe("Numeric space id"),
     }),
-    execute: async (args: { query: string; limit: number }) =>
-      safeConfluence(() =>
-        confluenceClient().search.searchUser({
-          cql: `user.fullname ~ "${args.query}" OR user ~ "${args.query}"`,
-          limit: args.limit,
-        } as never),
-      ),
+    execute: async (args: { space_id: string }) =>
+      safeConfluence(async () => {
+        const raw = await confluenceV2().get<unknown>(
+          `/spaces/${encodeURIComponent(args.space_id)}`,
+        );
+        return toSpaceProjection(raw);
+      }),
   });
 }

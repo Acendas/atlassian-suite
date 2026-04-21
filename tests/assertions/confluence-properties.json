@@ -1,0 +1,36 @@
+[
+  {
+    "name": "allows_list_properties",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_get_page_properties"
+  },
+  {
+    "name": "allows_get_property",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_get_page_property"
+  },
+  {
+    "name": "allows_set_property",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_set_page_property"
+  },
+  {
+    "name": "allows_delete_property",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_delete_page_property"
+  },
+  {
+    "name": "explains_versioning",
+    "type": "contains",
+    "pattern": "version_number|versioned|version"
+  },
+  {
+    "name": "gives_concrete_use_cases",
+    "type": "contains",
+    "pattern": "last-reviewed|linked-jira|runbook"
+  }
+]
