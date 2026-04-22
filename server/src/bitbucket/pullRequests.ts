@@ -202,16 +202,50 @@ export function registerPullRequestTools(server: FastMCP, ctx: BitbucketContext)
         const ws = workspaceOf(ctx, args.workspace);
         const reviewerList: Array<Record<string, string>> = [];
 
+        // Bitbucket rejects PR creation with 400 if the PR author is in the
+        // reviewer list ("you cannot review your own pull request"). The
+        // default-reviewers list often contains the current user, so we must
+        // filter them out. Fetching /user is cheap and cacheable per-session,
+        // but we do it lazily so repos that pass use_default_reviewers=false
+        // and no reviewers skip the call entirely.
+        let authorUuid: string | null = null;
+        const fetchAuthorUuid = async (): Promise<string | null> => {
+          if (authorUuid !== null) return authorUuid;
+          try {
+            const me = await ctx.http.get<{ uuid?: string; account_id?: string }>(`/user`);
+            authorUuid = me.uuid ?? null;
+          } catch {
+            authorUuid = null;
+          }
+          return authorUuid;
+        };
+
         if (args.use_default_reviewers) {
-          const defaults = await ctx.http.get<{
-            values?: Array<{ uuid?: string }>;
-          }>(`/repositories/${ws}/${args.repo_slug}/default-reviewers`);
-          for (const r of defaults.values ?? []) {
-            if (r.uuid) reviewerList.push({ uuid: r.uuid });
+          // Default-reviewers is a paginated endpoint. Large orgs hit the
+          // 10-per-page default and silently drop reviewers past page 1.
+          let url: string | undefined =
+            `/repositories/${ws}/${args.repo_slug}/default-reviewers?pagelen=100`;
+          const me = await fetchAuthorUuid();
+          while (url) {
+            const page: {
+              values?: Array<{ uuid?: string; account_id?: string }>;
+              next?: string;
+            } = await ctx.http.get(url);
+            for (const r of page.values ?? []) {
+              if (!r.uuid) continue;
+              if (me && r.uuid === me) continue; // skip PR author
+              reviewerList.push({ uuid: r.uuid });
+            }
+            url = page.next;
           }
         }
         if (args.reviewers) {
+          const me = await fetchAuthorUuid();
           for (const r of args.reviewers) {
+            // Explicit reviewer list from the caller: still filter the author
+            // so a caller that passes the default-reviewer UUIDs through
+            // doesn't hit the same 400.
+            if (me && r === me) continue;
             reviewerList.push(r.startsWith("{") ? { uuid: r } : { account_id: r });
           }
         }
@@ -232,7 +266,32 @@ export function registerPullRequestTools(server: FastMCP, ctx: BitbucketContext)
         if (args.description) payload.description = args.description;
         if (dedup.length > 0) payload.reviewers = dedup;
 
-        return ctx.http.post(`/repositories/${ws}/${args.repo_slug}/pullrequests`, payload);
+        const prPath = `/repositories/${ws}/${args.repo_slug}/pullrequests`;
+        try {
+          return await ctx.http.post(prPath, payload);
+        } catch (err: any) {
+          // If Bitbucket rejects the reviewer list (400) even after filtering
+          // the author — e.g. a default reviewer is deactivated or no longer
+          // has repo access — retry once without reviewers so the PR still
+          // opens. Surface a note in the response so the caller knows to
+          // attach reviewers manually.
+          if (
+            err?.name === "AtlassianHttpError" &&
+            err.status === 400 &&
+            dedup.length > 0
+          ) {
+            const fallback = { ...payload };
+            delete fallback.reviewers;
+            const pr = await ctx.http.post<Record<string, unknown>>(prPath, fallback);
+            return {
+              ...pr,
+              _acendas_note:
+                "PR created without reviewers: Bitbucket rejected the reviewer list (likely one default reviewer is inactive or lacks repo access). Attach reviewers manually or via add_reviewer.",
+              _acendas_rejected_reviewers: dedup,
+            };
+          }
+          throw err;
+        }
       }),
   });
 
