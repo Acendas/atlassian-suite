@@ -140,8 +140,10 @@ export function registerPipelineTools(server: FastMCP, ctx: BitbucketContext): v
     }),
     execute: async (args: any) =>
       safeExecute(() =>
-        ctx.http.get<string>(
+        ctx.http.request<string>(
+          "GET",
           `${repoBase(args.workspace, args.repo_slug)}/pipelines/${encodeURIComponent(args.pipeline_uuid)}/steps/${encodeURIComponent(args.step_uuid)}/log`,
+          { headers: { Accept: "text/plain" } },
         ),
       ),
   });

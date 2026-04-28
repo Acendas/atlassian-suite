@@ -57,7 +57,7 @@ export function registerCommitTools(server: FastMCP, ctx: BitbucketContext): voi
     }),
     execute: async (args: any) =>
       safeExecute(() =>
-        ctx.http.get<string>(`${repoBase(args.workspace, args.repo_slug)}/diff/${args.commit}`),
+        ctx.http.request<string>("GET", `${repoBase(args.workspace, args.repo_slug)}/diff/${args.commit}`, { headers: { Accept: "text/plain" } }),
       ),
   });
 

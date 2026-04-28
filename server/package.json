@@ -1,6 +1,6 @@
 {
   "name": "@acendas/atlassian-mcp",
-  "version": "0.4.0",
+  "version": "0.4.2",
   "description": "Acendas Atlassian Suite MCP server: unified Jira, Confluence, and Bitbucket Cloud integration.",
   "type": "module",
   "main": "dist/server.js",

@@ -53,9 +53,7 @@ export function registerRepositoryTools(server: FastMCP, ctx: BitbucketContext):
     }),
     execute: async (args: any) =>
       safeExecute(() =>
-        ctx.http.get(
-          `${repoBase(args.workspace, args.repo_slug)}/src/${encodeURIComponent(args.commit)}/${args.path}`,
-        ),
+        ctx.http.request("GET", `${repoBase(args.workspace, args.repo_slug)}/src/${encodeURIComponent(args.commit)}/${args.path}`, { headers: { Accept: "*/*" } }),
       ),
   });
 

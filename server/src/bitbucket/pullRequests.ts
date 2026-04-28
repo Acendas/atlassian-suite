@@ -62,9 +62,7 @@ export function registerPullRequestTools(server: FastMCP, ctx: BitbucketContext)
     }),
     execute: async (args) =>
       safeExecute(() =>
-        ctx.http.get<string>(
-          `${repoBase(args.workspace, args.repo_slug)}/${args.pull_request_id}/diff`,
-        ),
+        ctx.http.request<string>("GET", `${repoBase(args.workspace, args.repo_slug)}/${args.pull_request_id}/diff`, { headers: { Accept: "text/plain" } }),
       ),
   });
 
