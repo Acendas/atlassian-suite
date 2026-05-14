@@ -1,6 +1,6 @@
 ---
-name: Show Bitbucket Commit
-description: This skill should be used when the user asks to "show commit", "what changed in commit X", "commit details", "show me commit Y", or runs `/atlassian-suite:commit-show`. Pulls a commit's metadata, diff, diffstat, and CI/build statuses.
+name: commit-show
+description: Show a Bitbucket commit's diff and CI status.
 argument-hint: "<repo-slug> <commit-sha>"
 allowed-tools: mcp__acendas-atlassian__get_commit, mcp__acendas-atlassian__get_commit_diffstat, mcp__acendas-atlassian__get_commit_diff, mcp__acendas-atlassian__list_commit_statuses, mcp__acendas-atlassian__list_commit_comments
 ---

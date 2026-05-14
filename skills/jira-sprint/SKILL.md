@@ -1,6 +1,6 @@
 ---
-name: Jira Sprint Operations
-description: This skill should be used when the user asks to "manage sprint", "create a sprint", "add issues to sprint", "start/close sprint", "list sprints", or runs `/atlassian-suite:jira-sprint`. Handles sprint lifecycle on a Scrum board (list/create/start/close, add/remove issues).
+name: jira-sprint
+description: Manage a Jira Scrum sprint lifecycle.
 argument-hint: "<board-id-or-name> <action: list|create|start|close|add|remove> [args...]"
 allowed-tools: mcp__acendas-atlassian__jira_get_agile_boards, mcp__acendas-atlassian__jira_get_sprints_from_board, mcp__acendas-atlassian__jira_create_sprint, mcp__acendas-atlassian__jira_update_sprint, mcp__acendas-atlassian__jira_add_issues_to_sprint, mcp__acendas-atlassian__jira_get_sprint_issues
 ---

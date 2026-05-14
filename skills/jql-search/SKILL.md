@@ -1,6 +1,6 @@
 ---
-name: JQL Search Helper
-description: This skill should be used when the user asks to "search jira", "run a JQL query", "find jira issues where X", "help me write JQL", or runs `/atlassian-suite:jql-search`. Translates natural-language queries into JQL, runs the search, and explains the results.
+name: jql-search
+description: Search Jira via natural-language to JQL.
 argument-hint: "<natural-language-query-or-jql>"
 allowed-tools: mcp__acendas-atlassian__jira_search, mcp__acendas-atlassian__jira_search_fields
 ---

@@ -1,6 +1,6 @@
 ---
-name: Confluence Page Labels
-description: This skill should be used when the user asks to "tag a confluence page", "add label to confluence", "remove label from page", "list confluence labels", "label this as runbook", or runs `/atlassian-suite:confluence-labels`. Lists, adds, and removes labels on a Confluence page. List uses v2; add/remove use v1 (v2 labels API is read-only).
+name: confluence-labels
+description: Manage labels on a Confluence page.
 argument-hint: "<page-id-or-title> <action: list|add|remove> [label-names...]"
 allowed-tools: mcp__acendas-atlassian__confluence_get_labels, mcp__acendas-atlassian__confluence_add_label, mcp__acendas-atlassian__confluence_remove_label, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title
 ---

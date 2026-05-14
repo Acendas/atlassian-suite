@@ -1,6 +1,6 @@
 ---
-name: Create Jira Issue
-description: This skill should be used when the user asks to "create a jira issue", "file a bug in jira", "create a story", "open a ticket from this", or runs `/atlassian-suite:create-issue`. Creates a Jira issue with smart defaults pulled from current context (project, type, summary, description, labels), then asks once for confirmation.
+name: create-issue
+description: Create a Jira issue from current context.
 argument-hint: "[project-key] [summary]"
 allowed-tools: mcp__acendas-atlassian__jira_get_all_projects, mcp__acendas-atlassian__jira_create_issue, mcp__acendas-atlassian__jira_batch_create_issues, mcp__acendas-atlassian__jira_get_user_profile, mcp__acendas-atlassian__getJiraProjectIssueTypesMetadata
 ---

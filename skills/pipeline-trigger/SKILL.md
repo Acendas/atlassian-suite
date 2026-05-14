@@ -1,6 +1,6 @@
 ---
-name: Trigger Bitbucket Pipeline
-description: This skill should be used when the user asks to "trigger a pipeline", "run a build", "start CI", "trigger custom pipeline", or runs `/atlassian-suite:pipeline-trigger`. Triggers a Bitbucket Pipelines build on a branch/commit/tag, optionally selecting a custom pipeline pattern with variables.
+name: pipeline-trigger
+description: Trigger a Bitbucket Pipelines build.
 argument-hint: "<repo-slug> <branch-or-commit> [pattern]"
 allowed-tools: mcp__acendas-atlassian__trigger_pipeline, mcp__acendas-atlassian__list_branches, mcp__acendas-atlassian__list_pipeline_variables, mcp__acendas-atlassian__get_pipeline
 ---

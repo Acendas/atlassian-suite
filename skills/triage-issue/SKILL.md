@@ -1,6 +1,6 @@
 ---
-name: Triage Jira Issue
-description: This skill should be used when the user asks to "triage this issue", "triage the bug", "categorize this jira ticket", "find related docs and prs for this issue", or runs `/atlassian-suite:triage-issue`. Pulls related Confluence docs and Bitbucket PRs/commits for a Jira issue, suggests labels/priority/component, and proposes a transition.
+name: triage-issue
+description: Triage a Jira issue with related context.
 argument-hint: "<issue-key>"
 allowed-tools: mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__jira_get_transitions, mcp__acendas-atlassian__jira_transition_issue, mcp__acendas-atlassian__jira_update_issue, mcp__acendas-atlassian__jira_search, mcp__acendas-atlassian__confluence_search, mcp__acendas-atlassian__list_pull_requests
 ---

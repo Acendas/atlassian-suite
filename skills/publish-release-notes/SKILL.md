@@ -1,6 +1,6 @@
 ---
-name: Publish Release Notes to Confluence
-description: This skill should be used when the user asks to "publish release notes to confluence", "post the changelog to confluence", "publish to confluence", "create confluence release notes page", "post release notes", or runs `/atlassian-suite:publish-release-notes`. Creates or updates a Confluence page with release notes in the chosen space.
+name: publish-release-notes
+description: Publish release notes to Confluence.
 argument-hint: "<space-key> [parent-page-id-or-title] [page-title]"
 allowed-tools: mcp__acendas-atlassian__confluence_create_page, mcp__acendas-atlassian__confluence_update_page, mcp__acendas-atlassian__confluence_search, mcp__acendas-atlassian__getConfluenceSpaces
 ---

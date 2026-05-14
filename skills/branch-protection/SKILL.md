@@ -1,6 +1,6 @@
 ---
-name: Bitbucket Branch Protection
-description: This skill should be used when the user asks to "audit branch protection", "show branch restrictions", "protect main branch", "require approvals", "branch policy", or runs `/atlassian-suite:branch-protection`. Lists branch restrictions on a repo and helps add/remove protection rules.
+name: branch-protection
+description: List or manage Bitbucket branch protection rules.
 argument-hint: "<repo-slug> [action: list|add|remove] [args...]"
 allowed-tools: mcp__acendas-atlassian__list_branch_restrictions, mcp__acendas-atlassian__create_branch_restriction, mcp__acendas-atlassian__update_branch_restriction, mcp__acendas-atlassian__delete_branch_restriction, mcp__acendas-atlassian__get_branching_model_settings, mcp__acendas-atlassian__update_branching_model_settings
 ---

@@ -1,6 +1,6 @@
 ---
-name: Daily Standup Notes
-description: This skill should be used when the user asks for "standup notes", "what did I do yesterday", "daily standup", "yesterday/today/blockers", or runs `/atlassian-suite:standup-notes`. Generates a personalized daily standup brief from the user's Jira activity, in-flight Bitbucket PRs, and any blockers in the active sprint.
+name: standup-notes
+description: Generate a daily standup brief from Jira and PRs.
 argument-hint: "[user-account-id-or-email]"
 allowed-tools: mcp__acendas-atlassian__jira_get_user_profile, mcp__acendas-atlassian__jira_search, mcp__acendas-atlassian__list_pull_requests, mcp__acendas-atlassian__get_pull_request
 ---

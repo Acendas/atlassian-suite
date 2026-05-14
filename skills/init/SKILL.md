@@ -1,6 +1,6 @@
 ---
-name: Initialize Atlassian Suite
-description: This skill should be used when the user asks to "init atlassian", "initialize atlassian", "setup atlassian", "configure atlassian", "configure jira/confluence/bitbucket", "set my atlassian credentials", "save atlassian credentials", "what credentials does the atlassian plugin need", "rotate my atlassian token", "remove atlassian credentials", "atlassian token expired", "atlassian auth failed", "log in to atlassian", or runs `/atlassian-suite:init`. Hands off to a localhost-only browser wizard (`auth.mjs web`) that opens the Atlassian token page, shows the exact OAuth scopes per product, accepts unbounded-length token paste in a real textarea, persists atomically to the config file, and self-tests against each product API. Tokens never appear in the Claude Code transcript.
+name: init
+description: Initialize Atlassian credentials via browser wizard.
 argument-hint: ""
 allowed-tools: Bash, mcp__acendas-atlassian__clear_credentials
 ---

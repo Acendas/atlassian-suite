@@ -1,6 +1,6 @@
 ---
-name: View / Work on a Jira Issue
-description: This skill should be used when the user asks to "show jira issue X", "open PROJ-123", "what's the status of {issue}", "transition this issue", "comment on issue", or runs `/atlassian-suite:jira-issue`. Loads a Jira issue, displays a compact summary, and offers next actions (comment, transition, log work).
+name: jira-issue
+description: View or act on a Jira issue.
 argument-hint: "<issue-key> [action: show|comment|transition|worklog]"
 allowed-tools: mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__jira_get_transitions, mcp__acendas-atlassian__jira_transition_issue, mcp__acendas-atlassian__jira_add_comment, mcp__acendas-atlassian__jira_add_worklog
 ---

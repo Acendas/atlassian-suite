@@ -1,6 +1,6 @@
 ---
-name: List Pull Requests
-description: This skill should be used when the user asks to "list PRs", "list pull requests", "show open PRs", "PRs needing my review", "my PRs", or runs `/atlassian-suite:pr-list`. Lists Bitbucket pull requests with smart filters (mine, needs-review, stale).
+name: pr-list
+description: List Bitbucket pull requests with smart filters.
 argument-hint: "[repo-slug] [filter: open|mine|review|stale|merged]"
 allowed-tools: mcp__acendas-atlassian__list_pull_requests, mcp__acendas-atlassian__list_repositories, mcp__acendas-atlassian__get_pull_request
 ---

@@ -1,6 +1,6 @@
 ---
-name: Review PR with Multi-Scanner Pipeline
-description: This skill should be used when the user asks to "review this PR", "review pull request", "deep review of PR X", "review with full pipeline", "thorough code review", "release-readiness review", or runs `/atlassian-suite:review-pr`. Runs the multi-agent code review pipeline (6 specialized scanners + investigator + critic) against a Bitbucket PR with Jira context. Auto-selects scope and stakes.
+name: review-pr
+description: Run the multi-scanner PR review pipeline.
 argument-hint: "<pr-url-or-id> [--high] [--quick]"
 allowed-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_pull_request_diff, mcp__acendas-atlassian__get_pull_request_diffstat, mcp__acendas-atlassian__get_pull_request_commits, mcp__acendas-atlassian__get_pull_request_comments, mcp__acendas-atlassian__get_pull_request_activity, mcp__acendas-atlassian__get_file_contents, mcp__acendas-atlassian__add_inline_comment, mcp__acendas-atlassian__add_pull_request_comment, mcp__acendas-atlassian__jira_get_issue, Agent
 ---

@@ -1,6 +1,6 @@
 ---
-name: PR Review Follow-up to Jira
-description: This skill should be used when the user asks to "create jira issues from review findings", "spin out follow-ups from PR review", "convert review notes to tickets", "file the follow-up bucket", "create issues for the follow-ups", or runs `/atlassian-suite:pr-followup`. Converts the follow-up bucket from a PR review into Jira issues with batch confirmation.
+name: pr-followup
+description: Convert PR review follow-ups into Jira issues.
 argument-hint: "[pr-id-or-url] [project-key]"
 allowed-tools: mcp__acendas-atlassian__jira_create_issue, mcp__acendas-atlassian__jira_batch_create_issues, mcp__acendas-atlassian__jira_create_remote_issue_link, mcp__acendas-atlassian__jira_get_all_projects, mcp__acendas-atlassian__getJiraProjectIssueTypesMetadata, mcp__acendas-atlassian__get_pull_request, AskUserQuestion
 ---

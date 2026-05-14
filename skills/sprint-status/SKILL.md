@@ -1,6 +1,6 @@
 ---
-name: Sprint Status Report
-description: This skill should be used when the user asks for "sprint status", "current sprint progress", "where are we in the sprint", "sprint health check", or runs `/atlassian-suite:sprint-status`. Produces a concise sprint progress report with completed/in-progress/blocked breakdown, scope changes, and burndown signal.
+name: sprint-status
+description: Report current Jira sprint progress.
 argument-hint: "[board-id-or-name] [sprint-id-or-name]"
 allowed-tools: mcp__acendas-atlassian__jira_get_agile_boards, mcp__acendas-atlassian__jira_get_sprints_from_board, mcp__acendas-atlassian__jira_get_sprint_issues, mcp__acendas-atlassian__jira_search
 ---

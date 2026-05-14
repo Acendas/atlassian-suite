@@ -1,6 +1,6 @@
 ---
-name: Comment on a Confluence Page
-description: This skill should be used when the user asks to "comment on confluence page", "reply to confluence comment", "leave feedback on confluence", or runs `/atlassian-suite:confluence-comment`. Adds a FOOTER comment (page-level) or threaded reply to a Confluence page. Markdown body is auto-converted to ADF. For text-anchored comments on selections, use `/atlassian-suite:confluence-inline-comment`.
+name: confluence-comment
+description: Add a footer comment on a Confluence page.
 argument-hint: "<page-id-or-title> [parent-comment-id]"
 allowed-tools: mcp__acendas-atlassian__confluence_add_comment, mcp__acendas-atlassian__confluence_reply_to_comment, mcp__acendas-atlassian__confluence_get_comments, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title, mcp__acendas-atlassian__confluence_search
 ---

@@ -1,6 +1,6 @@
 ---
-name: Confluence Search Helper
-description: This skill should be used when the user asks to "search confluence", "find confluence page about X", "help me write CQL", "look up our docs on Y", or runs `/atlassian-suite:confluence-search`. Translates natural-language queries to CQL, runs the search, summarizes results.
+name: confluence-search
+description: Search Confluence via natural-language to CQL.
 argument-hint: "<natural-language-query-or-cql> [space-key]"
 allowed-tools: mcp__acendas-atlassian__confluence_search, mcp__acendas-atlassian__getConfluenceSpaces
 ---

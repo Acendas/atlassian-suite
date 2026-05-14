@@ -1,6 +1,6 @@
 ---
-name: Sprint Retrospective Brief
-description: This skill should be used when the user asks for "sprint retro", "retrospective brief", "sprint review summary", "what went well/poorly this sprint", or runs `/atlassian-suite:sprint-retro`. Produces a retro-ready brief from completed/incomplete work, scope churn, cycle-time outliers, and recurring blockers in a closed sprint.
+name: sprint-retro
+description: Generate a Jira sprint retrospective brief.
 argument-hint: "[board-id-or-name] [sprint-id-or-name]"
 allowed-tools: mcp__acendas-atlassian__jira_get_agile_boards, mcp__acendas-atlassian__jira_get_sprints_from_board, mcp__acendas-atlassian__jira_get_sprint_issues, mcp__acendas-atlassian__jira_search, mcp__acendas-atlassian__jira_batch_get_changelogs
 ---

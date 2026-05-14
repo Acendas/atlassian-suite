@@ -1,6 +1,6 @@
 ---
-name: Generate Release Notes
-description: This skill should be used when the user asks to "generate release notes", "draft release notes", "what changed in this release", "changelog from PRs and Jira", or runs `/atlassian-suite:release-notes`. Builds release notes by intersecting merged Bitbucket PRs in a date or commit range with their linked Jira issues, grouped by issue type.
+name: release-notes
+description: Generate release notes from PRs and Jira issues.
 argument-hint: "<repo-slug> <since-ref-or-date> [until-ref-or-date]"
 allowed-tools: mcp__acendas-atlassian__list_pull_requests, mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_pull_request_commits, mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__jira_search
 ---

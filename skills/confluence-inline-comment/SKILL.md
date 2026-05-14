@@ -1,6 +1,6 @@
 ---
-name: Inline Comment on a Confluence Page
-description: This skill should be used when the user asks to "comment on a specific sentence in confluence", "add inline comment", "highlight a paragraph and leave a note", "flag this line on confluence", "resolve inline comment", or runs `/atlassian-suite:confluence-inline-comment`. Adds, replies to, lists, or resolves INLINE (text-anchored) comments on a Confluence page. Distinct from footer comments — inline is for "this specific sentence is unclear" while footer is "overall feedback".
+name: confluence-inline-comment
+description: Add an inline comment on a Confluence page.
 argument-hint: "<page-id-or-title> <action: list|add|reply|resolve> [selection-text-or-comment-id] [body]"
 allowed-tools: mcp__acendas-atlassian__confluence_get_inline_comments, mcp__acendas-atlassian__confluence_add_inline_comment, mcp__acendas-atlassian__confluence_reply_to_inline_comment, mcp__acendas-atlassian__confluence_resolve_inline_comment, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title, mcp__acendas-atlassian__confluence_search
 ---

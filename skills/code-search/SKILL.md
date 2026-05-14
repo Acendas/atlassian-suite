@@ -1,6 +1,6 @@
 ---
-name: Search Code Across Bitbucket
-description: This skill should be used when the user asks to "search code", "find usages of X across repos", "where is function Y defined", "grep across bitbucket", or runs `/atlassian-suite:code-search`. Runs a Bitbucket workspace-wide code search with optional language/path/repo filters.
+name: code-search
+description: Search code across the Bitbucket workspace.
 argument-hint: "<query> [repo-slug] [lang]"
 allowed-tools: mcp__acendas-atlassian__search_code
 ---

@@ -1,6 +1,6 @@
 ---
-name: Bitbucket Deployments
-description: This skill should be used when the user asks "what's deployed", "list deployments", "show environments", "deployment status", "promote to staging", or runs `/atlassian-suite:deployments`. Inspects Bitbucket Deployments — environments, recent deploys, and per-environment variables.
+name: deployments
+description: Inspect Bitbucket deployments and environments.
 argument-hint: "<repo-slug> [action: list|environments|variables] [environment-uuid]"
 allowed-tools: mcp__acendas-atlassian__list_deployments, mcp__acendas-atlassian__get_deployment, mcp__acendas-atlassian__list_environments, mcp__acendas-atlassian__get_environment, mcp__acendas-atlassian__list_environment_variables
 ---

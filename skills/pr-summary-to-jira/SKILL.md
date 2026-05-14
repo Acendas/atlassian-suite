@@ -1,6 +1,6 @@
 ---
-name: Post PR Summary to Jira
-description: This skill should be used when the user asks to "post pr summary to jira", "summarize this pr in jira", "comment pr status on jira issue", or runs `/atlassian-suite:pr-summary-to-jira`. Generates a concise PR status summary and posts it as a Jira comment on the linked issue, keeping non-technical stakeholders updated without leaving Jira.
+name: pr-summary-to-jira
+description: Post PR summary as a Jira comment.
 argument-hint: "<pr-url-or-id> [issue-key]"
 allowed-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_pull_request_diffstat, mcp__acendas-atlassian__get_pull_request_activity, mcp__acendas-atlassian__jira_add_comment, mcp__acendas-atlassian__jira_get_issue
 ---

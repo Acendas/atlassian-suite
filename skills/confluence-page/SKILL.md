@@ -1,6 +1,6 @@
 ---
-name: Read / Edit a Confluence Page
-description: This skill should be used when the user asks to "show confluence page X", "read this confluence page", "rewrite confluence page", "create a child page", or runs `/atlassian-suite:confluence-page`. Reads a page or performs a FULL-PAGE rewrite/create. For partial edits (sections, find/replace, append), prefer `/atlassian-suite:confluence-edit`.
+name: confluence-page
+description: Read or rewrite a Confluence page.
 argument-hint: "<page-id-or-title-or-url> [action: read|rewrite|create-child] [body-file-or-text]"
 allowed-tools: mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title, mcp__acendas-atlassian__confluence_update_page, mcp__acendas-atlassian__confluence_create_page, mcp__acendas-atlassian__confluence_get_comments, mcp__acendas-atlassian__confluence_search, mcp__acendas-atlassian__getConfluenceSpaces, mcp__acendas-atlassian__confluence_get_space, mcp__acendas-atlassian__confluence_get_page_diff
 ---

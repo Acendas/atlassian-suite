@@ -1,6 +1,6 @@
 ---
-name: Bitbucket Pipeline Status
-description: This skill should be used when the user asks for "pipeline status", "build status", "list pipelines", "is the build green", "show CI runs", or runs `/atlassian-suite:pipeline-status`. Lists recent Bitbucket Pipelines runs and summarizes pass/fail/in-progress.
+name: pipeline-status
+description: Show Bitbucket Pipelines run status.
 argument-hint: "<repo-slug> [filter: latest|failed|inprogress]"
 allowed-tools: mcp__acendas-atlassian__list_pipelines, mcp__acendas-atlassian__get_pipeline, mcp__acendas-atlassian__list_pipeline_steps, mcp__acendas-atlassian__get_pipeline_step_log
 ---

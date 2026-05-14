@@ -1,6 +1,6 @@
 ---
-name: Jira Worklog
-description: This skill should be used when the user asks to "log work on issue", "add worklog", "track time", "I spent 2h on PROJ-123", or runs `/atlassian-suite:jira-worklog`. Adds time entries to Jira issues and shows existing worklogs.
+name: jira-worklog
+description: Log time on a Jira issue.
 argument-hint: "<issue-key> [time-spent] [comment]"
 allowed-tools: mcp__acendas-atlassian__jira_add_worklog, mcp__acendas-atlassian__jira_get_worklog
 ---

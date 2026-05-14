@@ -1,6 +1,6 @@
 ---
-name: Create Pull Request
-description: This skill should be used when the user asks to "create a PR", "open pull request", "raise PR", "create bitbucket PR from current branch", or runs `/atlassian-suite:pr-create`. Creates a Bitbucket PR with default reviewers, source/destination branches, and a Jira-aware description.
+name: pr-create
+description: Create a Bitbucket pull request.
 argument-hint: "<repo-slug> <source-branch> [destination-branch] [title]"
 allowed-tools: Bash, mcp__acendas-atlassian__create_pull_request, mcp__acendas-atlassian__get_default_reviewers, mcp__acendas-atlassian__list_branches, mcp__acendas-atlassian__jira_get_issue
 ---

@@ -1,6 +1,6 @@
 ---
-name: Link Jira Issues
-description: This skill should be used when the user asks to "link issues", "issue X blocks Y", "add issue link", "remove issue link", "list link types", or runs `/atlassian-suite:jira-link`. Creates and removes typed links between Jira issues.
+name: jira-link
+description: Create or remove typed Jira issue links.
 argument-hint: "<inward-key> <link-type> <outward-key>"
 allowed-tools: mcp__acendas-atlassian__jira_create_issue_link, mcp__acendas-atlassian__jira_remove_issue_link, mcp__acendas-atlassian__jira_get_link_types, mcp__acendas-atlassian__jira_link_to_epic
 ---

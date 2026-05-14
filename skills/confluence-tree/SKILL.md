@@ -1,6 +1,6 @@
 ---
-name: Browse Confluence Space Tree
-description: This skill should be used when the user asks to "show confluence space structure", "list pages in space", "browse confluence tree", "what's under this confluence page", or runs `/atlassian-suite:confluence-tree`. Renders the page hierarchy of a Confluence space (or sub-tree under a page). Powered by v2 /descendants — one API call for the whole subtree, not N+1 recursion.
+name: confluence-tree
+description: Browse a Confluence space's page tree.
 argument-hint: "<space-key-or-page-id> [depth]"
 allowed-tools: mcp__acendas-atlassian__confluence_get_space_page_tree, mcp__acendas-atlassian__confluence_get_page_children, mcp__acendas-atlassian__getConfluenceSpaces, mcp__acendas-atlassian__confluence_get_space
 ---

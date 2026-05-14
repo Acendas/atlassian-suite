@@ -1,6 +1,6 @@
 ---
-name: Copy Confluence Page or Hierarchy
-description: This skill should be used when the user asks to "copy a confluence page", "duplicate this page", "copy page tree to another space", "clone this runbook as a template", "copy page hierarchy", or runs `/atlassian-suite:confluence-copy`. Copies a single page (synchronous) or an entire subtree (asynchronous long-task). v1-backed — v2 has no copy endpoint.
+name: confluence-copy
+description: Copy a Confluence page or page tree.
 argument-hint: "<source-page-id> <destination-parent-page-id> [mode: page|hierarchy] [new-title]"
 allowed-tools: mcp__acendas-atlassian__confluence_copy_page, mcp__acendas-atlassian__confluence_copy_page_hierarchy_start, mcp__acendas-atlassian__confluence_copy_page_hierarchy_status, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title
 ---

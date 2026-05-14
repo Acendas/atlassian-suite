@@ -1,6 +1,6 @@
 ---
-name: Watch / Unwatch Confluence Page or Space
-description: This skill should be used when the user asks to "watch this confluence page", "subscribe to confluence updates", "stop watching", "unwatch space", "follow this runbook", or runs `/atlassian-suite:confluence-watch`. Subscribes or unsubscribes the authenticated user from page/space change notifications. v1-backed — v2 has no watchers endpoint.
+name: confluence-watch
+description: Watch or unwatch a Confluence page or space.
 argument-hint: "<page-id-or-space-key> [action: watch|unwatch] [scope: page|space]"
 allowed-tools: mcp__acendas-atlassian__confluence_watch_page, mcp__acendas-atlassian__confluence_unwatch_page, mcp__acendas-atlassian__confluence_watch_space, mcp__acendas-atlassian__confluence_unwatch_space, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title
 ---

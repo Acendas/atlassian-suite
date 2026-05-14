@@ -1,6 +1,6 @@
 ---
-name: Jira Issue Attachments
-description: This skill should be used when the user asks to "list jira attachments", "show attachments on jira issue", "download jira attachment", "save jira attachment", "view jira attachment", "upload file to jira", "attach file to jira issue", "delete jira attachment", or runs `/atlassian-suite:jira-attachment`. Lists, downloads, uploads, and deletes attachments on a Jira issue. Downloads stream straight to disk — safe for multi-GB files.
+name: jira-attachment
+description: Manage attachments on a Jira issue.
 argument-hint: "<issue-key> [action: list|download|upload|delete] [attachment-id-or-save-path-or-file-path]"
 allowed-tools: mcp__acendas-atlassian__jira_list_issue_attachments, mcp__acendas-atlassian__jira_get_attachment, mcp__acendas-atlassian__jira_download_attachment, mcp__acendas-atlassian__jira_add_attachment, mcp__acendas-atlassian__jira_delete_attachment, mcp__acendas-atlassian__jira_get_issue
 ---

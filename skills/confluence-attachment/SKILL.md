@@ -1,6 +1,6 @@
 ---
-name: Confluence Page Attachments
-description: This skill should be used when the user asks to "list confluence attachments", "show attachments on page", "download attachment from confluence", "save confluence attachment", "upload attachment to confluence", "delete confluence attachment", or runs `/atlassian-suite:confluence-attachment`. Lists, downloads, uploads, reads, or deletes attachments on a Confluence page. Upload uses v1 (no v2 upload endpoint); list/get/download/delete use v2.
+name: confluence-attachment
+description: Manage attachments on a Confluence page.
 argument-hint: "<page-id-or-title> [action: list|get|download|upload|delete] [attachment-id-or-file-path] [save-path]"
 allowed-tools: mcp__acendas-atlassian__confluence_get_attachments, mcp__acendas-atlassian__confluence_get_attachment, mcp__acendas-atlassian__confluence_download_attachment, mcp__acendas-atlassian__confluence_upload_attachment, mcp__acendas-atlassian__confluence_delete_attachment, mcp__acendas-atlassian__confluence_search, mcp__acendas-atlassian__confluence_get_page_by_title, mcp__acendas-atlassian__confluence_render_image_macro
 ---

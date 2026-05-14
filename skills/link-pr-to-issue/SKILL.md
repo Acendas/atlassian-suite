@@ -1,6 +1,6 @@
 ---
-name: Link PR to Jira Issue
-description: This skill should be used when the user asks to "link this PR to a jira issue", "link pr to jira", "associate PR with ticket", "add Jira link to PR", or runs `/atlassian-suite:link-pr-to-issue`. Establishes a bidirectional link between a Bitbucket pull request and a Jira issue (issue gets a remote link to the PR; PR description and branch reference the issue key).
+name: link-pr-to-issue
+description: Bidirectionally link a PR to a Jira issue.
 argument-hint: "<pr-url-or-id> [issue-key]"
 allowed-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__update_pull_request, mcp__acendas-atlassian__add_pull_request_comment, mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__jira_create_remote_issue_link, mcp__acendas-atlassian__jira_add_comment
 ---

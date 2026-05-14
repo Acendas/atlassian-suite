@@ -1,6 +1,6 @@
 ---
-name: Confluence Granular Edits
-description: This skill should be used when the user asks to "edit a section of a confluence page", "append to confluence page", "replace text on confluence", "update one paragraph on confluence", "fix typo on confluence page", "insert section after heading", "remove section from page", or runs `/atlassian-suite:confluence-edit`. Performs SURGICAL edits that preserve all other content (images, macros, charts). Always preferred over full-page rewrites unless replacing the entire page.
+name: confluence-edit
+description: Surgically edit a section of a Confluence page.
 argument-hint: "<page-id-or-title> <op: append|prepend|replace-section|insert-after|replace-text|remove-section> [args...]"
 allowed-tools: mcp__acendas-atlassian__confluence_append_to_page, mcp__acendas-atlassian__confluence_prepend_to_page, mcp__acendas-atlassian__confluence_replace_section, mcp__acendas-atlassian__confluence_insert_after_heading, mcp__acendas-atlassian__confluence_replace_text, mcp__acendas-atlassian__confluence_remove_section, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title, mcp__acendas-atlassian__confluence_search, mcp__acendas-atlassian__confluence_upload_attachment, mcp__acendas-atlassian__confluence_render_image_macro
 ---

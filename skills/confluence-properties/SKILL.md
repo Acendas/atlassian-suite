@@ -1,6 +1,6 @@
 ---
-name: Confluence Page Properties (Structured Metadata)
-description: This skill should be used when the user asks to "set a property on a confluence page", "add metadata to confluence page", "tag this runbook as reviewed", "record linked jira epic on the doc", "get property from page", "delete page property", or runs `/atlassian-suite:confluence-properties`. Reads, writes, and deletes structured key/value metadata on a Confluence page. Useful for machine-readable fields that shouldn't live in the page body — "last-reviewed-by", "linked-jira-epic", "source-sha", etc.
+name: confluence-properties
+description: Manage structured properties on a Confluence page.
 argument-hint: "<page-id-or-title> <action: list|get|set|delete> [key] [value]"
 allowed-tools: mcp__acendas-atlassian__confluence_get_page_properties, mcp__acendas-atlassian__confluence_get_page_property, mcp__acendas-atlassian__confluence_set_page_property, mcp__acendas-atlassian__confluence_delete_page_property, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title
 ---
