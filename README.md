@@ -67,7 +67,7 @@ Wave 3 — pr-critic (opus, high-stakes only): anti-sycophancy adversarial pass 
 Consolidated verdict + optional inline-comment posting
 ```
 
-Use via `/atlassian-suite:review-pr <pr-id> [--high] [--quick]` or by dispatching `code-review-orchestrator` directly for batch reviews.
+Use via `/atlassian-suite:as-review-pr <pr-id> [--high] [--quick]` or by dispatching `code-review-orchestrator` directly for batch reviews.
 
 ## Prerequisites
 
@@ -89,7 +89,7 @@ Use via `/atlassian-suite:review-pr <pr-id> [--high] [--quick]` or by dispatchin
 
 3. Configure credentials. **Two options** — pick one:
 
-   **Option A — File (recommended).** Run `/atlassian-suite:init` after first launch. The skill runs an interactive wizard: it opens the Atlassian token page in your browser, prints the exact OAuth scopes to tick per product (Jira / Confluence / Bitbucket), collects URL/email/workspace/token via in-chat prompts, persists to `~/.acendas-atlassian/config.json` (mode 0600, atomic write with rolling backup), and self-tests each product against its API. **Note:** tokens entered in the wizard appear in your Claude Code transcript — if that's a concern, use Option B (env vars) instead.
+   **Option A — File (recommended).** Run `/atlassian-suite:as-init` after first launch. The skill runs an interactive wizard: it opens the Atlassian token page in your browser, prints the exact OAuth scopes to tick per product (Jira / Confluence / Bitbucket), collects URL/email/workspace/token via in-chat prompts, persists to `~/.acendas-atlassian/config.json` (mode 0600, atomic write with rolling backup), and self-tests each product against its API. **Note:** tokens entered in the wizard appear in your Claude Code transcript — if that's a concern, use Option B (env vars) instead.
 
    **Option B — Env vars.** Set in `~/.zshrc` / `~/.bashrc` / project `.env`:
 

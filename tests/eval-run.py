@@ -3,7 +3,7 @@
 
 Usage:
     python3 tests/eval-run.py              # Run all checks
-    python3 tests/eval-run.py --skill init # Run checks for one skill (by directory name)
+    python3 tests/eval-run.py --skill as-init # Run checks for one skill (by directory name)
     python3 tests/eval-run.py --verbose    # Show passing assertions too
 
 Checks:
