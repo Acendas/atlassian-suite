@@ -146238,6 +146238,7 @@ var AtlassianHttpError = class extends Error {
   statusText;
   body;
 };
+var BitbucketHttpError = AtlassianHttpError;
 function createAtlassianHttp(opts) {
   const { baseUrl, username, apiToken } = opts;
   const label = opts.productLabel ?? "Atlassian";
@@ -147392,6 +147393,7 @@ function registerTagTools(server2, ctx) {
 // src/bitbucket/pipelines.ts
 function registerPipelineTools(server2, ctx) {
   const repoBase = (workspace, repo) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}`;
+  const stepBase = (workspace, repo, pipeline3, step) => `${repoBase(workspace, repo)}/pipelines/${encodeURIComponent(pipeline3)}/steps/${encodeURIComponent(step)}`;
   server2.addTool({
     name: "list_pipelines",
     description: "List pipeline runs for a repository.",
@@ -147502,7 +147504,58 @@ function registerPipelineTools(server2, ctx) {
   });
   server2.addTool({
     name: "get_pipeline_step_log",
-    description: "Get the raw log output for a single pipeline step.",
+    description: "Get the raw log output for a single pipeline step. Auto-falls back to per-command logs if the unified /log endpoint returns 406 (common for steps with large logs or test reports).",
+    parameters: external_exports4.object({
+      repo_slug: external_exports4.string(),
+      pipeline_uuid: external_exports4.string(),
+      step_uuid: external_exports4.string(),
+      workspace: external_exports4.string().optional()
+    }),
+    execute: async (args) => safeExecute(async () => {
+      const base = stepBase(args.workspace, args.repo_slug, args.pipeline_uuid, args.step_uuid);
+      try {
+        const body = await ctx.http.request("GET", `${base}/log`, {
+          headers: { Accept: "*/*" }
+        });
+        return { source: "unified", body };
+      } catch (err) {
+        const isHttp = err?.name === "BitbucketHttpError" || err instanceof BitbucketHttpError;
+        if (!isHttp || err.status !== 406 && err.status !== 404) throw err;
+        const list = await ctx.http.get(`${base}/logs/`, { pagelen: 100 });
+        const entries = Array.isArray(list?.values) ? list.values : [];
+        const bodies = [];
+        for (const entry of entries) {
+          const logUuid = entry?.uuid ?? entry?.log_uuid;
+          if (!logUuid) continue;
+          try {
+            const body = await ctx.http.request(
+              "GET",
+              `${base}/logs/${encodeURIComponent(logUuid)}`,
+              { headers: { Accept: "*/*" } }
+            );
+            bodies.push({ uuid: logUuid, name: entry?.name, body });
+          } catch (innerErr) {
+            bodies.push({
+              uuid: logUuid,
+              name: entry?.name,
+              body: "",
+              error: innerErr?.message ?? String(innerErr)
+            });
+          }
+        }
+        return {
+          source: "per_command",
+          unified_log_status: err.status,
+          unified_log_hint: "Bitbucket's unified /log endpoint returned " + err.status + "; fell back to /logs/ per-command index. For structured test failure detail (names, classes, assertion messages) prefer list_pipeline_step_test_cases.",
+          command_count: bodies.length,
+          commands: bodies
+        };
+      }
+    })
+  });
+  server2.addTool({
+    name: "get_pipeline_step_test_report",
+    description: "Get the summary of a step's test report (totals: passed, failed, error, skipped). Returns empty body if no test report exists for the step.",
     parameters: external_exports4.object({
       repo_slug: external_exports4.string(),
       pipeline_uuid: external_exports4.string(),
@@ -147510,12 +147563,53 @@ function registerPipelineTools(server2, ctx) {
       workspace: external_exports4.string().optional()
     }),
     execute: async (args) => safeExecute(
-      () => ctx.http.request(
-        "GET",
-        `${repoBase(args.workspace, args.repo_slug)}/pipelines/${encodeURIComponent(args.pipeline_uuid)}/steps/${encodeURIComponent(args.step_uuid)}/log`,
-        { headers: { Accept: "text/plain" } }
-      )
+      () => ctx.http.get(`${stepBase(args.workspace, args.repo_slug, args.pipeline_uuid, args.step_uuid)}/test_reports`)
     )
+  });
+  server2.addTool({
+    name: "list_pipeline_step_test_cases",
+    description: "List individual test cases from a step's test report. Filter by status (FAILED/ERROR/PASSED/SKIPPED/UNKNOWN) \u2014 for triage, request status=FAILED to get just the failing test names and classes. Each returned case carries its `reason` inline (assertion message + stack trace), so for typical failure triage this single call is sufficient \u2014 only fall back to list_pipeline_step_test_case_reasons if a case's inline reason is missing or truncated.",
+    parameters: external_exports4.object({
+      repo_slug: external_exports4.string(),
+      pipeline_uuid: external_exports4.string(),
+      step_uuid: external_exports4.string(),
+      status: external_exports4.enum(["FAILED", "ERROR", "PASSED", "SKIPPED", "UNKNOWN"]).optional().describe("Filter by test-case status. Omit to return all cases."),
+      pagelen: external_exports4.number().int().min(1).max(100).optional(),
+      page: external_exports4.number().int().positive().optional(),
+      workspace: external_exports4.string().optional()
+    }),
+    execute: async (args) => safeExecute(() => {
+      const query = {
+        pagelen: args.pagelen ?? 100
+      };
+      if (args.page) query.page = args.page;
+      if (args.status) query.status = args.status;
+      return ctx.http.get(
+        `${stepBase(args.workspace, args.repo_slug, args.pipeline_uuid, args.step_uuid)}/test_reports/test_cases/`,
+        query
+      );
+    })
+  });
+  server2.addTool({
+    name: "list_pipeline_step_test_case_reasons",
+    description: "Fetch the reason (assertion message + stack trace) for one specific test case in a step. test_case_uuid is required \u2014 Bitbucket does not expose a bare collection endpoint. Typical triage uses the inline `reason` block returned by list_pipeline_step_test_cases instead of this tool; reach for this only when the inline reason is missing or truncated.",
+    parameters: external_exports4.object({
+      repo_slug: external_exports4.string(),
+      pipeline_uuid: external_exports4.string(),
+      step_uuid: external_exports4.string(),
+      test_case_uuid: external_exports4.string().describe(
+        "UUID of the specific test case (as returned by list_pipeline_step_test_cases). Required."
+      ),
+      pagelen: external_exports4.number().int().min(1).max(100).optional(),
+      workspace: external_exports4.string().optional()
+    }),
+    execute: async (args) => safeExecute(() => {
+      const base = stepBase(args.workspace, args.repo_slug, args.pipeline_uuid, args.step_uuid);
+      return ctx.http.get(
+        `${base}/test_reports/test_cases/${encodeURIComponent(args.test_case_uuid)}/test_case_reasons/`,
+        { pagelen: args.pagelen ?? 100 }
+      );
+    })
   });
   server2.addTool({
     name: "list_pipeline_variables",
