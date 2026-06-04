@@ -21,6 +21,7 @@ import {
   loadJiraConfig,
   loadConfluenceConfig,
   loadBitbucketConfig,
+  loadQMetryConfig,
   isReadOnly,
 } from "./config.js";
 
@@ -62,6 +63,23 @@ export function registerCredentialTools(server: FastMCP): void {
       bitbucket_workspace: z.string().optional(),
       bitbucket_username: z.string().optional(),
       bitbucket_api_token: z.string().optional(),
+      qmetry_api_key: z
+        .string()
+        .optional()
+        .describe(
+          "QMetry API key — generated from Jira → QMetry → Configuration → Open API → Generate. " +
+          "Separate from Atlassian credentials; authenticates directly against qtmcloud.qmetry.com.",
+        ),
+      qmetry_base_url: z
+        .string()
+        .url()
+        .optional()
+        .describe("QMetry API base URL. Defaults to https://qtmcloud.qmetry.com/rest/api/latest (US region). Use https://syd-qtmcloud.qmetry.com/rest/api/latest for APAC/Sydney."),
+      qmetry_default_project_id: z
+        .number()
+        .int()
+        .optional()
+        .describe("Numeric QMetry project ID used as default when no projectId is specified. Run qmetry_list_projects to find your project ID."),
     }),
     execute: async (args: any) => {
       const before = loadStoredCreds();
@@ -90,6 +108,11 @@ export function registerCredentialTools(server: FastMCP): void {
           workspace: args.bitbucket_workspace,
           username: args.bitbucket_username,
           api_token: args.bitbucket_api_token,
+        },
+        qmetry: {
+          api_key: args.qmetry_api_key,
+          base_url: args.qmetry_base_url,
+          default_project_id: args.qmetry_default_project_id,
         },
       };
 
@@ -134,6 +157,7 @@ export function registerCredentialTools(server: FastMCP): void {
       const jira = loadJiraConfig();
       const confluence = loadConfluenceConfig();
       const bitbucket = loadBitbucketConfig();
+      const qmetry = loadQMetryConfig();
 
       return JSON.stringify(
         {
@@ -171,6 +195,15 @@ export function registerCredentialTools(server: FastMCP): void {
                   username: bitbucket.username,
                   api_token: maskToken(bitbucket.apiToken),
                   source: resolutionSource("bitbucket"),
+                }
+              : { configured: false },
+            qmetry: qmetry
+              ? {
+                  configured: true,
+                  base_url: qmetry.baseUrl,
+                  api_key: maskToken(qmetry.apiKey),
+                  default_project_id: qmetry.defaultProjectId ?? null,
+                  note: "Authenticates directly against qtmcloud.qmetry.com — unrelated to Atlassian credentials.",
                 }
               : { configured: false },
             read_only: isReadOnly(),
@@ -218,6 +251,7 @@ function maskAll(creds: StoredCreds): StoredCreds {
   if (clone.jira?.api_token) clone.jira.api_token = maskToken(clone.jira.api_token) as any;
   if (clone.confluence?.api_token) clone.confluence.api_token = maskToken(clone.confluence.api_token) as any;
   if (clone.bitbucket?.api_token) clone.bitbucket.api_token = maskToken(clone.bitbucket.api_token) as any;
+  if (clone.qmetry?.api_key) clone.qmetry.api_key = maskToken(clone.qmetry.api_key) as any;
   return clone;
 }
 

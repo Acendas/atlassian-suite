@@ -6,11 +6,13 @@ import { FastMCP } from "fastmcp";
 import { registerBitbucketTools } from "./bitbucket/index.js";
 import { registerJiraTools } from "./jira/index.js";
 import { registerConfluenceTools } from "./confluence/index.js";
+import { registerQMetryTools } from "./qmetry/index.js";
 import { registerCredentialTools } from "./common/configTools.js";
 import {
   loadJiraConfig,
   loadConfluenceConfig,
   loadBitbucketConfig,
+  loadQMetryConfig,
   isReadOnly,
 } from "./common/config.js";
 
@@ -22,10 +24,11 @@ const server = new FastMCP({
 const jiraReady = loadJiraConfig() !== null;
 const confluenceReady = loadConfluenceConfig() !== null;
 const bitbucketReady = loadBitbucketConfig() !== null;
+const qmetryReady = loadQMetryConfig() !== null;
 const readOnly = isReadOnly();
 
 console.error(
-  `[acendas-atlassian] starting. jira=${jiraReady} confluence=${confluenceReady} bitbucket=${bitbucketReady} read_only=${readOnly}`,
+  `[acendas-atlassian] starting. jira=${jiraReady} confluence=${confluenceReady} bitbucket=${bitbucketReady} qmetry=${qmetryReady} read_only=${readOnly}`,
 );
 
 // Credential tools are always available so the user can configure / inspect / clear
@@ -35,6 +38,7 @@ registerCredentialTools(server);
 if (jiraReady) registerJiraTools(server, { readOnly });
 if (confluenceReady) registerConfluenceTools(server, { readOnly });
 if (bitbucketReady) registerBitbucketTools(server, { readOnly });
+if (qmetryReady) registerQMetryTools(server, { readOnly });
 
 if (!jiraReady && !confluenceReady && !bitbucketReady) {
   console.error(

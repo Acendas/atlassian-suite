@@ -57,6 +57,11 @@ export interface StoredCreds {
     spaces_filter?: string[];
   };
   bitbucket?: { workspace?: string; username?: string; api_token?: string };
+  qmetry?: {
+    api_key?: string;
+    base_url?: string;
+    default_project_id?: number;
+  };
 }
 
 let cached: StoredCreds | null = null;
@@ -157,7 +162,7 @@ export function clearStoredCreds(): void {
  */
 export function mergeCreds(base: StoredCreds, patch: StoredCreds): StoredCreds {
   const result: StoredCreds = JSON.parse(JSON.stringify(base));
-  for (const section of ["atlassian", "jira", "confluence", "bitbucket"] as const) {
+  for (const section of ["atlassian", "jira", "confluence", "bitbucket", "qmetry"] as const) {
     const src = (patch as any)[section];
     if (!src) continue;
     const dst = ((result as any)[section] ??= {});
@@ -179,7 +184,7 @@ export function diffCreds(
   const added: string[] = [];
   const updated: string[] = [];
   const preserved: string[] = [];
-  for (const section of ["atlassian", "jira", "confluence", "bitbucket"] as const) {
+  for (const section of ["atlassian", "jira", "confluence", "bitbucket", "qmetry"] as const) {
     const b = ((before as any)[section] ?? {}) as Record<string, unknown>;
     const a = ((after as any)[section] ?? {}) as Record<string, unknown>;
     const keys = new Set([...Object.keys(b), ...Object.keys(a)]);

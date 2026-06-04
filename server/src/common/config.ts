@@ -139,5 +139,24 @@ export function loadBitbucketConfig(): BitbucketConfig | null {
   };
 }
 
+export interface QMetryConfig {
+  baseUrl: string;
+  apiKey: string;
+  defaultProjectId?: number;
+}
+
+export function loadQMetryConfig(): QMetryConfig | null {
+  const apiKey = env("QMETRY_API_KEY") ?? getStoredString(["qmetry", "api_key"]);
+  if (!apiKey) return null;
+  const baseUrl =
+    env("QMETRY_BASE_URL") ??
+    getStoredString(["qmetry", "base_url"]) ??
+    "https://qtmcloud.qmetry.com/rest/api/latest";
+  const projectIdRaw =
+    env("QMETRY_DEFAULT_PROJECT_ID") ?? getStoredString(["qmetry", "default_project_id"]);
+  const defaultProjectId = projectIdRaw ? parseInt(projectIdRaw, 10) || undefined : undefined;
+  return { baseUrl, apiKey, defaultProjectId };
+}
+
 export const isReadOnly = (): boolean =>
   ["true", "1", "yes"].includes((env("READ_ONLY_MODE") ?? "").toLowerCase());

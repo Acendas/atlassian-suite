@@ -49861,6 +49861,131 @@ var init_index_DoHiaFQM = __esm({
   }
 });
 
+// src/common/http.ts
+var http_exports = {};
+__export(http_exports, {
+  AtlassianHttpError: () => AtlassianHttpError2,
+  BitbucketHttpError: () => BitbucketHttpError,
+  createAtlassianHttp: () => createAtlassianHttp,
+  createBitbucketHttp: () => createBitbucketHttp
+});
+function createAtlassianHttp(opts) {
+  const { baseUrl, username, apiToken } = opts;
+  const label = opts.productLabel ?? "Atlassian";
+  const authHeader = "Basic " + Buffer.from(`${username}:${apiToken}`).toString("base64");
+  const buildUrl = (path, query) => {
+    const url4 = new URL(path.startsWith("http") ? path : `${baseUrl}${path}`);
+    if (query) {
+      for (const [k, v] of Object.entries(query)) {
+        if (v !== void 0 && v !== null) url4.searchParams.set(k, String(v));
+      }
+    }
+    return url4.toString();
+  };
+  const parseBody2 = (text) => {
+    if (text.length === 0) return text;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  };
+  const RETRYABLE = /* @__PURE__ */ new Set([429, 502, 503, 504]);
+  const MAX_RETRIES = 3;
+  const BASE_DELAY_MS = 400;
+  const CAP_DELAY_MS = 8e3;
+  const parseRetryAfter = (headerVal) => {
+    if (!headerVal) return null;
+    const asNum = Number(headerVal);
+    if (Number.isFinite(asNum)) return Math.max(0, asNum) * 1e3;
+    const asDate = Date.parse(headerVal);
+    if (!Number.isNaN(asDate)) return Math.max(0, asDate - Date.now());
+    return null;
+  };
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const isIdempotent = (method) => method === "GET" || method === "HEAD" || method === "OPTIONS";
+  const doFetch = async (method, path, init, query) => {
+    const url4 = buildUrl(path, query);
+    let lastErr = null;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const res = await fetch(url4, init);
+      const text = await res.text();
+      const parsed = parseBody2(text);
+      if (res.ok) return parsed;
+      const err = new AtlassianHttpError2(
+        res.status,
+        res.statusText,
+        parsed,
+        `${label} ${method} ${path} failed: ${res.status} ${res.statusText}`
+      );
+      lastErr = err;
+      if (!RETRYABLE.has(res.status)) throw err;
+      if (res.status !== 429 && !isIdempotent(method)) throw err;
+      if (attempt === MAX_RETRIES) throw err;
+      const retryAfterMs = parseRetryAfter(res.headers.get("Retry-After"));
+      const expMs = Math.min(BASE_DELAY_MS * 2 ** attempt, CAP_DELAY_MS);
+      const jittered = expMs * (0.75 + Math.random() * 0.5);
+      const delay2 = retryAfterMs != null ? retryAfterMs : jittered;
+      await sleep(delay2);
+    }
+    throw lastErr;
+  };
+  const request = (method, path, opts2 = {}) => {
+    const headers = {
+      Authorization: authHeader,
+      Accept: "application/json",
+      ...opts2.headers
+    };
+    let body;
+    if (opts2.bodyRaw !== void 0) {
+      body = opts2.bodyRaw;
+    } else if (opts2.body !== void 0) {
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify(opts2.body);
+    }
+    return doFetch(method, path, { method, headers, body }, opts2.query);
+  };
+  return {
+    get: (path, query) => request("GET", path, { query }),
+    post: (path, body, query) => request("POST", path, { body, query }),
+    put: (path, body, query) => request("PUT", path, { body, query }),
+    delete: (path, query) => request("DELETE", path, { query }),
+    postMultipart: (path, form, query) => request("POST", path, {
+      bodyRaw: form,
+      headers: { "X-Atlassian-Token": "no-check" },
+      query
+    }),
+    request
+  };
+}
+function createBitbucketHttp(cfg) {
+  return createAtlassianHttp({
+    baseUrl: cfg.baseUrl,
+    username: cfg.username,
+    apiToken: cfg.apiToken,
+    productLabel: "Bitbucket"
+  });
+}
+var AtlassianHttpError2, BitbucketHttpError;
+var init_http = __esm({
+  "src/common/http.ts"() {
+    "use strict";
+    AtlassianHttpError2 = class extends Error {
+      constructor(status, statusText, body, message) {
+        super(message);
+        this.status = status;
+        this.statusText = statusText;
+        this.body = body;
+        this.name = "AtlassianHttpError";
+      }
+      status;
+      statusText;
+      body;
+    };
+    BitbucketHttpError = AtlassianHttpError2;
+  }
+});
+
 // node_modules/.pnpm/delayed-stream@1.0.0/node_modules/delayed-stream/lib/delayed_stream.js
 var require_delayed_stream = __commonJS({
   "node_modules/.pnpm/delayed-stream@1.0.0/node_modules/delayed-stream/lib/delayed_stream.js"(exports, module) {
@@ -75759,9 +75884,9 @@ var require_DataAdapterCore = __commonJS({
       get(cacheKey2, user) {
         var _a2;
         const result = this._data[cacheKey2];
-        const cached4 = result === null || result === void 0 ? void 0 : result.stableID;
+        const cached5 = result === null || result === void 0 ? void 0 : result.stableID;
         const provided = (_a2 = user === null || user === void 0 ? void 0 : user.customIDs) === null || _a2 === void 0 ? void 0 : _a2.stableID;
-        if (provided && cached4 && provided !== cached4) {
+        if (provided && cached5 && provided !== cached5) {
           Log_1.Log.warn("'StatsigUser.customIDs.stableID' mismatch");
           return null;
         }
@@ -146063,7 +146188,7 @@ function clearStoredCreds() {
 }
 function mergeCreds(base, patch) {
   const result = JSON.parse(JSON.stringify(base));
-  for (const section of ["atlassian", "jira", "confluence", "bitbucket"]) {
+  for (const section of ["atlassian", "jira", "confluence", "bitbucket", "qmetry"]) {
     const src = patch[section];
     if (!src) continue;
     const dst = result[section] ??= {};
@@ -146080,7 +146205,7 @@ function diffCreds(before, after) {
   const added = [];
   const updated = [];
   const preserved = [];
-  for (const section of ["atlassian", "jira", "confluence", "bitbucket"]) {
+  for (const section of ["atlassian", "jira", "confluence", "bitbucket", "qmetry"]) {
     const b = before[section] ?? {};
     const a = after[section] ?? {};
     const keys = /* @__PURE__ */ new Set([...Object.keys(b), ...Object.keys(a)]);
@@ -146223,119 +146348,18 @@ function loadBitbucketConfig() {
     apiToken
   };
 }
+function loadQMetryConfig() {
+  const apiKey = env("QMETRY_API_KEY") ?? getStoredString(["qmetry", "api_key"]);
+  if (!apiKey) return null;
+  const baseUrl = env("QMETRY_BASE_URL") ?? getStoredString(["qmetry", "base_url"]) ?? "https://qtmcloud.qmetry.com/rest/api/latest";
+  const projectIdRaw = env("QMETRY_DEFAULT_PROJECT_ID") ?? getStoredString(["qmetry", "default_project_id"]);
+  const defaultProjectId = projectIdRaw ? parseInt(projectIdRaw, 10) || void 0 : void 0;
+  return { baseUrl, apiKey, defaultProjectId };
+}
 var isReadOnly = () => ["true", "1", "yes"].includes((env("READ_ONLY_MODE") ?? "").toLowerCase());
 
-// src/common/http.ts
-var AtlassianHttpError = class extends Error {
-  constructor(status, statusText, body, message) {
-    super(message);
-    this.status = status;
-    this.statusText = statusText;
-    this.body = body;
-    this.name = "AtlassianHttpError";
-  }
-  status;
-  statusText;
-  body;
-};
-var BitbucketHttpError = AtlassianHttpError;
-function createAtlassianHttp(opts) {
-  const { baseUrl, username, apiToken } = opts;
-  const label = opts.productLabel ?? "Atlassian";
-  const authHeader = "Basic " + Buffer.from(`${username}:${apiToken}`).toString("base64");
-  const buildUrl = (path, query) => {
-    const url4 = new URL(path.startsWith("http") ? path : `${baseUrl}${path}`);
-    if (query) {
-      for (const [k, v] of Object.entries(query)) {
-        if (v !== void 0 && v !== null) url4.searchParams.set(k, String(v));
-      }
-    }
-    return url4.toString();
-  };
-  const parseBody2 = (text) => {
-    if (text.length === 0) return text;
-    try {
-      return JSON.parse(text);
-    } catch {
-      return text;
-    }
-  };
-  const RETRYABLE = /* @__PURE__ */ new Set([429, 502, 503, 504]);
-  const MAX_RETRIES = 3;
-  const BASE_DELAY_MS = 400;
-  const CAP_DELAY_MS = 8e3;
-  const parseRetryAfter = (headerVal) => {
-    if (!headerVal) return null;
-    const asNum = Number(headerVal);
-    if (Number.isFinite(asNum)) return Math.max(0, asNum) * 1e3;
-    const asDate = Date.parse(headerVal);
-    if (!Number.isNaN(asDate)) return Math.max(0, asDate - Date.now());
-    return null;
-  };
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const isIdempotent = (method) => method === "GET" || method === "HEAD" || method === "OPTIONS";
-  const doFetch = async (method, path, init, query) => {
-    const url4 = buildUrl(path, query);
-    let lastErr = null;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const res = await fetch(url4, init);
-      const text = await res.text();
-      const parsed = parseBody2(text);
-      if (res.ok) return parsed;
-      const err = new AtlassianHttpError(
-        res.status,
-        res.statusText,
-        parsed,
-        `${label} ${method} ${path} failed: ${res.status} ${res.statusText}`
-      );
-      lastErr = err;
-      if (!RETRYABLE.has(res.status)) throw err;
-      if (res.status !== 429 && !isIdempotent(method)) throw err;
-      if (attempt === MAX_RETRIES) throw err;
-      const retryAfterMs = parseRetryAfter(res.headers.get("Retry-After"));
-      const expMs = Math.min(BASE_DELAY_MS * 2 ** attempt, CAP_DELAY_MS);
-      const jittered = expMs * (0.75 + Math.random() * 0.5);
-      const delay2 = retryAfterMs != null ? retryAfterMs : jittered;
-      await sleep(delay2);
-    }
-    throw lastErr;
-  };
-  const request = (method, path, opts2 = {}) => {
-    const headers = {
-      Authorization: authHeader,
-      Accept: "application/json",
-      ...opts2.headers
-    };
-    let body;
-    if (opts2.bodyRaw !== void 0) {
-      body = opts2.bodyRaw;
-    } else if (opts2.body !== void 0) {
-      headers["Content-Type"] = "application/json";
-      body = JSON.stringify(opts2.body);
-    }
-    return doFetch(method, path, { method, headers, body }, opts2.query);
-  };
-  return {
-    get: (path, query) => request("GET", path, { query }),
-    post: (path, body, query) => request("POST", path, { body, query }),
-    put: (path, body, query) => request("PUT", path, { body, query }),
-    delete: (path, query) => request("DELETE", path, { query }),
-    postMultipart: (path, form, query) => request("POST", path, {
-      bodyRaw: form,
-      headers: { "X-Atlassian-Token": "no-check" },
-      query
-    }),
-    request
-  };
-}
-function createBitbucketHttp(cfg) {
-  return createAtlassianHttp({
-    baseUrl: cfg.baseUrl,
-    username: cfg.username,
-    apiToken: cfg.apiToken,
-    productLabel: "Bitbucket"
-  });
-}
+// src/bitbucket/index.ts
+init_http();
 
 // src/bitbucket/_helpers.ts
 var workspaceOf = (ctx, override) => override && override.length > 0 ? override : ctx.workspace;
@@ -147391,6 +147415,7 @@ function registerTagTools(server2, ctx) {
 }
 
 // src/bitbucket/pipelines.ts
+init_http();
 function registerPipelineTools(server2, ctx) {
   const repoBase = (workspace, repo) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}`;
   const stepBase = (workspace, repo, pipeline3, step) => `${repoBase(workspace, repo)}/pipelines/${encodeURIComponent(pipeline3)}/steps/${encodeURIComponent(step)}`;
@@ -163396,6 +163421,7 @@ function registerJiraTools(server2, opts) {
 }
 
 // src/common/confluenceHttp.ts
+init_http();
 function createConfluenceV2Http(cfg) {
   return createAtlassianHttp({
     baseUrl: `${cfg.baseUrl}/api/v2`,
@@ -163447,9 +163473,10 @@ function confluenceSpacesFilter() {
 }
 
 // src/common/confluenceErrors.ts
+init_http();
 var SCOPE_MATCH_RE = /scope\s+does\s+not\s+match/i;
 function classifyConfluenceError(err) {
-  if (!(err instanceof AtlassianHttpError)) {
+  if (!(err instanceof AtlassianHttpError2)) {
     return {
       kind: "unknown",
       status: 0,
@@ -165261,6 +165288,393 @@ function registerConfluenceTools(server2, opts) {
   registerPageLinkTools(server2);
 }
 
+// src/common/qmetryClient.ts
+function createQMetryHttp(opts) {
+  const { baseUrl, apiKey } = opts;
+  const label = opts.productLabel ?? "QMetry";
+  const buildUrl = (path, query) => {
+    const url4 = new URL(path.startsWith("http") ? path : `${baseUrl}${path}`);
+    if (query) {
+      for (const [k, v] of Object.entries(query)) {
+        if (v !== void 0 && v !== null) url4.searchParams.set(k, String(v));
+      }
+    }
+    return url4.toString();
+  };
+  const parseBody2 = (text) => {
+    if (text.length === 0) return text;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  };
+  const RETRYABLE = /* @__PURE__ */ new Set([429, 502, 503, 504]);
+  const MAX_RETRIES = 3;
+  const BASE_DELAY_MS = 400;
+  const CAP_DELAY_MS = 8e3;
+  const parseRetryAfter = (headerVal) => {
+    if (!headerVal) return null;
+    const asNum = Number(headerVal);
+    if (Number.isFinite(asNum)) return Math.max(0, asNum) * 1e3;
+    const asDate = Date.parse(headerVal);
+    if (!Number.isNaN(asDate)) return Math.max(0, asDate - Date.now());
+    return null;
+  };
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const isIdempotent = (method) => method === "GET" || method === "HEAD" || method === "OPTIONS";
+  const doFetch = async (method, path, init, query) => {
+    const { AtlassianHttpError: AtlassianHttpError3 } = await Promise.resolve().then(() => (init_http(), http_exports));
+    const url4 = buildUrl(path, query);
+    let lastErr = null;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const res = await fetch(url4, init);
+      const text = await res.text();
+      const parsed = parseBody2(text);
+      if (res.ok) return parsed;
+      const err = new AtlassianHttpError3(
+        res.status,
+        res.statusText,
+        parsed,
+        `${label} ${method} ${path} failed: ${res.status} ${res.statusText}`
+      );
+      lastErr = err;
+      if (!RETRYABLE.has(res.status)) throw err;
+      if (res.status !== 429 && !isIdempotent(method)) throw err;
+      if (attempt === MAX_RETRIES) throw err;
+      const retryAfterMs = parseRetryAfter(res.headers.get("Retry-After"));
+      const expMs = Math.min(BASE_DELAY_MS * 2 ** attempt, CAP_DELAY_MS);
+      const jittered = expMs * (0.75 + Math.random() * 0.5);
+      const delay2 = retryAfterMs != null ? retryAfterMs : jittered;
+      await sleep(delay2);
+    }
+    throw lastErr;
+  };
+  const request = (method, path, reqOpts = {}) => {
+    const headers = {
+      apiKey,
+      Accept: "application/json",
+      ...reqOpts.headers
+    };
+    let body;
+    if (reqOpts.bodyRaw !== void 0) {
+      body = reqOpts.bodyRaw;
+    } else if (reqOpts.body !== void 0) {
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify(reqOpts.body);
+    }
+    return doFetch(method, path, { method, headers, body }, reqOpts.query);
+  };
+  return {
+    get: (path, query) => request("GET", path, { query }),
+    post: (path, body, query) => request("POST", path, { body, query }),
+    put: (path, body, query) => request("PUT", path, { body, query }),
+    delete: (path, query) => request("DELETE", path, { query }),
+    postMultipart: (path, form, query) => request("POST", path, { bodyRaw: form, query }),
+    request
+  };
+}
+var cached4 = null;
+var cachedConfig = null;
+function qmetryClient() {
+  const cfg = loadQMetryConfig();
+  if (!cfg) throw new Error("QMetry is not configured. Run /atlassian-suite:init to set up your QMetry API key.");
+  if (!cached4 || cachedConfig?.apiKey !== cfg.apiKey || cachedConfig?.baseUrl !== cfg.baseUrl) {
+    cached4 = createQMetryHttp({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, productLabel: "QMetry" });
+    cachedConfig = cfg;
+  }
+  return cached4;
+}
+
+// src/qmetry/_helpers.ts
+async function safeQMetry(fn) {
+  try {
+    const result = await fn();
+    return JSON.stringify(result, null, 2);
+  } catch (err) {
+    if (err?.name === "AtlassianHttpError") {
+      const body = err.body;
+      const message = typeof body === "object" && body !== null && "errorMessage" in body ? body.errorMessage : err.message;
+      const errors = typeof body === "object" && body !== null && Array.isArray(body.errors) ? body.errors : void 0;
+      return JSON.stringify(
+        {
+          error: true,
+          status: err.status,
+          message,
+          errors: errors ?? null,
+          // Sanitize body: mask any string value that looks like an API key
+          // (length > 50, no spaces — same heuristic as Atlassian tokens).
+          body: sanitizeBody(body)
+        },
+        null,
+        2
+      );
+    }
+    return JSON.stringify({ error: true, message: err?.message ?? String(err) }, null, 2);
+  }
+}
+function ensureWritable4(readOnly2) {
+  if (readOnly2) throw new Error("READ_ONLY_MODE is enabled \u2014 write operations are blocked.");
+}
+function sanitizeBody(body) {
+  if (typeof body === "string" && body.length > 50 && !body.includes(" ")) {
+    return maskToken(body);
+  }
+  if (typeof body === "object" && body !== null) {
+    const out = {};
+    for (const [k, v] of Object.entries(body)) {
+      out[k] = sanitizeBody(v);
+    }
+    return out;
+  }
+  return body;
+}
+
+// src/qmetry/projects.ts
+function registerQMetryProjectTools(server2) {
+  server2.addTool({
+    name: "qmetry_list_projects",
+    description: "List all QMetry-enabled projects. Returns project id, key, name, and favorite flag. The numeric id is required by every other QMetry endpoint.",
+    parameters: external_exports4.object({}),
+    execute: async () => safeQMetry(
+      () => qmetryClient().post("/projects", {})
+    )
+  });
+}
+
+// src/qmetry/testcases.ts
+var paginationParams = {
+  start_at: external_exports4.number().int().min(0).default(0).describe("0-based page offset"),
+  max_results: external_exports4.number().int().min(1).max(100).default(50).describe("Items per page, max 100")
+};
+function registerQMetryTestCaseTools(server2, opts) {
+  server2.addTool({
+    name: "qmetry_search_test_cases",
+    description: "Search test cases in a QMetry project. Filter by key, summary text, status, priority, or folder. Returns lean objects by default; use fields param to expand.",
+    parameters: external_exports4.object({
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID (from qmetry_list_projects)"),
+      key: external_exports4.string().optional().describe("Exact test case key, e.g. NYW-TC-209"),
+      search_text: external_exports4.string().optional().describe("Free-text search across summary"),
+      status: external_exports4.array(external_exports4.string()).optional().describe("Filter by status names, e.g. ['To Do', 'In Progress']"),
+      priority: external_exports4.array(external_exports4.string()).optional().describe("Filter by priority names, e.g. ['High', 'Medium']"),
+      labels: external_exports4.array(external_exports4.string()).optional().describe("Filter by label names"),
+      folder_id: external_exports4.number().int().optional().describe("Filter by folder ID"),
+      fields: external_exports4.string().optional().describe("Comma-separated extra fields, e.g. 'summary,status,priority'"),
+      sort: external_exports4.string().optional().describe("Sort expression, e.g. 'key:desc'"),
+      ...paginationParams
+    }),
+    execute: async (args) => safeQMetry(() => {
+      const filter2 = { projectId: args.project_id };
+      if (args.key) filter2.key = args.key;
+      if (args.search_text) filter2.searchText = args.search_text;
+      if (args.status?.length) filter2.status = args.status;
+      if (args.priority?.length) filter2.priority = args.priority;
+      if (args.labels?.length) filter2.labels = args.labels;
+      if (args.folder_id) filter2.folderId = args.folder_id;
+      return qmetryClient().post(
+        "/testcases/search",
+        { filter: filter2 },
+        {
+          startAt: args.start_at,
+          maxResults: args.max_results,
+          ...args.fields ? { fields: args.fields } : {},
+          ...args.sort ? { sort: args.sort } : {}
+        }
+      );
+    })
+  });
+  server2.addTool({
+    name: "qmetry_get_test_case",
+    description: "Get full details for a single test case by key, including steps, status, priority, description, and linked items.",
+    parameters: external_exports4.object({
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      key: external_exports4.string().describe("Test case key, e.g. NYW-TC-209")
+    }),
+    execute: async (args) => safeQMetry(
+      () => qmetryClient().post(
+        "/testcases/search",
+        { filter: { projectId: args.project_id, key: args.key } },
+        { fields: "summary,status,priority,description,steps,labels,folderId,version" }
+      )
+    )
+  });
+  server2.addTool({
+    name: "qmetry_create_test_case",
+    description: "Create a new test case in a QMetry project.",
+    parameters: external_exports4.object({
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      summary: external_exports4.string().describe("Test case title / summary"),
+      status: external_exports4.string().optional().describe("Status name, e.g. 'To Do'"),
+      priority: external_exports4.string().optional().describe("Priority name, e.g. 'Medium'"),
+      description: external_exports4.string().optional(),
+      labels: external_exports4.array(external_exports4.string()).optional(),
+      folder_id: external_exports4.number().int().optional()
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      const body = {
+        projectId: args.project_id,
+        summary: args.summary
+      };
+      if (args.status) body.status = { name: args.status };
+      if (args.priority) body.priority = { name: args.priority };
+      if (args.description) body.description = args.description;
+      if (args.labels?.length) body.labels = args.labels;
+      if (args.folder_id) body.folderId = args.folder_id;
+      return qmetryClient().post("/testcases", body);
+    })
+  });
+  server2.addTool({
+    name: "qmetry_update_test_case",
+    description: "Update fields on an existing test case (status, priority, summary, description).",
+    parameters: external_exports4.object({
+      test_case_id: external_exports4.string().describe("Internal QMetry test case ID (the opaque id string, not the human-readable key)"),
+      summary: external_exports4.string().optional(),
+      status: external_exports4.string().optional().describe("New status name"),
+      priority: external_exports4.string().optional().describe("New priority name"),
+      description: external_exports4.string().optional(),
+      labels: external_exports4.array(external_exports4.string()).optional()
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      const body = {};
+      if (args.summary) body.summary = args.summary;
+      if (args.status) body.status = { name: args.status };
+      if (args.priority) body.priority = { name: args.priority };
+      if (args.description) body.description = args.description;
+      if (args.labels) body.labels = args.labels;
+      return qmetryClient().put(`/testcases/${encodeURIComponent(args.test_case_id)}`, body);
+    })
+  });
+}
+
+// src/qmetry/testcycles.ts
+function registerQMetryTestCycleTools(server2) {
+  server2.addTool({
+    name: "qmetry_search_test_cycles",
+    description: "Search test cycles in a QMetry project. Returns cycle id, key, name, status, and dates.",
+    parameters: external_exports4.object({
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      search_text: external_exports4.string().optional().describe("Free-text search on cycle name/summary"),
+      status: external_exports4.array(external_exports4.string()).optional(),
+      start_at: external_exports4.number().int().min(0).default(0),
+      max_results: external_exports4.number().int().min(1).max(100).default(50)
+    }),
+    execute: async (args) => safeQMetry(() => {
+      const filter2 = { projectId: args.project_id };
+      if (args.search_text) filter2.searchText = args.search_text;
+      if (args.status?.length) filter2.status = args.status;
+      return qmetryClient().post(
+        "/testcycles/search",
+        { filter: filter2 },
+        { startAt: args.start_at, maxResults: args.max_results }
+      );
+    })
+  });
+  server2.addTool({
+    name: "qmetry_get_test_cycle",
+    description: "Get details for a single test cycle by its numeric ID, including linked test cases and execution summary.",
+    parameters: external_exports4.object({
+      test_cycle_id: external_exports4.string().describe("Test cycle ID (numeric string from search results)")
+    }),
+    execute: async (args) => safeQMetry(
+      () => qmetryClient().get(`/testcycles/${encodeURIComponent(args.test_cycle_id)}`)
+    )
+  });
+}
+
+// src/qmetry/testplans.ts
+function registerQMetryTestPlanTools(server2) {
+  server2.addTool({
+    name: "qmetry_search_test_plans",
+    description: "Search test plans in a QMetry project.",
+    parameters: external_exports4.object({
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      search_text: external_exports4.string().optional(),
+      status: external_exports4.array(external_exports4.string()).optional(),
+      start_at: external_exports4.number().int().min(0).default(0),
+      max_results: external_exports4.number().int().min(1).max(100).default(50)
+    }),
+    execute: async (args) => safeQMetry(() => {
+      const filter2 = { projectId: args.project_id };
+      if (args.search_text) filter2.searchText = args.search_text;
+      if (args.status?.length) filter2.status = args.status;
+      return qmetryClient().post(
+        "/testplans/search",
+        { filter: filter2 },
+        { startAt: args.start_at, maxResults: args.max_results }
+      );
+    })
+  });
+  server2.addTool({
+    name: "qmetry_get_test_plan",
+    description: "Get details for a single test plan by ID, including linked test cycles.",
+    parameters: external_exports4.object({
+      test_plan_id: external_exports4.string().describe("Test plan ID from search results")
+    }),
+    execute: async (args) => safeQMetry(
+      () => qmetryClient().get(`/testplans/${encodeURIComponent(args.test_plan_id)}`)
+    )
+  });
+}
+
+// src/qmetry/executions.ts
+var EXECUTION_STATUSES = ["PASS", "FAIL", "BLOCKED", "NOT RUN", "IN PROGRESS"];
+function registerQMetryExecutionTools(server2, opts) {
+  server2.addTool({
+    name: "qmetry_search_executions",
+    description: "Search test case executions (runs) within a test cycle. Returns each test case's execution status and last-run details.",
+    parameters: external_exports4.object({
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      test_cycle_id: external_exports4.string().optional().describe("Restrict to a specific test cycle ID"),
+      test_case_key: external_exports4.string().optional().describe("Restrict to a specific test case key, e.g. NYW-TC-209"),
+      status: external_exports4.array(external_exports4.string()).optional().describe("Filter by execution status, e.g. ['PASS', 'FAIL']"),
+      start_at: external_exports4.number().int().min(0).default(0),
+      max_results: external_exports4.number().int().min(1).max(100).default(50)
+    }),
+    execute: async (args) => safeQMetry(() => {
+      const filter2 = { projectId: args.project_id };
+      if (args.test_cycle_id) filter2.testCycleId = args.test_cycle_id;
+      if (args.test_case_key) filter2.testCaseKey = args.test_case_key;
+      if (args.status?.length) filter2.status = args.status;
+      return qmetryClient().post(
+        "/testcaseruns/search",
+        { filter: filter2 },
+        { startAt: args.start_at, maxResults: args.max_results }
+      );
+    })
+  });
+  server2.addTool({
+    name: "qmetry_update_execution",
+    description: "Update the execution status of a test case run (pass, fail, blocked, etc.).",
+    parameters: external_exports4.object({
+      execution_id: external_exports4.string().describe("Execution / test-case-run ID from qmetry_search_executions"),
+      status: external_exports4.enum(EXECUTION_STATUSES).describe("New execution status"),
+      comment: external_exports4.string().optional().describe("Optional comment / notes for this execution result")
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      const body = {
+        status: { name: args.status }
+      };
+      if (args.comment) body.comment = args.comment;
+      return qmetryClient().put(
+        `/testcaseruns/${encodeURIComponent(args.execution_id)}`,
+        body
+      );
+    })
+  });
+}
+
+// src/qmetry/index.ts
+function registerQMetryTools(server2, opts) {
+  registerQMetryProjectTools(server2);
+  registerQMetryTestCaseTools(server2, opts);
+  registerQMetryTestCycleTools(server2);
+  registerQMetryTestPlanTools(server2);
+  registerQMetryExecutionTools(server2, opts);
+}
+
 // src/common/configTools.ts
 function registerCredentialTools(server2) {
   server2.addTool({
@@ -165283,7 +165697,12 @@ function registerCredentialTools(server2) {
       confluence_spaces_filter: external_exports4.array(external_exports4.string()).optional(),
       bitbucket_workspace: external_exports4.string().optional(),
       bitbucket_username: external_exports4.string().optional(),
-      bitbucket_api_token: external_exports4.string().optional()
+      bitbucket_api_token: external_exports4.string().optional(),
+      qmetry_api_key: external_exports4.string().optional().describe(
+        "QMetry API key \u2014 generated from Jira \u2192 QMetry \u2192 Configuration \u2192 Open API \u2192 Generate. Separate from Atlassian credentials; authenticates directly against qtmcloud.qmetry.com."
+      ),
+      qmetry_base_url: external_exports4.string().url().optional().describe("QMetry API base URL. Defaults to https://qtmcloud.qmetry.com/rest/api/latest (US region). Use https://syd-qtmcloud.qmetry.com/rest/api/latest for APAC/Sydney."),
+      qmetry_default_project_id: external_exports4.number().int().optional().describe("Numeric QMetry project ID used as default when no projectId is specified. Run qmetry_list_projects to find your project ID.")
     }),
     execute: async (args) => {
       const before = loadStoredCreds();
@@ -165310,6 +165729,11 @@ function registerCredentialTools(server2) {
           workspace: args.bitbucket_workspace,
           username: args.bitbucket_username,
           api_token: args.bitbucket_api_token
+        },
+        qmetry: {
+          api_key: args.qmetry_api_key,
+          base_url: args.qmetry_base_url,
+          default_project_id: args.qmetry_default_project_id
         }
       };
       const after = mergeCreds(before, patch);
@@ -165346,6 +165770,7 @@ function registerCredentialTools(server2) {
       const jira = loadJiraConfig();
       const confluence = loadConfluenceConfig();
       const bitbucket = loadBitbucketConfig();
+      const qmetry = loadQMetryConfig();
       return JSON.stringify(
         {
           file_path: CONFIG_FILE_PATH,
@@ -165377,6 +165802,13 @@ function registerCredentialTools(server2) {
               username: bitbucket.username,
               api_token: maskToken(bitbucket.apiToken),
               source: resolutionSource("bitbucket")
+            } : { configured: false },
+            qmetry: qmetry ? {
+              configured: true,
+              base_url: qmetry.baseUrl,
+              api_key: maskToken(qmetry.apiKey),
+              default_project_id: qmetry.defaultProjectId ?? null,
+              note: "Authenticates directly against qtmcloud.qmetry.com \u2014 unrelated to Atlassian credentials."
             } : { configured: false },
             read_only: isReadOnly()
           }
@@ -165419,6 +165851,7 @@ function maskAll(creds) {
   if (clone3.jira?.api_token) clone3.jira.api_token = maskToken(clone3.jira.api_token);
   if (clone3.confluence?.api_token) clone3.confluence.api_token = maskToken(clone3.confluence.api_token);
   if (clone3.bitbucket?.api_token) clone3.bitbucket.api_token = maskToken(clone3.bitbucket.api_token);
+  if (clone3.qmetry?.api_key) clone3.qmetry.api_key = maskToken(clone3.qmetry.api_key);
   return clone3;
 }
 function resolutionSource(product) {
@@ -165444,14 +165877,16 @@ var server = new FastMCP({
 var jiraReady = loadJiraConfig() !== null;
 var confluenceReady = loadConfluenceConfig() !== null;
 var bitbucketReady = loadBitbucketConfig() !== null;
+var qmetryReady = loadQMetryConfig() !== null;
 var readOnly = isReadOnly();
 console.error(
-  `[acendas-atlassian] starting. jira=${jiraReady} confluence=${confluenceReady} bitbucket=${bitbucketReady} read_only=${readOnly}`
+  `[acendas-atlassian] starting. jira=${jiraReady} confluence=${confluenceReady} bitbucket=${bitbucketReady} qmetry=${qmetryReady} read_only=${readOnly}`
 );
 registerCredentialTools(server);
 if (jiraReady) registerJiraTools(server, { readOnly });
 if (confluenceReady) registerConfluenceTools(server, { readOnly });
 if (bitbucketReady) registerBitbucketTools(server, { readOnly });
+if (qmetryReady) registerQMetryTools(server, { readOnly });
 if (!jiraReady && !confluenceReady && !bitbucketReady) {
   console.error(
     "[acendas-atlassian] WARNING: no products configured. Set JIRA_URL, CONFLUENCE_URL, and/or BITBUCKET_WORKSPACE plus credentials."

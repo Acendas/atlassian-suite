@@ -29,7 +29,7 @@ Run via Bash:
 node "${CLAUDE_PLUGIN_ROOT}/server/scripts/auth.mjs" status
 ```
 
-Parse which of `jira` / `confluence` / `bitbucket` already have entries. Report a one-line summary to the user (e.g. "Jira + Confluence configured, Bitbucket missing").
+Parse which of `jira` / `confluence` / `bitbucket` / `qmetry` already have entries. Report a one-line summary to the user (e.g. "Jira + Confluence configured, Bitbucket and QMetry not set"). QMetry is optional — only mention it if the user asked about test management or if it is already configured.
 
 If the user said "remove credentials" / "clear credentials" / "log out of atlassian", call `mcp__acendas-atlassian__clear_credentials` with `confirm: true` and stop.
 

@@ -46,7 +46,7 @@ const TOKEN_URL =
   "https://id.atlassian.com/manage-profile/security/api-tokens";
 
 const USAGE =
-  "Usage: node auth.mjs {web|open-url|jira|confluence|bitbucket|shared|scopes|verify|status}";
+  "Usage: node auth.mjs {web|open-url|jira|confluence|bitbucket|qmetry|shared|scopes|verify|status}";
 
 // Scope catalog — what the Acendas suite needs per product.
 // `probe` tells verify how to test: GET for read scopes, POST-empty for write.
@@ -289,6 +289,7 @@ async function main() {
     case "jira":
     case "confluence":
     case "bitbucket":
+    case "qmetry":
     case "shared":
       await configure(sub);
       return;
@@ -371,13 +372,24 @@ async function configure(product) {
     const token = await promptHidden("Bitbucket API token (hidden): ");
     assertNotEmpty({ workspace, email: username, token });
     patch.bitbucket = { workspace, username, api_token: token };
+  } else if (product === "qmetry") {
+    // QMetry uses a completely separate credential — NOT an Atlassian credential.
+    // The API key is generated inside QMetry:
+    //   Jira → QMetry → Configuration → Open API → Generate
+    console.log("QMetry Test Management for Jira — generates its own API key.");
+    console.log("In Jira: navigate to QMetry → Configuration → Open API → click Generate.");
+    console.log("");
+    const apiKey = await promptHidden("QMetry API key (hidden): ");
+    assertNotEmpty({ api_key: apiKey });
+    patch.qmetry = { api_key: apiKey };
   }
 
   const after = mergeCreds(before, patch);
   saveConfig(after);
 
   const sectionKey = Object.keys(patch)[0];
-  const savedToken = patch[sectionKey].api_token;
+  // QMetry uses api_key; all other products use api_token.
+  const savedToken = patch[sectionKey].api_key ?? patch[sectionKey].api_token;
 
   console.log("");
   console.log(`saved ${product} credentials to ${CONFIG_FILE}`);
@@ -387,7 +399,11 @@ async function configure(product) {
   }
 
   console.log("");
-  console.log("Self-test: hitting the product API with Basic Auth…");
+  if (product === "qmetry") {
+    console.log("Self-test: hitting QMetry API…");
+  } else {
+    console.log("Self-test: hitting the product API with Basic Auth…");
+  }
   const ok = await verifyProduct(product === "shared" ? "jira" : product, after);
   if (product === "shared" && ok) {
     // Shared creds also power Confluence — probe that too.
@@ -435,11 +451,11 @@ async function verifyAll(target) {
   const cfg = loadConfig();
   const products =
     target === "all"
-      ? ["jira", "confluence", "bitbucket"]
+      ? ["jira", "confluence", "bitbucket", "qmetry"]
       : [target];
   let allOk = true;
   for (const p of products) {
-    if (!["jira", "confluence", "bitbucket"].includes(p)) {
+    if (!["jira", "confluence", "bitbucket", "qmetry"].includes(p)) {
       console.error(`unknown product: ${p}`);
       return false;
     }
@@ -447,6 +463,82 @@ async function verifyAll(target) {
     if (!ok) allOk = false;
   }
   return allOk;
+}
+
+// QMetry verifier — completely separate from Atlassian verify logic.
+// Auth is apiKey header only; never sends Basic auth or Atlassian credentials.
+// Test: POST /projects {} → 200 or 400 both confirm the key reached the server.
+async function runVerifyQMetry(cfg) {
+  const apiKey =
+    process.env.QMETRY_API_KEY ||
+    (cfg.qmetry && cfg.qmetry.api_key);
+  const baseUrl =
+    process.env.QMETRY_BASE_URL ||
+    (cfg.qmetry && cfg.qmetry.base_url) ||
+    "https://qtmcloud.qmetry.com/rest/api/latest";
+
+  if (!apiKey) {
+    return {
+      product: "qmetry",
+      skipped: true,
+      skipReason: "api_key not configured",
+      auth: null,
+      scopes: [],
+      requiredOk: false,
+    };
+  }
+
+  try {
+    const res = await fetch(`${baseUrl}/projects`, {
+      method: "POST",
+      headers: {
+        apiKey,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: "{}",
+    });
+
+    // 200 = success; 400 = key valid (request reached the server, body validation failed)
+    // 401/403 = bad key
+    const text = await res.text();
+    let body;
+    try { body = JSON.parse(text); } catch { body = text; }
+
+    const authOk = res.status === 200 || res.status === 400;
+    const auth = authOk
+      ? { status: "ok", display: `QMetry API key accepted (HTTP ${res.status})` }
+      : { status: "fail", display: `HTTP ${res.status} — key invalid or no permission` };
+
+    const projectCount =
+      authOk && typeof body === "object" && body !== null && "total" in body
+        ? body.total
+        : null;
+
+    return {
+      product: "qmetry",
+      skipped: false,
+      auth,
+      scopes: [
+        {
+          scope: "qmetry:api",
+          required: true,
+          why: "all QMetry REST API operations",
+          status: authOk ? "ok" : "missing",
+          ...(projectCount !== null ? { note: `${projectCount} projects visible` } : {}),
+        },
+      ],
+      requiredOk: authOk,
+    };
+  } catch (err) {
+    return {
+      product: "qmetry",
+      skipped: false,
+      auth: { status: "fail", display: `Network error: ${err?.message || String(err)}` },
+      scopes: [],
+      requiredOk: false,
+    };
+  }
 }
 
 // Structured verifier — used by both the CLI verify path (which prints the
@@ -479,6 +571,12 @@ async function runVerifyStructured(product, cfg) {
       requiredOk: jiraR.requiredOk && confR.requiredOk,
       sub: { jira: jiraR, confluence: confR },
     };
+  }
+
+  // QMetry is a completely separate system — verify against qtmcloud.qmetry.com,
+  // not against any Atlassian host. No Basic auth, no Atlassian credentials.
+  if (product === "qmetry") {
+    return runVerifyQMetry(cfg);
   }
 
   const creds = resolveCreds(product, cfg);
@@ -565,7 +663,7 @@ async function verifyProduct(product, cfg) {
     console.log(`    auth:            FAIL (${r.auth.detail})`);
     return false;
   }
-  console.log(`    auth:            OK (${r.auth.who})`);
+  console.log(`    auth:            OK (${r.auth.display || r.auth.who})`);
 
   for (const s of r.scopes) {
     const label = s.scope.padEnd(32, " ");
@@ -900,6 +998,7 @@ function printStatus() {
   for (const s of ["atlassian", "jira", "confluence", "bitbucket"]) {
     if (masked[s]?.api_token) masked[s].api_token = mask(masked[s].api_token);
   }
+  if (masked.qmetry?.api_key) masked.qmetry.api_key = mask(masked.qmetry.api_key);
   console.log(`file: ${CONFIG_FILE}`);
   console.log(`exists: ${existsSync(CONFIG_FILE)}`);
   console.log(JSON.stringify(masked, null, 2));
@@ -1055,7 +1154,7 @@ function saveConfig(creds) {
 // undefined / null / empty strings / empty arrays in patch never clobber.
 function mergeCreds(base, patch) {
   const result = JSON.parse(JSON.stringify(base || {}));
-  for (const section of ["atlassian", "jira", "confluence", "bitbucket"]) {
+  for (const section of ["atlassian", "jira", "confluence", "bitbucket", "qmetry"]) {
     const src = patch[section];
     if (!src) continue;
     const dst = (result[section] = result[section] || {});
@@ -1133,6 +1232,7 @@ async function runWebWizard() {
           confluence: cfg.confluence ? maskSection(cfg.confluence) : null,
           bitbucket: cfg.bitbucket ? maskSection(cfg.bitbucket) : null,
           atlassian: cfg.atlassian ? maskSection(cfg.atlassian) : null,
+          qmetry: cfg.qmetry ? maskQMetrySection(cfg.qmetry) : null,
           file: CONFIG_FILE,
         };
         res.setHeader("Content-Type", "application/json");
@@ -1146,7 +1246,7 @@ async function runWebWizard() {
 
       if (req.method === "POST" && url.pathname.startsWith("/save/")) {
         const product = url.pathname.slice("/save/".length);
-        if (!["jira", "confluence", "bitbucket", "atlassian"].includes(product)) {
+        if (!["jira", "confluence", "bitbucket", "atlassian", "qmetry"].includes(product)) {
           res.statusCode = 400;
           return res.end(JSON.stringify({ ok: false, error: "unknown product" }));
         }
@@ -1229,6 +1329,15 @@ async function runWebWizard() {
             username: data.email.trim(),
             api_token: data.token,
           };
+        } else if (product === "qmetry") {
+          // QMetry uses its own API key — completely separate from Atlassian credentials.
+          // Never sends Basic auth or Atlassian tokens to qtmcloud.qmetry.com.
+          if (!data.apiKey) {
+            res.statusCode = 400;
+            return res.end(JSON.stringify({ ok: false, error: "apiKey is required" }));
+          }
+          patch.qmetry = { api_key: data.apiKey };
+          if (data.baseUrl) patch.qmetry.base_url = data.baseUrl.trim();
         }
 
         const after = mergeCreds(before, patch);
@@ -1307,6 +1416,12 @@ function readBody(req) {
 function maskSection(section) {
   const clone = { ...section };
   if (clone.api_token) clone.api_token = mask(clone.api_token);
+  return clone;
+}
+
+function maskQMetrySection(section) {
+  const clone = { ...section };
+  if (clone.api_key) clone.api_key = mask(clone.api_key);
   return clone;
 }
 
@@ -1665,6 +1780,7 @@ function buildHtml(secret) {
         <span class="chip" data-product="jira"><span class="check">●</span> Jira</span>
         <span class="chip" data-product="confluence"><span class="check">●</span> Confluence</span>
         <span class="chip" data-product="bitbucket"><span class="check">●</span> Bitbucket</span>
+        <span class="chip" data-product="qmetry"><span class="check">●</span> QMetry</span>
       </div>
       <div class="actions">
         <button class="primary" onclick="next()">Get started →</button>
@@ -1673,7 +1789,7 @@ function buildHtml(secret) {
 
     <section class="section" data-step="2">
       <h1>What are you configuring?</h1>
-      <p class="lede">Jira + Confluence come from the same Atlassian tenant and share auth. Bitbucket uses a separate issuer and always needs its own token.</p>
+      <p class="lede">Jira + Confluence come from the same Atlassian tenant and share auth. Bitbucket and QMetry each use their own separate credentials.</p>
       <div class="product-list">
         <button class="product-card" onclick="pickSurface('atlassian')">
           <div class="icon">A</div>
@@ -1692,6 +1808,15 @@ function buildHtml(secret) {
             <div class="meta" id="meta-bitbucket"></div>
           </div>
           <div class="right" id="badge-bitbucket">not set</div>
+        </button>
+        <button class="product-card" onclick="pickSurface('qmetry')">
+          <div class="icon">Q</div>
+          <div class="text-col">
+            <div class="name">QMetry Test Management</div>
+            <div class="desc">Separate QMetry API key — not an Atlassian token. Generated inside Jira: QMetry → Configuration → Open API → Generate.</div>
+            <div class="meta" id="meta-qmetry"></div>
+          </div>
+          <div class="right" id="badge-qmetry">not set</div>
         </button>
       </div>
       <div class="actions">
@@ -1749,7 +1874,7 @@ function buildHtml(secret) {
 
     <section class="section" data-step="4">
       <h1>Enter your <span id="step4-product">…</span> credentials</h1>
-      <p class="lede">Just three fields. Paste the token directly into the textarea — no length limit.</p>
+      <p class="lede" id="step4-lede">Just three fields. Paste the token directly into the textarea — no length limit.</p>
       <form onsubmit="event.preventDefault(); save();" autocomplete="off">
         <div class="field" data-field="url">
           <label for="f-url" id="lbl-url">Site URL</label>
@@ -1761,17 +1886,22 @@ function buildHtml(secret) {
           <input id="f-workspace" type="text" name="workspace" autocomplete="off" />
           <span class="hint">The <code>&lt;workspace&gt;</code> in <code>bitbucket.org/&lt;workspace&gt;/…</code></span>
         </div>
-        <div class="field">
+        <div class="field" data-field="atlassian-email">
           <label for="f-email">Atlassian email</label>
           <input id="f-email" type="email" name="email" autocomplete="off" />
         </div>
-        <div class="field">
+        <div class="field" data-field="atlassian-token">
           <label for="f-token">API token</label>
           <textarea id="f-token" name="token" rows="3" spellcheck="false" autocomplete="off" placeholder="ATATT3xFfGF0…"></textarea>
         </div>
+        <div class="field" data-field="qmetry-apikey">
+          <label for="f-qmetry-apikey">QMetry API key</label>
+          <textarea id="f-qmetry-apikey" name="apiKey" rows="3" spellcheck="false" autocomplete="off" placeholder="caf230cfd…"></textarea>
+          <span class="hint">From Jira → QMetry → Configuration → Open API → Generate. This is <b>not</b> an Atlassian token.</span>
+        </div>
         <div class="privacy-note">
           <b>🔒</b>
-          <span>Your token is sent only to <b>localhost</b> via this page. It's written directly to your config file. It never touches the Claude Code chat transcript.</span>
+          <span id="step4-privacy-note">Your token is sent only to <b>localhost</b> via this page. It's written directly to your config file. It never touches the Claude Code chat transcript.</span>
         </div>
       </form>
       <div class="actions">
@@ -1800,14 +1930,16 @@ const PRODUCT_LABEL = {
   confluence: "Confluence",
   bitbucket: "Bitbucket",
   atlassian: "Atlassian Cloud",
+  qmetry: "QMetry",
 };
 const PRODUCT_HINTS = {
-  jira: { url: "Site URL", urlHint: "e.g. https://acme.atlassian.net", showWorkspace: false },
-  confluence: { url: "Site URL", urlHint: "Typically https://acme.atlassian.net/wiki", showWorkspace: false },
-  bitbucket: { url: null, urlHint: "", showWorkspace: true },
+  jira: { url: "Site URL", urlHint: "e.g. https://acme.atlassian.net", showWorkspace: false, isQMetry: false },
+  confluence: { url: "Site URL", urlHint: "Typically https://acme.atlassian.net/wiki", showWorkspace: false, isQMetry: false },
+  bitbucket: { url: null, urlHint: "", showWorkspace: true, isQMetry: false },
   // Atlassian (classic) mode: single tenant URL covers both Jira + Confluence.
-  // We auto-derive confluence.url = tenant/wiki on the backend.
-  atlassian: { url: "Atlassian tenant URL", urlHint: "e.g. https://acme.atlassian.net (no /wiki)", showWorkspace: false },
+  atlassian: { url: "Atlassian tenant URL", urlHint: "e.g. https://acme.atlassian.net (no /wiki)", showWorkspace: false, isQMetry: false },
+  // QMetry: completely separate credential — only an API key, no URL/email.
+  qmetry: { url: null, urlHint: "", showWorkspace: false, isQMetry: true },
 };
 
 let state = {
@@ -1839,9 +1971,10 @@ function escapeHtml(s) {
 
 // Steps the user walks through, in order. "2b" is the mode-picker,
 // only visited when surface=atlassian. Total dots shown on the progress
-// bar is derived from this list so Bitbucket doesn't see a phantom dot.
+// bar is derived from this list so Bitbucket/QMetry don't see phantom dots.
 function pathForSurface(surface) {
   if (surface === "bitbucket") return [1, 2, 3, 4, 5];
+  if (surface === "qmetry") return [1, 2, 4, 5]; // no scope step
   return [1, 2, "2b", 3, 4, 5];
 }
 
@@ -1887,17 +2020,22 @@ function back() {
   if (p === 2) return gotoStep(1);
   if (p === "2b") return gotoStep(2);
   if (p === 3) return gotoStep(state.surface === "atlassian" ? "2b" : 2);
-  if (p === 4) return gotoStep(3);
+  if (p === 4) return gotoStep(state.surface === "qmetry" ? 2 : 3);
   if (p === 5) return gotoStep(2);
 }
 
-// Outer pick: Atlassian (Jira + Confluence) or Bitbucket.
+// Outer pick: Atlassian (Jira + Confluence), Bitbucket, or QMetry.
 function pickSurface(s) {
   state.surface = s;
   if (s === "bitbucket") {
     state.mode = null;
     state.product = "bitbucket";
     gotoStep(3);
+  } else if (s === "qmetry") {
+    // QMetry skips scope step — go straight to credentials form.
+    state.mode = null;
+    state.product = "qmetry";
+    gotoStep(4);
   } else {
     // Go to mode picker.
     gotoStep("2b");
@@ -2004,9 +2142,21 @@ function renderStep4() {
   const shared = (state.config && state.config.atlassian) || {};
   const meta = PRODUCT_HINTS[p];
 
-  Q('[data-field="url"]').style.display = meta.url ? "" : "none";
-  Q('[data-field="workspace"]').style.display = meta.showWorkspace ? "" : "none";
+  const isQMetry = meta.isQMetry;
+  Q('[data-field="url"]').style.display = (!isQMetry && meta.url) ? "" : "none";
+  Q('[data-field="workspace"]').style.display = (!isQMetry && meta.showWorkspace) ? "" : "none";
+  Q('[data-field="atlassian-email"]').style.display = isQMetry ? "none" : "";
+  Q('[data-field="atlassian-token"]').style.display = isQMetry ? "none" : "";
+  Q('[data-field="qmetry-apikey"]').style.display = isQMetry ? "" : "none";
 
+  if (isQMetry) {
+    Q("#step4-lede").textContent = "Paste your QMetry API key — no email or URL required. This key never goes to Atlassian.";
+    Q("#f-qmetry-apikey").value = "";
+    setTimeout(() => Q("#f-qmetry-apikey").focus(), 50);
+    return;
+  }
+
+  Q("#step4-lede").textContent = "Just three fields. Paste the token directly into the textarea — no length limit.";
   if (meta.url) {
     Q("#lbl-url").textContent = meta.url;
     Q("#hint-url").textContent = meta.urlHint;
@@ -2028,6 +2178,31 @@ function renderStep4() {
 async function save() {
   const p = state.product;
   const meta = PRODUCT_HINTS[p];
+
+  // QMetry: only apiKey, no email/token/url.
+  if (meta.isQMetry) {
+    const apiKey = Q("#f-qmetry-apikey").value;
+    if (!apiKey) {
+      Q("#f-qmetry-apikey").focus();
+      Q("#f-qmetry-apikey").style.borderColor = "var(--fail)";
+      return;
+    }
+    Q("#save-btn").disabled = true;
+    Q("#save-btn").textContent = "Saving…";
+    try {
+      const result = await api("/save/qmetry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey }),
+      });
+      renderResult(result);
+    } finally {
+      Q("#save-btn").disabled = false;
+      Q("#save-btn").textContent = "Save & test →";
+    }
+    return;
+  }
+
   const data = { email: Q("#f-email").value.trim(), token: Q("#f-token").value };
   if (meta.url) data.url = Q("#f-url").value.trim();
   if (meta.showWorkspace) data.workspace = Q("#f-workspace").value.trim();
@@ -2069,10 +2244,14 @@ async function save() {
 
 function renderResult(v) {
   const p = state.product;
+  const isQMetry = p === "qmetry";
   const title = Q("#result-title");
   const summaryBox = Q("#result-summary");
   const scopeBox = Q("#result-scopes");
   const actions = Q("#result-actions");
+
+  // QMetry auth uses the "display" field; Atlassian products use "who".
+  const authDisplay = v.auth ? (v.auth.display || v.auth.who || v.auth.status) : "";
 
   if (v.skipped) {
     title.textContent = "Couldn't run the test";
@@ -2080,15 +2259,21 @@ function renderResult(v) {
     scopeBox.innerHTML = "";
   } else if (v.requiredOk) {
     title.textContent = PRODUCT_LABEL[p] + " is configured";
-    summaryBox.innerHTML = '<div class="verify-summary ok"><div class="headline"><span class="icon">✓</span> Authenticated as ' + escapeHtml(v.auth.who) + '</div><div class="sub">All required scopes granted. Restart Claude Code to pick up the new credentials.</div></div>';
+    summaryBox.innerHTML = '<div class="verify-summary ok"><div class="headline"><span class="icon">✓</span> ' +
+      escapeHtml(isQMetry ? authDisplay : "Authenticated as " + authDisplay) +
+      '</div><div class="sub">Restart Claude Code to pick up the new credentials.</div></div>';
     scopeBox.innerHTML = renderScopeRows(v.scopes);
   } else if (v.auth.status !== "ok") {
     title.textContent = "Authentication failed";
-    summaryBox.innerHTML = '<div class="verify-summary fail"><div class="headline"><span class="icon">×</span> ' + escapeHtml(v.auth.detail || v.auth.status) + '</div><div class="sub">Double-check the URL, email, and token, then try again.</div></div>';
+    summaryBox.innerHTML = '<div class="verify-summary fail"><div class="headline"><span class="icon">×</span> ' + escapeHtml(authDisplay) + '</div><div class="sub">' +
+      (isQMetry ? "Check that the API key was copied correctly (Jira → QMetry → Configuration → Open API → Generate)." : "Double-check the URL, email, and token, then try again.") +
+      '</div></div>';
     scopeBox.innerHTML = "";
   } else {
-    title.textContent = "Token is missing scopes";
-    summaryBox.innerHTML = '<div class="verify-summary fail"><div class="headline"><span class="icon">!</span> ' + escapeHtml(v.auth.who) + '</div><div class="sub">Tokens cannot have scopes added after creation. Generate a new token with the missing scopes ticked.</div></div>';
+    title.textContent = isQMetry ? "API key rejected" : "Token is missing scopes";
+    summaryBox.innerHTML = '<div class="verify-summary fail"><div class="headline"><span class="icon">!</span> ' + escapeHtml(authDisplay) + '</div><div class="sub">' +
+      (isQMetry ? "Generate a new API key in Jira → QMetry → Configuration → Open API." : "Tokens cannot have scopes added after creation. Generate a new token with the missing scopes ticked.") +
+      '</div></div>';
     scopeBox.innerHTML = renderScopeRows(v.scopes);
   }
 
@@ -2106,6 +2291,8 @@ function renderResult(v) {
       btns += '<button class="secondary" onclick="gotoStep(2)">Configure another surface</button>';
       btns += '<button class="primary" onclick="finish()">Done — close wizard</button>';
     }
+  } else if (isQMetry) {
+    btns += '<button class="primary" onclick="gotoStep(4)">Try again</button>';
   } else if (v.auth.status === "ok") {
     btns += '<button class="ghost" onclick="window.open(\'https://id.atlassian.com/manage-profile/security/api-tokens\', \'_blank\')">Open token page</button>';
     btns += '<button class="primary" onclick="gotoStep(3)">Generate a new token</button>';
@@ -2207,6 +2394,24 @@ function refreshChips() {
     } else {
       aMeta.textContent = "";
     }
+  }
+
+  // QMetry card + chip — separate from Atlassian.
+  const qmCfg = state.config && state.config.qmetry;
+  const qmSet = !!(qmCfg && qmCfg.api_key);
+  const qmChip = Q('#status-chips .chip[data-product="qmetry"]');
+  if (qmChip) {
+    qmChip.classList.toggle("set", qmSet);
+    qmChip.querySelector(".check").textContent = qmSet ? "✓" : "●";
+  }
+  const qmBadge = Q("#badge-qmetry");
+  const qmMeta = Q("#meta-qmetry");
+  if (qmBadge) {
+    qmBadge.textContent = qmSet ? "configured" : "not set";
+    qmBadge.classList.toggle("set", qmSet);
+  }
+  if (qmMeta) {
+    qmMeta.textContent = qmSet ? (qmCfg.api_key || "") : "";
   }
 }
 
