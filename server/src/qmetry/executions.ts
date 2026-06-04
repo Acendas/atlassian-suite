@@ -40,7 +40,7 @@ export function registerQMetryExecutionTools(server: FastMCP, opts: { readOnly: 
     }),
     execute: async (args) =>
       safeQMetry(() =>
-        qmetryClient().get<unknown>(`/testcaseruns/${encodeURIComponent(args.execution_id)}`),
+        qmetryClient().post<unknown>(`/testcaseruns/${encodeURIComponent(args.execution_id)}`, {}),
       ),
   });
 

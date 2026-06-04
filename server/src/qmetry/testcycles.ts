@@ -39,8 +39,9 @@ export function registerQMetryTestCycleTools(server: FastMCP, opts: { readOnly: 
     }),
     execute: async (args) =>
       safeQMetry(async () => {
-        const cycle: any = await qmetryClient().get<unknown>(
+        const cycle: any = await qmetryClient().post<unknown>(
           `/testcycles/${encodeURIComponent(args.test_cycle_id)}`,
+          {},
         );
 
         // Jira context: QMetry project ID = Jira project ID — fetch project details.

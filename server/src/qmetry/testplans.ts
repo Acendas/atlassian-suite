@@ -35,7 +35,7 @@ export function registerQMetryTestPlanTools(server: FastMCP): void {
     }),
     execute: async (args) =>
       safeQMetry(() =>
-        qmetryClient().get<unknown>(`/testplans/${encodeURIComponent(args.test_plan_id)}`),
+        qmetryClient().post<unknown>(`/testplans/${encodeURIComponent(args.test_plan_id)}`, {}),
       ),
   });
 }

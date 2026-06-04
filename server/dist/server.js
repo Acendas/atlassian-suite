@@ -165567,8 +165567,9 @@ function registerQMetryTestCaseTools(server2, opts) {
       const versionNo = tc?.version?.versionNo ?? 1;
       if (tcId) {
         try {
-          const steps = await qmetryClient().get(
-            `/testcases/${encodeURIComponent(tcId)}/versions/${versionNo}/teststeps`
+          const steps = await qmetryClient().post(
+            `/testcases/${encodeURIComponent(tcId)}/versions/${versionNo}/teststeps`,
+            {}
           );
           tc.steps = steps;
         } catch {
@@ -165601,8 +165602,9 @@ function registerQMetryTestCaseTools(server2, opts) {
       version: external_exports4.number().int().min(1).default(1).describe("Version number. Use 1 for the latest/only version unless you need a specific historical version.")
     }),
     execute: async (args) => safeQMetry(
-      () => qmetryClient().get(
-        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`
+      () => qmetryClient().post(
+        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
+        {}
       )
     )
   });
@@ -165799,8 +165801,9 @@ function registerQMetryTestCycleTools(server2, opts) {
       test_cycle_id: external_exports4.string().describe("Test cycle ID from qmetry_search_test_cycles results")
     }),
     execute: async (args) => safeQMetry(async () => {
-      const cycle = await qmetryClient().get(
-        `/testcycles/${encodeURIComponent(args.test_cycle_id)}`
+      const cycle = await qmetryClient().post(
+        `/testcycles/${encodeURIComponent(args.test_cycle_id)}`,
+        {}
       );
       if (cycle && cycle.projectId && jiraIsConfigured()) {
         try {
@@ -165929,7 +165932,7 @@ function registerQMetryTestPlanTools(server2) {
       test_plan_id: external_exports4.string().describe("Test plan ID from search results")
     }),
     execute: async (args) => safeQMetry(
-      () => qmetryClient().get(`/testplans/${encodeURIComponent(args.test_plan_id)}`)
+      () => qmetryClient().post(`/testplans/${encodeURIComponent(args.test_plan_id)}`, {})
     )
   });
 }
@@ -165967,7 +165970,7 @@ function registerQMetryExecutionTools(server2, opts) {
       execution_id: external_exports4.string().describe("Execution / test-case-run ID from qmetry_search_executions")
     }),
     execute: async (args) => safeQMetry(
-      () => qmetryClient().get(`/testcaseruns/${encodeURIComponent(args.execution_id)}`)
+      () => qmetryClient().post(`/testcaseruns/${encodeURIComponent(args.execution_id)}`, {})
     )
   });
   server2.addTool({

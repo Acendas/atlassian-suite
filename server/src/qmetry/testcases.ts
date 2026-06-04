@@ -67,14 +67,15 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
         );
 
         // Fetch test steps from the separate sub-resource.
-        // Steps live at: GET /testcases/{id}/versions/{versionNo}/teststeps
+        // Steps endpoint uses POST (QMetry reads are often POST, not GET).
         const tc = result?.data?.[0] ?? result;
         const tcId = tc?.id;
         const versionNo = tc?.version?.versionNo ?? 1;
         if (tcId) {
           try {
-            const steps = await qmetryClient().get<unknown>(
+            const steps = await qmetryClient().post<unknown>(
               `/testcases/${encodeURIComponent(tcId)}/versions/${versionNo}/teststeps`,
+              {},
             );
             tc.steps = steps;
           } catch {
@@ -117,8 +118,9 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     }),
     execute: async (args) =>
       safeQMetry(() =>
-        qmetryClient().get<unknown>(
+        qmetryClient().post<unknown>(
           `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
+          {},
         ),
       ),
   });
