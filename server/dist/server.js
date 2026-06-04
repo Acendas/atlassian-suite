@@ -165560,7 +165560,7 @@ function registerQMetryTestCaseTools(server2, opts) {
       const result = await qmetryClient().post(
         "/testcases/search",
         { filter: { projectId: args.project_id, key: args.key } },
-        { fields: "summary,status,priority,description,steps,labels,folderId,version" }
+        { fields: "summary,status,priority,description,labels,version" }
       );
       if (jiraIsConfigured()) {
         try {

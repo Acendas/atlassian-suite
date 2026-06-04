@@ -62,7 +62,7 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
         const result: any = await qmetryClient().post<unknown>(
           "/testcases/search",
           { filter: { projectId: args.project_id, key: args.key } },
-          { fields: "summary,status,priority,description,steps,labels,folderId,version" },
+          { fields: "summary,status,priority,description,labels,version" },
         );
 
         // Jira context: QMetry project ID = Jira project ID — fetch project details.
