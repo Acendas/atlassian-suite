@@ -1,0 +1,79 @@
+[
+  {
+    "name": "allows_jira_get_issue",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_get_issue"
+  },
+  {
+    "name": "allows_get_credentials_status",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "get_credentials_status"
+  },
+  {
+    "name": "allows_jira_get_issue_property_keys",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_get_issue_property_keys"
+  },
+  {
+    "name": "allows_jira_get_issue_property",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_get_issue_property"
+  },
+  {
+    "name": "allows_qmetry_search_test_cycles",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "qmetry_search_test_cycles"
+  },
+  {
+    "name": "checks_qmetry_configured",
+    "type": "contains",
+    "pattern": "qmetry\\.configured"
+  },
+  {
+    "name": "checks_testcycle_panel_property",
+    "type": "contains",
+    "pattern": "testcycle-execution-panel"
+  },
+  {
+    "name": "uses_fields_project_id_for_qmetry",
+    "type": "contains",
+    "pattern": "fields\\.project\\.id"
+  },
+  {
+    "name": "documents_project_id_identity",
+    "type": "contains",
+    "pattern": "Jira project ID.*QMetry project ID|QMetry project ID.*Jira project ID",
+    "dotall": false
+  },
+  {
+    "name": "skips_qmetry_when_not_configured",
+    "type": "contains",
+    "pattern": "skip QMetry|skip.*entirely|false.*skip",
+    "_comment": "Skill must not error when QMetry is not configured"
+  },
+  {
+    "name": "confirms_before_write",
+    "type": "contains",
+    "pattern": "(?i)confirm before any write"
+  },
+  {
+    "name": "supports_comment_action",
+    "type": "contains",
+    "pattern": "jira_add_comment"
+  },
+  {
+    "name": "supports_transition_action",
+    "type": "contains",
+    "pattern": "jira_transition_issue"
+  },
+  {
+    "name": "supports_worklog_action",
+    "type": "contains",
+    "pattern": "jira_add_worklog"
+  }
+]
