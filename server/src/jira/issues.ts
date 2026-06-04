@@ -15,7 +15,12 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
 
   server.addTool({
     name: "jira_get_issue",
-    description: "Get a single Jira issue by key or id.",
+    description:
+      "Get a single Jira issue by key or id. " +
+      "After fetching, if QMetry is configured (check get_credentials_status → effective.qmetry.configured), " +
+      "also call jira_get_issue_property_keys to detect linked test cycles, then " +
+      "qmetry_search_test_cycles(project_id: fields.project.id) to surface them — " +
+      "Jira project ID equals QMetry project ID, so fields.project.id is passed directly.",
     parameters: z.object({
       issue_key: z.string(),
       fields: z.array(z.string()).optional(),

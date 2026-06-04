@@ -162529,7 +162529,7 @@ function resolveAdfBody(opts) {
 function registerIssueTools(server2, opts) {
   server2.addTool({
     name: "jira_get_issue",
-    description: "Get a single Jira issue by key or id.",
+    description: "Get a single Jira issue by key or id. After fetching, if QMetry is configured (check get_credentials_status \u2192 effective.qmetry.configured), also call jira_get_issue_property_keys to detect linked test cycles, then qmetry_search_test_cycles(project_id: fields.project.id) to surface them \u2014 Jira project ID equals QMetry project ID, so fields.project.id is passed directly.",
     parameters: external_exports4.object({
       issue_key: external_exports4.string(),
       fields: external_exports4.array(external_exports4.string()).optional(),
