@@ -1906,7 +1906,7 @@ function buildHtml(secret) {
       </form>
       <div class="actions">
         <button class="ghost" onclick="back()">← Back</button>
-        <button class="primary" id="save-btn" onclick="save()">Save & test →</button>
+        <button class="primary" id="save-btn" onclick="save()">Save & Test →</button>
       </div>
     </section>
 
@@ -2195,10 +2195,21 @@ async function save() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ apiKey }),
       });
-      renderResult(result);
+      if (!result.ok) {
+        Q("#save-btn").disabled = false;
+        Q("#save-btn").textContent = "Save & Test →";
+        alert("Save failed: " + (result.error || "unknown"));
+        return;
+      }
+      state.config = await api("/state");
+      refreshChips();
+      renderResult(result.verify);
+      gotoStep(5);
+    } catch (e) {
+      alert("Network error: " + e.message);
     } finally {
       Q("#save-btn").disabled = false;
-      Q("#save-btn").textContent = "Save & test →";
+      Q("#save-btn").textContent = "Save & Test →";
     }
     return;
   }
@@ -2226,7 +2237,7 @@ async function save() {
     });
     if (!result.ok) {
       btn.disabled = false;
-      btn.textContent = "Save & test →";
+      btn.textContent = "Save & Test →";
       alert("Save failed: " + (result.error || "unknown"));
       return;
     }
@@ -2238,7 +2249,7 @@ async function save() {
     alert("Network error: " + e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = "Save & test →";
+    btn.textContent = "Save & Test →";
   }
 }
 
