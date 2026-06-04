@@ -5,6 +5,8 @@ import type { FastMCP } from "fastmcp";
 import { jiraClient } from "../common/jiraClient.js";
 import { markdownToAdf, resolveAdfBody } from "../common/adf.js";
 import { safeJira, ensureWritable } from "./_helpers.js";
+import { loadQMetryConfig } from "../common/config.js";
+import { qmetryClient } from "../common/qmetryClient.js";
 
 export interface IssueOpts {
   readOnly: boolean;
@@ -16,24 +18,83 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
   server.addTool({
     name: "jira_get_issue",
     description:
-      "Get a single Jira issue by key or id. " +
-      "After fetching, if QMetry is configured (check get_credentials_status → effective.qmetry.configured), " +
-      "also call jira_get_issue_property_keys to detect linked test cycles, then " +
-      "qmetry_search_test_cycles(project_id: fields.project.id) to surface them — " +
-      "Jira project ID equals QMetry project ID, so fields.project.id is passed directly.",
+      "Get a single Jira issue by key or id. Automatically includes QMetry test cycle coverage " +
+      "when QMetry is configured — no extra tool calls needed. Pass include_qmetry: false for " +
+      "raw Jira data only (e.g. internal pipeline lookups).",
     parameters: z.object({
       issue_key: z.string(),
       fields: z.array(z.string()).optional(),
       expand: z.array(z.string()).optional(),
+      include_qmetry: z
+        .boolean()
+        .default(true)
+        .describe("Include QMetry test cycle data when QMetry is configured. Default true."),
     }),
-    execute: async (args: { issue_key: string; fields?: string[]; expand?: string[] }) =>
-      safeJira(() =>
-        jiraClient().issues.getIssue({
+    execute: async (args: {
+      issue_key: string;
+      fields?: string[];
+      expand?: string[];
+      include_qmetry: boolean;
+    }) =>
+      safeJira(async () => {
+        const issue: any = await jiraClient().issues.getIssue({
           issueIdOrKey: args.issue_key,
           fields: args.fields,
           expand: args.expand?.join(","),
-        } as never),
-      ),
+        } as never);
+
+        if (args.include_qmetry !== false) {
+          try {
+            const qmetryCfg = loadQMetryConfig();
+            if (qmetryCfg) {
+              const projectId = issue.fields?.project?.id
+                ? parseInt(issue.fields.project.id, 10)
+                : null;
+
+              // Check for linked test cycle panel stored as entity property.
+              const propKeys: any = await jiraClient().issueProperties.getIssuePropertyKeys({
+                issueIdOrKey: args.issue_key,
+              } as never);
+              const panelKey = (propKeys.keys || []).find(
+                (k: any) => typeof k.key === "string" && k.key.includes("testcycle-execution-panel"),
+              );
+
+              let linkedCycleCount = 0;
+              if (panelKey) {
+                const propVal: any = await jiraClient().issueProperties.getIssueProperty({
+                  issueIdOrKey: args.issue_key,
+                  propertyKey: panelKey.key,
+                } as never);
+                linkedCycleCount = Array.isArray(propVal.value) ? propVal.value.length : 0;
+              }
+
+              // Jira project ID = QMetry project ID — pass directly.
+              let testCycles: unknown[] = [];
+              if (projectId) {
+                const cycleResult: any = await qmetryClient().post(
+                  "/testcycles/search",
+                  { filter: { projectId } },
+                  { startAt: 0, maxResults: 10 },
+                );
+                testCycles = cycleResult.data || [];
+              }
+
+              issue.qmetry = {
+                configured: true,
+                linked_cycle_count: linkedCycleCount,
+                test_cycles: testCycles,
+              };
+            } else {
+              issue.qmetry = null;
+            }
+          } catch {
+            // QMetry is best-effort — never block the Jira response.
+            issue.qmetry = null;
+          }
+        }
+
+        return issue;
+      }),
   });
 
   server.addTool({

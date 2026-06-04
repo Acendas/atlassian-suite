@@ -162525,23 +162525,163 @@ function resolveAdfBody(opts) {
   return markdownToAdf(md);
 }
 
+// src/common/qmetryClient.ts
+function createQMetryHttp(opts) {
+  const { baseUrl, apiKey } = opts;
+  const label = opts.productLabel ?? "QMetry";
+  const buildUrl = (path, query) => {
+    const url4 = new URL(path.startsWith("http") ? path : `${baseUrl}${path}`);
+    if (query) {
+      for (const [k, v] of Object.entries(query)) {
+        if (v !== void 0 && v !== null) url4.searchParams.set(k, String(v));
+      }
+    }
+    return url4.toString();
+  };
+  const parseBody2 = (text) => {
+    if (text.length === 0) return text;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  };
+  const RETRYABLE = /* @__PURE__ */ new Set([429, 502, 503, 504]);
+  const MAX_RETRIES = 3;
+  const BASE_DELAY_MS = 400;
+  const CAP_DELAY_MS = 8e3;
+  const parseRetryAfter = (headerVal) => {
+    if (!headerVal) return null;
+    const asNum = Number(headerVal);
+    if (Number.isFinite(asNum)) return Math.max(0, asNum) * 1e3;
+    const asDate = Date.parse(headerVal);
+    if (!Number.isNaN(asDate)) return Math.max(0, asDate - Date.now());
+    return null;
+  };
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const isIdempotent = (method) => method === "GET" || method === "HEAD" || method === "OPTIONS";
+  const doFetch = async (method, path, init, query) => {
+    const { AtlassianHttpError: AtlassianHttpError3 } = await Promise.resolve().then(() => (init_http(), http_exports));
+    const url4 = buildUrl(path, query);
+    let lastErr = null;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const res = await fetch(url4, init);
+      const text = await res.text();
+      const parsed = parseBody2(text);
+      if (res.ok) return parsed;
+      const err = new AtlassianHttpError3(
+        res.status,
+        res.statusText,
+        parsed,
+        `${label} ${method} ${path} failed: ${res.status} ${res.statusText}`
+      );
+      lastErr = err;
+      if (!RETRYABLE.has(res.status)) throw err;
+      if (res.status !== 429 && !isIdempotent(method)) throw err;
+      if (attempt === MAX_RETRIES) throw err;
+      const retryAfterMs = parseRetryAfter(res.headers.get("Retry-After"));
+      const expMs = Math.min(BASE_DELAY_MS * 2 ** attempt, CAP_DELAY_MS);
+      const jittered = expMs * (0.75 + Math.random() * 0.5);
+      const delay2 = retryAfterMs != null ? retryAfterMs : jittered;
+      await sleep(delay2);
+    }
+    throw lastErr;
+  };
+  const request = (method, path, reqOpts = {}) => {
+    const headers = {
+      apiKey,
+      Accept: "application/json",
+      ...reqOpts.headers
+    };
+    let body;
+    if (reqOpts.bodyRaw !== void 0) {
+      body = reqOpts.bodyRaw;
+    } else if (reqOpts.body !== void 0) {
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify(reqOpts.body);
+    }
+    return doFetch(method, path, { method, headers, body }, reqOpts.query);
+  };
+  return {
+    get: (path, query) => request("GET", path, { query }),
+    post: (path, body, query) => request("POST", path, { body, query }),
+    put: (path, body, query) => request("PUT", path, { body, query }),
+    delete: (path, query) => request("DELETE", path, { query }),
+    postMultipart: (path, form, query) => request("POST", path, { bodyRaw: form, query }),
+    request
+  };
+}
+var cached4 = null;
+var cachedConfig = null;
+function qmetryClient() {
+  const cfg = loadQMetryConfig();
+  if (!cfg) throw new Error("QMetry is not configured. Run /atlassian-suite:init to set up your QMetry API key.");
+  if (!cached4 || cachedConfig?.apiKey !== cfg.apiKey || cachedConfig?.baseUrl !== cfg.baseUrl) {
+    cached4 = createQMetryHttp({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, productLabel: "QMetry" });
+    cachedConfig = cfg;
+  }
+  return cached4;
+}
+
 // src/jira/issues.ts
 function registerIssueTools(server2, opts) {
   server2.addTool({
     name: "jira_get_issue",
-    description: "Get a single Jira issue by key or id. After fetching, if QMetry is configured (check get_credentials_status \u2192 effective.qmetry.configured), also call jira_get_issue_property_keys to detect linked test cycles, then qmetry_search_test_cycles(project_id: fields.project.id) to surface them \u2014 Jira project ID equals QMetry project ID, so fields.project.id is passed directly.",
+    description: "Get a single Jira issue by key or id. Automatically includes QMetry test cycle coverage when QMetry is configured \u2014 no extra tool calls needed. Pass include_qmetry: false for raw Jira data only (e.g. internal pipeline lookups).",
     parameters: external_exports4.object({
       issue_key: external_exports4.string(),
       fields: external_exports4.array(external_exports4.string()).optional(),
-      expand: external_exports4.array(external_exports4.string()).optional()
+      expand: external_exports4.array(external_exports4.string()).optional(),
+      include_qmetry: external_exports4.boolean().default(true).describe("Include QMetry test cycle data when QMetry is configured. Default true.")
     }),
-    execute: async (args) => safeJira(
-      () => jiraClient().issues.getIssue({
+    execute: async (args) => safeJira(async () => {
+      const issue3 = await jiraClient().issues.getIssue({
         issueIdOrKey: args.issue_key,
         fields: args.fields,
         expand: args.expand?.join(",")
-      })
-    )
+      });
+      if (args.include_qmetry !== false) {
+        try {
+          const qmetryCfg = loadQMetryConfig();
+          if (qmetryCfg) {
+            const projectId = issue3.fields?.project?.id ? parseInt(issue3.fields.project.id, 10) : null;
+            const propKeys = await jiraClient().issueProperties.getIssuePropertyKeys({
+              issueIdOrKey: args.issue_key
+            });
+            const panelKey = (propKeys.keys || []).find(
+              (k) => typeof k.key === "string" && k.key.includes("testcycle-execution-panel")
+            );
+            let linkedCycleCount = 0;
+            if (panelKey) {
+              const propVal = await jiraClient().issueProperties.getIssueProperty({
+                issueIdOrKey: args.issue_key,
+                propertyKey: panelKey.key
+              });
+              linkedCycleCount = Array.isArray(propVal.value) ? propVal.value.length : 0;
+            }
+            let testCycles = [];
+            if (projectId) {
+              const cycleResult = await qmetryClient().post(
+                "/testcycles/search",
+                { filter: { projectId } },
+                { startAt: 0, maxResults: 10 }
+              );
+              testCycles = cycleResult.data || [];
+            }
+            issue3.qmetry = {
+              configured: true,
+              linked_cycle_count: linkedCycleCount,
+              test_cycles: testCycles
+            };
+          } else {
+            issue3.qmetry = null;
+          }
+        } catch {
+          issue3.qmetry = null;
+        }
+      }
+      return issue3;
+    })
   });
   server2.addTool({
     name: "jira_get_issue_dates",
@@ -165312,104 +165452,6 @@ function registerConfluenceTools(server2, opts) {
   registerPageLinkTools(server2);
 }
 
-// src/common/qmetryClient.ts
-function createQMetryHttp(opts) {
-  const { baseUrl, apiKey } = opts;
-  const label = opts.productLabel ?? "QMetry";
-  const buildUrl = (path, query) => {
-    const url4 = new URL(path.startsWith("http") ? path : `${baseUrl}${path}`);
-    if (query) {
-      for (const [k, v] of Object.entries(query)) {
-        if (v !== void 0 && v !== null) url4.searchParams.set(k, String(v));
-      }
-    }
-    return url4.toString();
-  };
-  const parseBody2 = (text) => {
-    if (text.length === 0) return text;
-    try {
-      return JSON.parse(text);
-    } catch {
-      return text;
-    }
-  };
-  const RETRYABLE = /* @__PURE__ */ new Set([429, 502, 503, 504]);
-  const MAX_RETRIES = 3;
-  const BASE_DELAY_MS = 400;
-  const CAP_DELAY_MS = 8e3;
-  const parseRetryAfter = (headerVal) => {
-    if (!headerVal) return null;
-    const asNum = Number(headerVal);
-    if (Number.isFinite(asNum)) return Math.max(0, asNum) * 1e3;
-    const asDate = Date.parse(headerVal);
-    if (!Number.isNaN(asDate)) return Math.max(0, asDate - Date.now());
-    return null;
-  };
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const isIdempotent = (method) => method === "GET" || method === "HEAD" || method === "OPTIONS";
-  const doFetch = async (method, path, init, query) => {
-    const { AtlassianHttpError: AtlassianHttpError3 } = await Promise.resolve().then(() => (init_http(), http_exports));
-    const url4 = buildUrl(path, query);
-    let lastErr = null;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const res = await fetch(url4, init);
-      const text = await res.text();
-      const parsed = parseBody2(text);
-      if (res.ok) return parsed;
-      const err = new AtlassianHttpError3(
-        res.status,
-        res.statusText,
-        parsed,
-        `${label} ${method} ${path} failed: ${res.status} ${res.statusText}`
-      );
-      lastErr = err;
-      if (!RETRYABLE.has(res.status)) throw err;
-      if (res.status !== 429 && !isIdempotent(method)) throw err;
-      if (attempt === MAX_RETRIES) throw err;
-      const retryAfterMs = parseRetryAfter(res.headers.get("Retry-After"));
-      const expMs = Math.min(BASE_DELAY_MS * 2 ** attempt, CAP_DELAY_MS);
-      const jittered = expMs * (0.75 + Math.random() * 0.5);
-      const delay2 = retryAfterMs != null ? retryAfterMs : jittered;
-      await sleep(delay2);
-    }
-    throw lastErr;
-  };
-  const request = (method, path, reqOpts = {}) => {
-    const headers = {
-      apiKey,
-      Accept: "application/json",
-      ...reqOpts.headers
-    };
-    let body;
-    if (reqOpts.bodyRaw !== void 0) {
-      body = reqOpts.bodyRaw;
-    } else if (reqOpts.body !== void 0) {
-      headers["Content-Type"] = "application/json";
-      body = JSON.stringify(reqOpts.body);
-    }
-    return doFetch(method, path, { method, headers, body }, reqOpts.query);
-  };
-  return {
-    get: (path, query) => request("GET", path, { query }),
-    post: (path, body, query) => request("POST", path, { body, query }),
-    put: (path, body, query) => request("PUT", path, { body, query }),
-    delete: (path, query) => request("DELETE", path, { query }),
-    postMultipart: (path, form, query) => request("POST", path, { bodyRaw: form, query }),
-    request
-  };
-}
-var cached4 = null;
-var cachedConfig = null;
-function qmetryClient() {
-  const cfg = loadQMetryConfig();
-  if (!cfg) throw new Error("QMetry is not configured. Run /atlassian-suite:init to set up your QMetry API key.");
-  if (!cached4 || cachedConfig?.apiKey !== cfg.apiKey || cachedConfig?.baseUrl !== cfg.baseUrl) {
-    cached4 = createQMetryHttp({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, productLabel: "QMetry" });
-    cachedConfig = cfg;
-  }
-  return cached4;
-}
-
 // src/qmetry/_helpers.ts
 async function safeQMetry(fn) {
   try {
@@ -165509,18 +165551,34 @@ function registerQMetryTestCaseTools(server2, opts) {
   });
   server2.addTool({
     name: "qmetry_get_test_case",
-    description: "Get full details for a single test case by key, including steps, status, priority, description, and linked items.",
+    description: "Get full details for a single test case by key, including steps, status, priority, description, and linked items. Automatically includes Jira project context when Jira is configured \u2014 QMetry project ID equals Jira project ID.",
     parameters: external_exports4.object({
-      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID (equals the Jira project ID)"),
       key: external_exports4.string().describe("Test case key, e.g. PROJ-TC-5")
     }),
-    execute: async (args) => safeQMetry(
-      () => qmetryClient().post(
+    execute: async (args) => safeQMetry(async () => {
+      const result = await qmetryClient().post(
         "/testcases/search",
         { filter: { projectId: args.project_id, key: args.key } },
         { fields: "summary,status,priority,description,steps,labels,folderId,version" }
-      )
-    )
+      );
+      if (jiraIsConfigured()) {
+        try {
+          const project = await jiraClient().projects.getProject({
+            projectIdOrKey: String(args.project_id)
+          });
+          if (result && typeof result === "object") {
+            result.jira = {
+              project_key: project.key,
+              project_name: project.name,
+              project_id: project.id
+            };
+          }
+        } catch {
+        }
+      }
+      return result;
+    })
   });
   server2.addTool({
     name: "qmetry_create_test_case",
@@ -165578,7 +165636,7 @@ function registerQMetryTestCycleTools(server2) {
     name: "qmetry_search_test_cycles",
     description: "Search test cycles in a QMetry project. Returns cycle id, key, name, status, and dates.",
     parameters: external_exports4.object({
-      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID (equals the Jira project ID for the same project)"),
       search_text: external_exports4.string().optional().describe("Free-text search on cycle name/summary"),
       status: external_exports4.array(external_exports4.string()).optional(),
       start_at: external_exports4.number().int().min(0).default(0),
@@ -165597,13 +165655,29 @@ function registerQMetryTestCycleTools(server2) {
   });
   server2.addTool({
     name: "qmetry_get_test_cycle",
-    description: "Get details for a single test cycle by its numeric ID, including linked test cases and execution summary.",
+    description: "Get details for a single test cycle by its ID, including linked test cases and execution summary. Automatically includes Jira project context when Jira is configured \u2014 QMetry project ID equals Jira project ID.",
     parameters: external_exports4.object({
-      test_cycle_id: external_exports4.string().describe("Test cycle ID (numeric string from search results)")
+      test_cycle_id: external_exports4.string().describe("Test cycle ID from qmetry_search_test_cycles results")
     }),
-    execute: async (args) => safeQMetry(
-      () => qmetryClient().get(`/testcycles/${encodeURIComponent(args.test_cycle_id)}`)
-    )
+    execute: async (args) => safeQMetry(async () => {
+      const cycle = await qmetryClient().get(
+        `/testcycles/${encodeURIComponent(args.test_cycle_id)}`
+      );
+      if (cycle && cycle.projectId && jiraIsConfigured()) {
+        try {
+          const project = await jiraClient().projects.getProject({
+            projectIdOrKey: String(cycle.projectId)
+          });
+          cycle.jira = {
+            project_key: project.key,
+            project_name: project.name,
+            project_id: project.id
+          };
+        } catch {
+        }
+      }
+      return cycle;
+    })
   });
 }
 

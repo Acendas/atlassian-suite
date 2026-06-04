@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { FastMCP } from "fastmcp";
 import { qmetryClient } from "../common/qmetryClient.js";
 import { safeQMetry, ensureWritable } from "./_helpers.js";
+import { jiraIsConfigured, jiraClient } from "../common/jiraClient.js";
 
 const paginationParams = {
   start_at: z.number().int().min(0).default(0).describe("0-based page offset"),
@@ -48,19 +49,42 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
 
   server.addTool({
     name: "qmetry_get_test_case",
-    description: "Get full details for a single test case by key, including steps, status, priority, description, and linked items.",
+    description:
+      "Get full details for a single test case by key, including steps, status, priority, description, and linked items. " +
+      "Automatically includes Jira project context when Jira is configured — " +
+      "QMetry project ID equals Jira project ID.",
     parameters: z.object({
-      project_id: z.number().int().describe("Numeric QMetry project ID"),
+      project_id: z.number().int().describe("Numeric QMetry project ID (equals the Jira project ID)"),
       key: z.string().describe("Test case key, e.g. PROJ-TC-5"),
     }),
     execute: async (args) =>
-      safeQMetry(() =>
-        qmetryClient().post<unknown>(
+      safeQMetry(async () => {
+        const result: any = await qmetryClient().post<unknown>(
           "/testcases/search",
           { filter: { projectId: args.project_id, key: args.key } },
           { fields: "summary,status,priority,description,steps,labels,folderId,version" },
-        ),
-      ),
+        );
+
+        // Jira context: QMetry project ID = Jira project ID — fetch project details.
+        if (jiraIsConfigured()) {
+          try {
+            const project: any = await jiraClient().projects.getProject({
+              projectIdOrKey: String(args.project_id),
+            } as never);
+            if (result && typeof result === "object") {
+              (result as any).jira = {
+                project_key: project.key,
+                project_name: project.name,
+                project_id: project.id,
+              };
+            }
+          } catch {
+            // Jira lookup is best-effort — never block the QMetry response.
+          }
+        }
+
+        return result;
+      }),
   });
 
   server.addTool({

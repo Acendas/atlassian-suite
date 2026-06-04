@@ -20,8 +20,8 @@ Call `get_credentials_status`. If `effective.qmetry.configured` is `false`, stop
 ## Inputs
 
 `$1` = Test case key, e.g. `PROJ-TC-5`.
-`$2` = Project ID source (optional) — one of:
-  - Numeric project ID (e.g. `10001`) — use directly
+`$2` = Project ID source (optional):
+  - Numeric project ID — use directly
   - Jira/QMetry project key (e.g. `PROJ`) → match in `qmetry_list_projects` by `key`
   - Jira issue key (e.g. `PROJ-123`) → call `jira_get_issue(fields: ["project"])`, use `fields.project.id`
   - Omitted → extract prefix from `$1` and resolve via `qmetry_list_projects`
@@ -31,23 +31,26 @@ Call `get_credentials_status`. If `effective.qmetry.configured` is `false`, stop
 
 ### 1. Resolve project_id
 
-If `$2` not provided: extract the prefix from `$1` (e.g. `PROJ` from `PROJ-TC-5`). Call `qmetry_list_projects` and find the entry where `key == "<prefix>"`. Use its `id`.
+If `$2` not provided: extract prefix from `$1` (e.g. `PROJ` from `PROJ-TC-5`). Call `qmetry_list_projects`, match by `key`, use `id`.
 
-If `$2` is a Jira issue key: call `jira_get_issue(issue_key: $2, fields: ["project"])` → `fields.project.id`.
+If `$2` is a Jira issue key: call `jira_get_issue(issue_key: $2, fields: ["project"], include_qmetry: false)` → `fields.project.id`.
 
-If `$2` is a Jira/QMetry project key: call `qmetry_list_projects`, match by `key`, use `id`.
-
-If `$2` is a numeric ID: use it directly.
+If `$2` is a project key or numeric ID: match in `qmetry_list_projects` or use directly.
 
 ### 2. Load the test case
 
 Call `qmetry_get_test_case(project_id: <resolved>, key: $1)`.
 
+The response includes a `jira` field automatically:
+- `jira.project_key`, `jira.project_name` — Jira project context for this test case
+
 ### 3. Render
 
 ```
 PROJ-TC-5  To Do  Medium
-Login flow — verify credentials are validated
+{summary}
+
+Jira project: {jira.project_name} ({jira.project_key})
 
 Description: {first 5 lines}
 

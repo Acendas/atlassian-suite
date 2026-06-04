@@ -6,55 +6,35 @@
     "value": "jira_get_issue"
   },
   {
-    "name": "allows_get_credentials_status",
-    "type": "frontmatter_contains",
+    "name": "server_provides_qmetry_no_extra_tools_needed",
+    "type": "frontmatter_not_contains",
     "field": "allowed-tools",
-    "value": "get_credentials_status"
+    "value": "qmetry_search_test_cycles",
+    "_comment": "Server-side integration means the skill does not need to call QMetry tools directly"
   },
   {
-    "name": "allows_jira_get_issue_property_keys",
-    "type": "frontmatter_contains",
+    "name": "server_provides_qmetry_no_property_lookup_needed",
+    "type": "frontmatter_not_contains",
     "field": "allowed-tools",
-    "value": "jira_get_issue_property_keys"
+    "value": "jira_get_issue_property_keys",
+    "_comment": "Server handles entity property check internally"
   },
   {
-    "name": "allows_jira_get_issue_property",
-    "type": "frontmatter_contains",
-    "field": "allowed-tools",
-    "value": "jira_get_issue_property"
-  },
-  {
-    "name": "allows_qmetry_search_test_cycles",
-    "type": "frontmatter_contains",
-    "field": "allowed-tools",
-    "value": "qmetry_search_test_cycles"
-  },
-  {
-    "name": "checks_qmetry_configured",
+    "name": "renders_qmetry_from_response_field",
     "type": "contains",
-    "pattern": "qmetry\\.configured"
+    "pattern": "qmetry",
+    "_comment": "Skill must render the qmetry field that comes back in the jira_get_issue response"
   },
   {
-    "name": "checks_testcycle_panel_property",
+    "name": "handles_null_qmetry_gracefully",
     "type": "contains",
-    "pattern": "testcycle-execution-panel"
+    "pattern": "null|omit|silently",
+    "_comment": "When qmetry is null (not configured), skip the section without error"
   },
   {
-    "name": "uses_fields_project_id_for_qmetry",
+    "name": "shows_linked_cycle_count",
     "type": "contains",
-    "pattern": "fields\\.project\\.id"
-  },
-  {
-    "name": "documents_project_id_identity",
-    "type": "contains",
-    "pattern": "Jira project ID.*QMetry project ID|QMetry project ID.*Jira project ID",
-    "dotall": false
-  },
-  {
-    "name": "skips_qmetry_when_not_configured",
-    "type": "contains",
-    "pattern": "skip QMetry|skip.*entirely|false.*skip",
-    "_comment": "Skill must not error when QMetry is not configured"
+    "pattern": "linked_cycle_count|linked.*cycle"
   },
   {
     "name": "confirms_before_write",
@@ -63,17 +43,20 @@
   },
   {
     "name": "supports_comment_action",
-    "type": "contains",
-    "pattern": "jira_add_comment"
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_add_comment"
   },
   {
     "name": "supports_transition_action",
-    "type": "contains",
-    "pattern": "jira_transition_issue"
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_transition_issue"
   },
   {
     "name": "supports_worklog_action",
-    "type": "contains",
-    "pattern": "jira_add_worklog"
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_add_worklog"
   }
 ]
