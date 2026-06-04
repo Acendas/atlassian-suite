@@ -50,9 +50,10 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
   server.addTool({
     name: "qmetry_get_test_case",
     description:
-      "Get full details for a single test case by key, including steps, status, priority, description, and linked items. " +
-      "Automatically includes Jira project context when Jira is configured — " +
-      "QMetry project ID equals Jira project ID.",
+      "Get full details for a single test case by key, including the step grid (action/expected-result rows), " +
+      "status, priority, description, and linked items. " +
+      "Steps are fetched automatically from the testcases/{id}/versions/{v}/teststeps sub-resource. " +
+      "Automatically includes Jira project context when Jira is configured.",
     parameters: z.object({
       project_id: z.number().int().describe("Numeric QMetry project ID (equals the Jira project ID)"),
       key: z.string().describe("Test case key, e.g. PROJ-TC-5"),
@@ -64,6 +65,23 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
           { filter: { projectId: args.project_id, key: args.key } },
           { fields: "summary,status,priority,description,labels,version" },
         );
+
+        // Fetch test steps from the separate sub-resource.
+        // Steps live at: GET /testcases/{id}/versions/{versionNo}/teststeps
+        const tc = result?.data?.[0] ?? result;
+        const tcId = tc?.id;
+        const versionNo = tc?.version?.versionNo ?? 1;
+        if (tcId) {
+          try {
+            const steps = await qmetryClient().get<unknown>(
+              `/testcases/${encodeURIComponent(tcId)}/versions/${versionNo}/teststeps`,
+            );
+            tc.steps = steps;
+          } catch {
+            // Steps fetch is best-effort — never block the main response.
+            tc.steps = null;
+          }
+        }
 
         // Jira context: QMetry project ID = Jira project ID — fetch project details.
         if (jiraIsConfigured()) {
@@ -85,6 +103,24 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
 
         return result;
       }),
+  });
+
+  server.addTool({
+    name: "qmetry_get_test_case_steps",
+    description:
+      "Get the step grid (action + expected-result rows) for a specific test case version. " +
+      "Steps are stored on a separate QMetry sub-resource and are not returned by qmetry_search_test_cases. " +
+      "Use qmetry_get_test_case instead for a combined view; call this directly when you already have the internal test case ID and version number.",
+    parameters: z.object({
+      test_case_id: z.string().describe("Internal QMetry test case ID (opaque string from search results, e.g. the 'id' field — not the human-readable key)"),
+      version: z.number().int().min(1).default(1).describe("Version number. Use 1 for the latest/only version unless you need a specific historical version."),
+    }),
+    execute: async (args) =>
+      safeQMetry(() =>
+        qmetryClient().get<unknown>(
+          `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
+        ),
+      ),
   });
 
   server.addTool({

@@ -165551,7 +165551,7 @@ function registerQMetryTestCaseTools(server2, opts) {
   });
   server2.addTool({
     name: "qmetry_get_test_case",
-    description: "Get full details for a single test case by key, including steps, status, priority, description, and linked items. Automatically includes Jira project context when Jira is configured \u2014 QMetry project ID equals Jira project ID.",
+    description: "Get full details for a single test case by key, including the step grid (action/expected-result rows), status, priority, description, and linked items. Steps are fetched automatically from the testcases/{id}/versions/{v}/teststeps sub-resource. Automatically includes Jira project context when Jira is configured.",
     parameters: external_exports4.object({
       project_id: external_exports4.number().int().describe("Numeric QMetry project ID (equals the Jira project ID)"),
       key: external_exports4.string().describe("Test case key, e.g. PROJ-TC-5")
@@ -165562,6 +165562,19 @@ function registerQMetryTestCaseTools(server2, opts) {
         { filter: { projectId: args.project_id, key: args.key } },
         { fields: "summary,status,priority,description,labels,version" }
       );
+      const tc = result?.data?.[0] ?? result;
+      const tcId = tc?.id;
+      const versionNo = tc?.version?.versionNo ?? 1;
+      if (tcId) {
+        try {
+          const steps = await qmetryClient().get(
+            `/testcases/${encodeURIComponent(tcId)}/versions/${versionNo}/teststeps`
+          );
+          tc.steps = steps;
+        } catch {
+          tc.steps = null;
+        }
+      }
       if (jiraIsConfigured()) {
         try {
           const project = await jiraClient().projects.getProject({
@@ -165579,6 +165592,19 @@ function registerQMetryTestCaseTools(server2, opts) {
       }
       return result;
     })
+  });
+  server2.addTool({
+    name: "qmetry_get_test_case_steps",
+    description: "Get the step grid (action + expected-result rows) for a specific test case version. Steps are stored on a separate QMetry sub-resource and are not returned by qmetry_search_test_cases. Use qmetry_get_test_case instead for a combined view; call this directly when you already have the internal test case ID and version number.",
+    parameters: external_exports4.object({
+      test_case_id: external_exports4.string().describe("Internal QMetry test case ID (opaque string from search results, e.g. the 'id' field \u2014 not the human-readable key)"),
+      version: external_exports4.number().int().min(1).default(1).describe("Version number. Use 1 for the latest/only version unless you need a specific historical version.")
+    }),
+    execute: async (args) => safeQMetry(
+      () => qmetryClient().get(
+        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`
+      )
+    )
   });
   server2.addTool({
     name: "qmetry_create_test_case",
