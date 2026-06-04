@@ -174,4 +174,142 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
         return qmetryClient().put<unknown>(`/testcases/${encodeURIComponent(args.test_case_id)}`, body);
       }),
   });
+
+  // ---------- Test case versions ----------
+
+  server.addTool({
+    name: "qmetry_list_test_case_versions",
+    description: "List all versions of a test case. QMetry test cases are versioned; use this to find version numbers before fetching steps for a specific version.",
+    parameters: z.object({
+      test_case_id: z.string().describe("Internal QMetry test case ID (opaque string)"),
+    }),
+    execute: async (args) =>
+      safeQMetry(() =>
+        qmetryClient().get<unknown>(`/testcases/${encodeURIComponent(args.test_case_id)}/versions`),
+      ),
+  });
+
+  // ---------- Test step CRUD ----------
+
+  server.addTool({
+    name: "qmetry_create_test_step",
+    description: "Add a new step to a test case version. Steps have an action (what to do) and an expected result.",
+    parameters: z.object({
+      test_case_id: z.string().describe("Internal QMetry test case ID"),
+      version: z.number().int().min(1).default(1),
+      step: z.string().describe("Step action — what the tester should do"),
+      expected_result: z.string().optional().describe("Expected outcome for this step"),
+      test_data: z.string().optional().describe("Optional test data or preconditions for this step"),
+    }),
+    execute: async (args) =>
+      safeQMetry(() => {
+        ensureWritable(opts.readOnly);
+        const body: Record<string, unknown> = { step: args.step };
+        if (args.expected_result) body.expectedResult = args.expected_result;
+        if (args.test_data) body.testData = args.test_data;
+        return qmetryClient().post<unknown>(
+          `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
+          body,
+        );
+      }),
+  });
+
+  server.addTool({
+    name: "qmetry_update_test_step",
+    description: "Update an existing test step's action, expected result, or test data.",
+    parameters: z.object({
+      test_case_id: z.string().describe("Internal QMetry test case ID"),
+      version: z.number().int().min(1).default(1),
+      step_id: z.string().describe("Test step ID from qmetry_get_test_case_steps results"),
+      step: z.string().optional().describe("Updated step action"),
+      expected_result: z.string().optional(),
+      test_data: z.string().optional(),
+    }),
+    execute: async (args) =>
+      safeQMetry(() => {
+        ensureWritable(opts.readOnly);
+        const body: Record<string, unknown> = {};
+        if (args.step) body.step = args.step;
+        if (args.expected_result !== undefined) body.expectedResult = args.expected_result;
+        if (args.test_data !== undefined) body.testData = args.test_data;
+        return qmetryClient().put<unknown>(
+          `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps/${encodeURIComponent(args.step_id)}`,
+          body,
+        );
+      }),
+  });
+
+  server.addTool({
+    name: "qmetry_delete_test_step",
+    description: "Delete a test step from a test case version.",
+    parameters: z.object({
+      test_case_id: z.string().describe("Internal QMetry test case ID"),
+      version: z.number().int().min(1).default(1),
+      step_id: z.string().describe("Test step ID from qmetry_get_test_case_steps results"),
+    }),
+    execute: async (args) =>
+      safeQMetry(() => {
+        ensureWritable(opts.readOnly);
+        return qmetryClient().delete<unknown>(
+          `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps/${encodeURIComponent(args.step_id)}`,
+        );
+      }),
+  });
+
+  // ---------- Requirements / Jira traceability ----------
+
+  server.addTool({
+    name: "qmetry_get_test_case_requirements",
+    description:
+      "Get the Jira issues (requirements) linked to a test case for traceability. " +
+      "This is the authoritative QMetry API for the 'Directly Linked to Stories' relationship — " +
+      "shows which Jira issues this test case covers.",
+    parameters: z.object({
+      test_case_id: z.string().describe("Internal QMetry test case ID"),
+      start_at: z.number().int().min(0).default(0),
+      max_results: z.number().int().min(1).max(100).default(50),
+    }),
+    execute: async (args) =>
+      safeQMetry(() =>
+        qmetryClient().get<unknown>(
+          `/testcases/${encodeURIComponent(args.test_case_id)}/requirements`,
+          { startAt: args.start_at, maxResults: args.max_results },
+        ),
+      ),
+  });
+
+  server.addTool({
+    name: "qmetry_link_requirement",
+    description:
+      "Link a test case to a Jira issue (requirement) for traceability. " +
+      "This creates the 'Directly Linked to Stories' relationship visible in Jira's QMetry panel.",
+    parameters: z.object({
+      test_case_id: z.string().describe("Internal QMetry test case ID"),
+      jira_issue_key: z.string().describe("Jira issue key, e.g. PROJ-123"),
+    }),
+    execute: async (args) =>
+      safeQMetry(() => {
+        ensureWritable(opts.readOnly);
+        return qmetryClient().post<unknown>(
+          `/testcases/${encodeURIComponent(args.test_case_id)}/requirements`,
+          { issueKey: args.jira_issue_key },
+        );
+      }),
+  });
+
+  server.addTool({
+    name: "qmetry_unlink_requirement",
+    description: "Remove the traceability link between a test case and a Jira issue.",
+    parameters: z.object({
+      test_case_id: z.string().describe("Internal QMetry test case ID"),
+      requirement_id: z.string().describe("Requirement link ID from qmetry_get_test_case_requirements"),
+    }),
+    execute: async (args) =>
+      safeQMetry(() => {
+        ensureWritable(opts.readOnly);
+        return qmetryClient().delete<unknown>(
+          `/testcases/${encodeURIComponent(args.test_case_id)}/requirements/${encodeURIComponent(args.requirement_id)}`,
+        );
+      }),
+  });
 }

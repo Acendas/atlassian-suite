@@ -36,6 +36,20 @@
     "value": "qmetry_get_test_cycle"
   },
   {
+    "name": "allows_get_test_cycle_test_cases",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "qmetry_get_test_cycle_test_cases",
+    "_comment": "Tier 1: show test cases within a cycle"
+  },
+  {
+    "name": "allows_search_requirements",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "qmetry_search_requirements",
+    "_comment": "Tier 1: requirements traceability — which Jira issues have coverage"
+  },
+  {
     "name": "has_preflight_check",
     "type": "contains",
     "pattern": "qmetry\\.configured"
@@ -62,20 +76,19 @@
     "pattern": "testcycle-execution-panel"
   },
   {
-    "name": "extracts_project_id_from_jira_issue",
+    "name": "offers_test_cases_in_cycle_drill_down",
     "type": "contains",
-    "pattern": "jira_get_issue"
+    "pattern": "qmetry_get_test_cycle_test_cases"
   },
   {
-    "name": "searches_test_cycles",
+    "name": "offers_requirements_traceability_drill_down",
     "type": "contains",
-    "pattern": "qmetry_search_test_cycles"
+    "pattern": "qmetry_search_requirements|traceability"
   },
   {
     "name": "no_real_customer_names",
     "type": "not_contains",
-    "pattern": "(?:NYW|ventek|venVUE|Caracal|NYWATERWAY|AllClients|NYWY)",
-    "_comment": "Skill is public — no real customer or product names allowed"
+    "pattern": "(?:NYW|ventek|venVUE|Caracal|NYWATERWAY|AllClients|NYWY)"
   },
   {
     "name": "no_real_project_ids",

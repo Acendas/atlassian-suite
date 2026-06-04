@@ -18,6 +18,13 @@
     "value": "qmetry_get_test_case"
   },
   {
+    "name": "allows_get_requirements",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "qmetry_get_test_case_requirements",
+    "_comment": "Skill must surface linked Jira requirements for traceability"
+  },
+  {
     "name": "allows_search_executions",
     "type": "frontmatter_contains",
     "field": "allowed-tools",
@@ -48,8 +55,7 @@
   {
     "name": "auto_resolves_project_id_from_prefix",
     "type": "contains",
-    "pattern": "prefix",
-    "_comment": "Skill must explain extracting project key from test case key prefix"
+    "pattern": "prefix"
   },
   {
     "name": "documents_project_id_identity",
@@ -58,10 +64,15 @@
     "dotall": false
   },
   {
+    "name": "shows_linked_requirements",
+    "type": "contains",
+    "pattern": "requirements?|Covers|traceability",
+    "_comment": "Skill must show linked Jira issues for traceability"
+  },
+  {
     "name": "confirms_before_write",
     "type": "contains",
-    "pattern": "(?:confirm|Confirm)(?:.*before.*writ|.*writ.*confirm)",
-    "dotall": false
+    "pattern": "(?i)confirm before any write"
   },
   {
     "name": "supports_update_execution_action",
@@ -76,8 +87,7 @@
   {
     "name": "no_real_customer_names",
     "type": "not_contains",
-    "pattern": "(?:NYW|ventek|venVUE|Caracal|NYWATERWAY|AllClients)",
-    "_comment": "Skill is public — no real customer or product names allowed"
+    "pattern": "(?:NYW|ventek|venVUE|Caracal|NYWATERWAY|AllClients)"
   },
   {
     "name": "no_real_project_ids",

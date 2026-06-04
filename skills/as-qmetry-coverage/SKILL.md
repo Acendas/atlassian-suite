@@ -2,7 +2,7 @@
 name: as-qmetry-coverage
 description: Show QMetry test coverage for a Jira issue.
 argument-hint: "<jira-issue-key>"
-allowed-tools: mcp__acendas-atlassian__get_credentials_status, mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__jira_get_issue_property_keys, mcp__acendas-atlassian__jira_get_issue_property, mcp__acendas-atlassian__qmetry_search_test_cycles, mcp__acendas-atlassian__qmetry_get_test_cycle, mcp__acendas-atlassian__qmetry_search_test_cases
+allowed-tools: mcp__acendas-atlassian__get_credentials_status, mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__jira_get_issue_property_keys, mcp__acendas-atlassian__jira_get_issue_property, mcp__acendas-atlassian__qmetry_search_test_cycles, mcp__acendas-atlassian__qmetry_get_test_cycle, mcp__acendas-atlassian__qmetry_get_test_cycle_test_cases, mcp__acendas-atlassian__qmetry_search_requirements, mcp__acendas-atlassian__qmetry_search_test_cases
 ---
 
 # QMetry Test Coverage for a Jira Issue
@@ -59,6 +59,7 @@ If linked count from step 2 is known, note "X cycle(s) directly linked to this s
 
 ### 5. Offer drill-downs
 
-- "View test cycle details" → call `qmetry_get_test_cycle(test_cycle_id: <id>)` for the selected cycle
+- "View test cases in a cycle" → call `qmetry_get_test_cycle_test_cases(test_cycle_id: <id>)` — shows each test case's execution status within the cycle
+- "Show traceability — which Jira stories have test coverage" → call `qmetry_search_requirements(project_id: <id>, jira_issue_key: $1)` to find coverage for the specific issue
 - "Search test cases in this project" → call `qmetry_search_test_cases(project_id: <id>)`
 - "View a specific test case" → `/atlassian-suite:as-qmetry-testcase <TC-key>`

@@ -165654,10 +165654,123 @@ function registerQMetryTestCaseTools(server2, opts) {
       return qmetryClient().put(`/testcases/${encodeURIComponent(args.test_case_id)}`, body);
     })
   });
+  server2.addTool({
+    name: "qmetry_list_test_case_versions",
+    description: "List all versions of a test case. QMetry test cases are versioned; use this to find version numbers before fetching steps for a specific version.",
+    parameters: external_exports4.object({
+      test_case_id: external_exports4.string().describe("Internal QMetry test case ID (opaque string)")
+    }),
+    execute: async (args) => safeQMetry(
+      () => qmetryClient().get(`/testcases/${encodeURIComponent(args.test_case_id)}/versions`)
+    )
+  });
+  server2.addTool({
+    name: "qmetry_create_test_step",
+    description: "Add a new step to a test case version. Steps have an action (what to do) and an expected result.",
+    parameters: external_exports4.object({
+      test_case_id: external_exports4.string().describe("Internal QMetry test case ID"),
+      version: external_exports4.number().int().min(1).default(1),
+      step: external_exports4.string().describe("Step action \u2014 what the tester should do"),
+      expected_result: external_exports4.string().optional().describe("Expected outcome for this step"),
+      test_data: external_exports4.string().optional().describe("Optional test data or preconditions for this step")
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      const body = { step: args.step };
+      if (args.expected_result) body.expectedResult = args.expected_result;
+      if (args.test_data) body.testData = args.test_data;
+      return qmetryClient().post(
+        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
+        body
+      );
+    })
+  });
+  server2.addTool({
+    name: "qmetry_update_test_step",
+    description: "Update an existing test step's action, expected result, or test data.",
+    parameters: external_exports4.object({
+      test_case_id: external_exports4.string().describe("Internal QMetry test case ID"),
+      version: external_exports4.number().int().min(1).default(1),
+      step_id: external_exports4.string().describe("Test step ID from qmetry_get_test_case_steps results"),
+      step: external_exports4.string().optional().describe("Updated step action"),
+      expected_result: external_exports4.string().optional(),
+      test_data: external_exports4.string().optional()
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      const body = {};
+      if (args.step) body.step = args.step;
+      if (args.expected_result !== void 0) body.expectedResult = args.expected_result;
+      if (args.test_data !== void 0) body.testData = args.test_data;
+      return qmetryClient().put(
+        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps/${encodeURIComponent(args.step_id)}`,
+        body
+      );
+    })
+  });
+  server2.addTool({
+    name: "qmetry_delete_test_step",
+    description: "Delete a test step from a test case version.",
+    parameters: external_exports4.object({
+      test_case_id: external_exports4.string().describe("Internal QMetry test case ID"),
+      version: external_exports4.number().int().min(1).default(1),
+      step_id: external_exports4.string().describe("Test step ID from qmetry_get_test_case_steps results")
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      return qmetryClient().delete(
+        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps/${encodeURIComponent(args.step_id)}`
+      );
+    })
+  });
+  server2.addTool({
+    name: "qmetry_get_test_case_requirements",
+    description: "Get the Jira issues (requirements) linked to a test case for traceability. This is the authoritative QMetry API for the 'Directly Linked to Stories' relationship \u2014 shows which Jira issues this test case covers.",
+    parameters: external_exports4.object({
+      test_case_id: external_exports4.string().describe("Internal QMetry test case ID"),
+      start_at: external_exports4.number().int().min(0).default(0),
+      max_results: external_exports4.number().int().min(1).max(100).default(50)
+    }),
+    execute: async (args) => safeQMetry(
+      () => qmetryClient().get(
+        `/testcases/${encodeURIComponent(args.test_case_id)}/requirements`,
+        { startAt: args.start_at, maxResults: args.max_results }
+      )
+    )
+  });
+  server2.addTool({
+    name: "qmetry_link_requirement",
+    description: "Link a test case to a Jira issue (requirement) for traceability. This creates the 'Directly Linked to Stories' relationship visible in Jira's QMetry panel.",
+    parameters: external_exports4.object({
+      test_case_id: external_exports4.string().describe("Internal QMetry test case ID"),
+      jira_issue_key: external_exports4.string().describe("Jira issue key, e.g. PROJ-123")
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      return qmetryClient().post(
+        `/testcases/${encodeURIComponent(args.test_case_id)}/requirements`,
+        { issueKey: args.jira_issue_key }
+      );
+    })
+  });
+  server2.addTool({
+    name: "qmetry_unlink_requirement",
+    description: "Remove the traceability link between a test case and a Jira issue.",
+    parameters: external_exports4.object({
+      test_case_id: external_exports4.string().describe("Internal QMetry test case ID"),
+      requirement_id: external_exports4.string().describe("Requirement link ID from qmetry_get_test_case_requirements")
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      return qmetryClient().delete(
+        `/testcases/${encodeURIComponent(args.test_case_id)}/requirements/${encodeURIComponent(args.requirement_id)}`
+      );
+    })
+  });
 }
 
 // src/qmetry/testcycles.ts
-function registerQMetryTestCycleTools(server2) {
+function registerQMetryTestCycleTools(server2, opts) {
   server2.addTool({
     name: "qmetry_search_test_cycles",
     description: "Search test cycles in a QMetry project. Returns cycle id, key, name, status, and dates.",
@@ -165703,6 +165816,85 @@ function registerQMetryTestCycleTools(server2) {
         }
       }
       return cycle;
+    })
+  });
+  server2.addTool({
+    name: "qmetry_create_test_cycle",
+    description: "Create a new test cycle in a QMetry project (e.g. for a new release regression run).",
+    parameters: external_exports4.object({
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      summary: external_exports4.string().describe("Test cycle name / summary"),
+      description: external_exports4.string().optional(),
+      status: external_exports4.string().optional().describe("Initial status, e.g. 'Not Started'"),
+      start_date: external_exports4.string().optional().describe("ISO 8601 date, e.g. 2026-07-01"),
+      end_date: external_exports4.string().optional().describe("ISO 8601 date")
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      const body = {
+        projectId: args.project_id,
+        summary: args.summary
+      };
+      if (args.description) body.description = args.description;
+      if (args.status) body.status = { name: args.status };
+      if (args.start_date) body.startDate = args.start_date;
+      if (args.end_date) body.endDate = args.end_date;
+      return qmetryClient().post("/testcycles", body);
+    })
+  });
+  server2.addTool({
+    name: "qmetry_update_test_cycle",
+    description: "Update an existing test cycle's summary, status, or dates.",
+    parameters: external_exports4.object({
+      test_cycle_id: external_exports4.string().describe("Test cycle ID from search results"),
+      summary: external_exports4.string().optional(),
+      description: external_exports4.string().optional(),
+      status: external_exports4.string().optional(),
+      start_date: external_exports4.string().optional().describe("ISO 8601 date"),
+      end_date: external_exports4.string().optional().describe("ISO 8601 date")
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      const body = {};
+      if (args.summary) body.summary = args.summary;
+      if (args.description) body.description = args.description;
+      if (args.status) body.status = { name: args.status };
+      if (args.start_date) body.startDate = args.start_date;
+      if (args.end_date) body.endDate = args.end_date;
+      return qmetryClient().put(
+        `/testcycles/${encodeURIComponent(args.test_cycle_id)}`,
+        body
+      );
+    })
+  });
+  server2.addTool({
+    name: "qmetry_get_test_cycle_test_cases",
+    description: "List the test cases assigned to a specific test cycle, including their execution status within that cycle.",
+    parameters: external_exports4.object({
+      test_cycle_id: external_exports4.string().describe("Test cycle ID"),
+      start_at: external_exports4.number().int().min(0).default(0),
+      max_results: external_exports4.number().int().min(1).max(100).default(50)
+    }),
+    execute: async (args) => safeQMetry(
+      () => qmetryClient().get(
+        `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases`,
+        { startAt: args.start_at, maxResults: args.max_results }
+      )
+    )
+  });
+  server2.addTool({
+    name: "qmetry_add_test_cases_to_cycle",
+    description: "Add one or more test cases to a test cycle by their IDs.",
+    parameters: external_exports4.object({
+      test_cycle_id: external_exports4.string().describe("Test cycle ID"),
+      test_case_ids: external_exports4.array(external_exports4.string()).min(1).describe("Internal QMetry test case IDs (opaque id strings, not keys)")
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      return qmetryClient().post(
+        `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases`,
+        { testcases: args.test_case_ids.map((id) => ({ id })) }
+      );
     })
   });
 }
@@ -165769,6 +165961,16 @@ function registerQMetryExecutionTools(server2, opts) {
     })
   });
   server2.addTool({
+    name: "qmetry_get_execution",
+    description: "Get full details of a single test case execution result by its ID, including status, comment, executed-by, and timestamps.",
+    parameters: external_exports4.object({
+      execution_id: external_exports4.string().describe("Execution / test-case-run ID from qmetry_search_executions")
+    }),
+    execute: async (args) => safeQMetry(
+      () => qmetryClient().get(`/testcaseruns/${encodeURIComponent(args.execution_id)}`)
+    )
+  });
+  server2.addTool({
     name: "qmetry_update_execution",
     description: "Update the execution status of a test case run (pass, fail, blocked, etc.).",
     parameters: external_exports4.object({
@@ -165790,13 +165992,78 @@ function registerQMetryExecutionTools(server2, opts) {
   });
 }
 
+// src/qmetry/requirements.ts
+function registerQMetryRequirementTools(server2) {
+  server2.addTool({
+    name: "qmetry_search_requirements",
+    description: "Search QMetry requirements (Jira issue traceability links) across a project. Returns Jira issues that have test cases linked to them. Use this to find which stories/tasks have test coverage and which don't.",
+    parameters: external_exports4.object({
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      search_text: external_exports4.string().optional().describe("Free-text search on requirement summary"),
+      jira_issue_key: external_exports4.string().optional().describe("Filter by a specific Jira issue key, e.g. PROJ-123"),
+      start_at: external_exports4.number().int().min(0).default(0),
+      max_results: external_exports4.number().int().min(1).max(100).default(50)
+    }),
+    execute: async (args) => safeQMetry(() => {
+      const filter2 = { projectId: args.project_id };
+      if (args.search_text) filter2.searchText = args.search_text;
+      if (args.jira_issue_key) filter2.issueKey = args.jira_issue_key;
+      return qmetryClient().post(
+        "/requirements/search",
+        { filter: filter2 },
+        { startAt: args.start_at, maxResults: args.max_results }
+      );
+    })
+  });
+}
+
+// src/qmetry/folders.ts
+function registerQMetryFolderTools(server2, opts) {
+  server2.addTool({
+    name: "qmetry_search_folders",
+    description: "Search test case folders in a QMetry project. Folders organise test cases into suites \u2014 use folder IDs when filtering test case searches.",
+    parameters: external_exports4.object({
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      search_text: external_exports4.string().optional().describe("Free-text search on folder name"),
+      start_at: external_exports4.number().int().min(0).default(0),
+      max_results: external_exports4.number().int().min(1).max(100).default(50)
+    }),
+    execute: async (args) => safeQMetry(() => {
+      const filter2 = {};
+      if (args.search_text) filter2.searchText = args.search_text;
+      return qmetryClient().post(
+        `/projects/${args.project_id}/folders/search`,
+        { filter: filter2 },
+        { startAt: args.start_at, maxResults: args.max_results }
+      );
+    })
+  });
+  server2.addTool({
+    name: "qmetry_create_folder",
+    description: "Create a new test case folder in a QMetry project for organising test cases.",
+    parameters: external_exports4.object({
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      name: external_exports4.string().describe("Folder name"),
+      parent_id: external_exports4.number().int().optional().describe("Parent folder ID for nesting. Omit for a top-level folder.")
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      const body = { name: args.name };
+      if (args.parent_id) body.parentId = args.parent_id;
+      return qmetryClient().post(`/projects/${args.project_id}/folders`, body);
+    })
+  });
+}
+
 // src/qmetry/index.ts
 function registerQMetryTools(server2, opts) {
   registerQMetryProjectTools(server2);
   registerQMetryTestCaseTools(server2, opts);
-  registerQMetryTestCycleTools(server2);
+  registerQMetryTestCycleTools(server2, opts);
   registerQMetryTestPlanTools(server2);
   registerQMetryExecutionTools(server2, opts);
+  registerQMetryRequirementTools(server2);
+  registerQMetryFolderTools(server2, opts);
 }
 
 // src/common/configTools.ts

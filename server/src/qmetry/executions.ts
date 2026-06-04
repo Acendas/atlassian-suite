@@ -33,6 +33,18 @@ export function registerQMetryExecutionTools(server: FastMCP, opts: { readOnly: 
   });
 
   server.addTool({
+    name: "qmetry_get_execution",
+    description: "Get full details of a single test case execution result by its ID, including status, comment, executed-by, and timestamps.",
+    parameters: z.object({
+      execution_id: z.string().describe("Execution / test-case-run ID from qmetry_search_executions"),
+    }),
+    execute: async (args) =>
+      safeQMetry(() =>
+        qmetryClient().get<unknown>(`/testcaseruns/${encodeURIComponent(args.execution_id)}`),
+      ),
+  });
+
+  server.addTool({
     name: "qmetry_update_execution",
     description: "Update the execution status of a test case run (pass, fail, blocked, etc.).",
     parameters: z.object({

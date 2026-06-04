@@ -2,7 +2,7 @@
 name: as-qmetry-testcase
 description: View or update a QMetry test case.
 argument-hint: "<test-case-key> [project-id|jira-key] [action: show|update-execution]"
-allowed-tools: mcp__acendas-atlassian__get_credentials_status, mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__qmetry_list_projects, mcp__acendas-atlassian__qmetry_get_test_case, mcp__acendas-atlassian__qmetry_search_executions, mcp__acendas-atlassian__qmetry_update_execution
+allowed-tools: mcp__acendas-atlassian__get_credentials_status, mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__qmetry_list_projects, mcp__acendas-atlassian__qmetry_get_test_case, mcp__acendas-atlassian__qmetry_get_test_case_requirements, mcp__acendas-atlassian__qmetry_search_executions, mcp__acendas-atlassian__qmetry_update_execution
 ---
 
 # View / Update a QMetry Test Case
@@ -61,7 +61,17 @@ Steps:
 Labels: {labels}
 ```
 
-### 4. Branch on action
+### 4. Show linked Jira requirements
+
+If the response includes a `jira` field, show the project context. Then call `qmetry_get_test_case_requirements(test_case_id: <tc.id>)` to list the Jira issues this test case covers:
+
+```
+Covers: PROJ-123, PROJ-456
+```
+
+If no requirements are linked, note "No Jira issues linked for traceability."
+
+### 5. Branch on action
 
 - `show` → done.
 - `update-execution` → call `qmetry_search_executions(project_id: <id>, test_case_key: $1)`. Show latest cycle + current status. Ask for new status (PASS / FAIL / BLOCKED / NOT RUN / IN PROGRESS) and optional comment. Confirm before writing. Call `qmetry_update_execution`.
