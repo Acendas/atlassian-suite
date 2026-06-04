@@ -162955,6 +162955,30 @@ function registerIssueTools(server2, opts) {
     })
   });
   server2.addTool({
+    name: "jira_get_issue_property_keys",
+    description: "List all entity property keys stored on an issue. Connect apps (e.g. QMetry) store data here \u2014 invisible to jira_get_issue. Use this first to discover what keys exist, then fetch values with jira_get_issue_property.",
+    parameters: external_exports4.object({ issue_key: external_exports4.string() }),
+    execute: async (args) => safeJira(
+      () => jiraClient().issueProperties.getIssuePropertyKeys({
+        issueIdOrKey: args.issue_key
+      })
+    )
+  });
+  server2.addTool({
+    name: "jira_get_issue_property",
+    description: "Get the value of a specific entity property on an issue. Use jira_get_issue_property_keys first to find available keys. QMetry stores test cycle links under a key like 'com.qmetry.*'.",
+    parameters: external_exports4.object({
+      issue_key: external_exports4.string(),
+      property_key: external_exports4.string().describe("Property key from jira_get_issue_property_keys, e.g. 'com.qmetry.testmanagement.issue-testcases'")
+    }),
+    execute: async (args) => safeJira(
+      () => jiraClient().issueProperties.getIssueProperty({
+        issueIdOrKey: args.issue_key,
+        propertyKey: args.property_key
+      })
+    )
+  });
+  server2.addTool({
     name: "jira_batch_get_changelogs",
     description: "Get changelogs for an issue (paginated).",
     parameters: external_exports4.object({

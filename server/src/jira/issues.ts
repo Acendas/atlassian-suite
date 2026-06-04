@@ -553,6 +553,38 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
       }),
   });
 
+  // ---------- Issue entity properties ----------
+  // These are separate from issue fields — Connect apps (e.g. QMetry) store
+  // data here that never appears in jira_get_issue field responses.
+
+  server.addTool({
+    name: "jira_get_issue_property_keys",
+    description: "List all entity property keys stored on an issue. Connect apps (e.g. QMetry) store data here — invisible to jira_get_issue. Use this first to discover what keys exist, then fetch values with jira_get_issue_property.",
+    parameters: z.object({ issue_key: z.string() }),
+    execute: async (args: { issue_key: string }) =>
+      safeJira(() =>
+        jiraClient().issueProperties.getIssuePropertyKeys({
+          issueIdOrKey: args.issue_key,
+        } as never),
+      ),
+  });
+
+  server.addTool({
+    name: "jira_get_issue_property",
+    description: "Get the value of a specific entity property on an issue. Use jira_get_issue_property_keys first to find available keys. QMetry stores test cycle links under a key like 'com.qmetry.*'.",
+    parameters: z.object({
+      issue_key: z.string(),
+      property_key: z.string().describe("Property key from jira_get_issue_property_keys, e.g. 'com.qmetry.testmanagement.issue-testcases'"),
+    }),
+    execute: async (args: { issue_key: string; property_key: string }) =>
+      safeJira(() =>
+        jiraClient().issueProperties.getIssueProperty({
+          issueIdOrKey: args.issue_key,
+          propertyKey: args.property_key,
+        } as never),
+      ),
+  });
+
   // ---------- Changelogs ----------
 
   server.addTool({
