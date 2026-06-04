@@ -165551,7 +165551,7 @@ function registerQMetryTestCaseTools(server2, opts) {
   });
   server2.addTool({
     name: "qmetry_get_test_case",
-    description: "Get full details for a single test case by key, including the step grid (action/expected-result rows), status, priority, description, and linked items. Steps are fetched automatically from the testcases/{id}/versions/{v}/teststeps sub-resource. Automatically includes Jira project context when Jira is configured.",
+    description: "Get full details for a single test case by key, including the step grid (action/expected-result rows), status, priority, description, and linked items. Steps are fetched automatically from the testcases/{id}/versions/{v}/teststeps/search sub-resource. Automatically includes Jira project context when Jira is configured.",
     parameters: external_exports4.object({
       project_id: external_exports4.number().int().describe("Numeric QMetry project ID (equals the Jira project ID)"),
       key: external_exports4.string().describe("Test case key, e.g. PROJ-TC-5")
@@ -165597,7 +165597,7 @@ function registerQMetryTestCaseTools(server2, opts) {
   });
   server2.addTool({
     name: "qmetry_get_test_case_steps",
-    description: "Get the step grid (action + expected-result rows) for a specific test case version. Steps are stored on a separate QMetry sub-resource and are not returned by qmetry_search_test_cases. Use qmetry_get_test_case instead for a combined view; call this directly when you already have the internal test case ID and version number.",
+    description: "Get the step grid (action + expected-result rows) for a specific test case version. Use qmetry_get_test_case instead for a combined view; call this directly when you already have the internal test case ID and version number.",
     parameters: external_exports4.object({
       test_case_id: external_exports4.string().describe("Internal QMetry test case ID (opaque string from search results, e.g. the 'id' field \u2014 not the human-readable key)"),
       version: external_exports4.number().int().min(1).default(1).describe("Version number. Use 1 for the latest/only version unless you need a specific historical version.")
@@ -165638,9 +165638,10 @@ function registerQMetryTestCaseTools(server2, opts) {
   });
   server2.addTool({
     name: "qmetry_update_test_case",
-    description: "Update fields on an existing test case (status, priority, summary, description).",
+    description: "Update fields on an existing test case version (status, priority, summary, description).",
     parameters: external_exports4.object({
-      test_case_id: external_exports4.string().describe("Internal QMetry test case ID (the opaque id string, not the human-readable key)"),
+      test_case_id: external_exports4.string().describe("Internal QMetry test case ID (opaque string, not the human-readable key)"),
+      version: external_exports4.number().int().min(1).default(1).describe("Version number to update. Use 1 for the latest version."),
       summary: external_exports4.string().optional(),
       status: external_exports4.string().optional().describe("New status name"),
       priority: external_exports4.string().optional().describe("New priority name"),
@@ -165655,17 +165656,24 @@ function registerQMetryTestCaseTools(server2, opts) {
       if (args.priority) body.priority = { name: args.priority };
       if (args.description) body.description = args.description;
       if (args.labels) body.labels = args.labels;
-      return qmetryClient().put(`/testcases/${encodeURIComponent(args.test_case_id)}`, body);
+      return qmetryClient().put(
+        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}`,
+        body
+      );
     })
   });
   server2.addTool({
     name: "qmetry_list_test_case_versions",
-    description: "List all versions of a test case. QMetry test cases are versioned; use this to find version numbers before fetching steps for a specific version.",
+    description: "Get the test case detail by its internal ID, including version information. Use this when you have the opaque ID (not the human-readable key) and need version numbers before fetching steps.",
     parameters: external_exports4.object({
       test_case_id: external_exports4.string().describe("Internal QMetry test case ID (opaque string)")
     }),
     execute: async (args) => safeQMetry(
-      () => qmetryClient().get(`/testcases/${encodeURIComponent(args.test_case_id)}/versions`)
+      () => (
+        // GET /testcases/{id} returns the test case including version info.
+        // Note: POST /testcases/{id}/versions creates a new version — not used here.
+        qmetryClient().get(`/testcases/${encodeURIComponent(args.test_case_id)}`)
+      )
     )
   });
   server2.addTool({
@@ -165691,23 +165699,23 @@ function registerQMetryTestCaseTools(server2, opts) {
   });
   server2.addTool({
     name: "qmetry_update_test_step",
-    description: "Update an existing test step's action, expected result, or test data.",
+    description: "Update an existing test step's action, expected result, or test data. The step ID must come from qmetry_get_test_case_steps results.",
     parameters: external_exports4.object({
       test_case_id: external_exports4.string().describe("Internal QMetry test case ID"),
       version: external_exports4.number().int().min(1).default(1),
-      step_id: external_exports4.string().describe("Test step ID from qmetry_get_test_case_steps results"),
+      step_id: external_exports4.number().int().describe("Numeric test step ID from qmetry_get_test_case_steps results (the 'id' field)"),
       step: external_exports4.string().optional().describe("Updated step action"),
       expected_result: external_exports4.string().optional(),
       test_data: external_exports4.string().optional()
     }),
     execute: async (args) => safeQMetry(() => {
       ensureWritable4(opts.readOnly);
-      const body = {};
+      const body = { id: args.step_id };
       if (args.step) body.step = args.step;
       if (args.expected_result !== void 0) body.expectedResult = args.expected_result;
       if (args.test_data !== void 0) body.testData = args.test_data;
       return qmetryClient().put(
-        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps/${encodeURIComponent(args.step_id)}`,
+        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
         body
       );
     })
@@ -165718,18 +165726,19 @@ function registerQMetryTestCaseTools(server2, opts) {
     parameters: external_exports4.object({
       test_case_id: external_exports4.string().describe("Internal QMetry test case ID"),
       version: external_exports4.number().int().min(1).default(1),
-      step_id: external_exports4.string().describe("Test step ID from qmetry_get_test_case_steps results")
+      step_id: external_exports4.number().int().describe("Numeric test step ID from qmetry_get_test_case_steps results")
     }),
     execute: async (args) => safeQMetry(() => {
       ensureWritable4(opts.readOnly);
       return qmetryClient().delete(
-        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps/${encodeURIComponent(args.step_id)}`
+        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
+        { id: args.step_id }
       );
     })
   });
   server2.addTool({
     name: "qmetry_get_test_case_requirements",
-    description: "Get the Jira issues (requirements) linked to a test case for traceability. This is the authoritative QMetry API for the 'Directly Linked to Stories' relationship \u2014 shows which Jira issues this test case covers.",
+    description: "Get the Jira issues (requirements) linked to a test case for traceability. This is the authoritative QMetry API for the 'Directly Linked to Stories' relationship.",
     parameters: external_exports4.object({
       test_case_id: external_exports4.string().describe("Internal QMetry test case ID"),
       start_at: external_exports4.number().int().min(0).default(0),
@@ -165744,30 +165753,33 @@ function registerQMetryTestCaseTools(server2, opts) {
   });
   server2.addTool({
     name: "qmetry_link_requirement",
-    description: "Link a test case to a Jira issue (requirement) for traceability. This creates the 'Directly Linked to Stories' relationship visible in Jira's QMetry panel.",
+    description: "Link a test case version to a Jira issue (requirement) for traceability. Creates the 'Directly Linked to Stories' relationship visible in Jira's QMetry panel.",
     parameters: external_exports4.object({
       test_case_id: external_exports4.string().describe("Internal QMetry test case ID"),
+      version: external_exports4.number().int().min(1).default(1).describe("Test case version number (default 1)"),
       jira_issue_key: external_exports4.string().describe("Jira issue key, e.g. PROJ-123")
     }),
     execute: async (args) => safeQMetry(() => {
       ensureWritable4(opts.readOnly);
       return qmetryClient().post(
-        `/testcases/${encodeURIComponent(args.test_case_id)}/requirements`,
+        `/testcases/${encodeURIComponent(args.test_case_id)}/version/${args.version}/requirements/link`,
         { issueKey: args.jira_issue_key }
       );
     })
   });
   server2.addTool({
     name: "qmetry_unlink_requirement",
-    description: "Remove the traceability link between a test case and a Jira issue.",
+    description: "Remove the traceability link between a test case version and a Jira issue.",
     parameters: external_exports4.object({
       test_case_id: external_exports4.string().describe("Internal QMetry test case ID"),
-      requirement_id: external_exports4.string().describe("Requirement link ID from qmetry_get_test_case_requirements")
+      version: external_exports4.number().int().min(1).default(1),
+      requirement_id: external_exports4.string().describe("Requirement ID from qmetry_get_test_case_requirements")
     }),
     execute: async (args) => safeQMetry(() => {
       ensureWritable4(opts.readOnly);
-      return qmetryClient().delete(
-        `/testcases/${encodeURIComponent(args.test_case_id)}/requirements/${encodeURIComponent(args.requirement_id)}`
+      return qmetryClient().post(
+        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/requirements/unlink`,
+        { id: args.requirement_id }
       );
     })
   });
@@ -165781,6 +165793,7 @@ function registerQMetryTestCycleTools(server2, opts) {
     parameters: external_exports4.object({
       project_id: external_exports4.number().int().describe("Numeric QMetry project ID (equals the Jira project ID for the same project)"),
       search_text: external_exports4.string().optional().describe("Free-text search on cycle name/summary"),
+      key: external_exports4.string().optional().describe("Exact cycle key, e.g. PROJ-TR-50"),
       status: external_exports4.array(external_exports4.string()).optional(),
       start_at: external_exports4.number().int().min(0).default(0),
       max_results: external_exports4.number().int().min(1).max(100).default(50)
@@ -165788,6 +165801,7 @@ function registerQMetryTestCycleTools(server2, opts) {
     execute: async (args) => safeQMetry(() => {
       const filter2 = { projectId: args.project_id };
       if (args.search_text) filter2.searchText = args.search_text;
+      if (args.key) filter2.key = args.key;
       if (args.status?.length) filter2.status = args.status;
       return qmetryClient().post(
         "/testcycles/search",
@@ -165798,19 +165812,22 @@ function registerQMetryTestCycleTools(server2, opts) {
   });
   server2.addTool({
     name: "qmetry_get_test_cycle",
-    description: "Get details for a single test cycle by its ID, including linked test cases and execution summary. Automatically includes Jira project context when Jira is configured \u2014 QMetry project ID equals Jira project ID.",
+    description: "Get details for a single test cycle by its key (e.g. PROJ-TR-50) and project ID. Uses POST /testcycles/search internally \u2014 there is no GET-by-ID endpoint in the QMetry API. Automatically includes Jira project context when Jira is configured.",
     parameters: external_exports4.object({
-      test_cycle_id: external_exports4.string().describe("Test cycle ID from qmetry_search_test_cycles results")
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      key: external_exports4.string().describe("Test cycle key, e.g. PROJ-TR-50 (from qmetry_search_test_cycles results)")
     }),
     execute: async (args) => safeQMetry(async () => {
-      const cycle = await qmetryClient().post(
-        `/testcycles/${encodeURIComponent(args.test_cycle_id)}`,
-        {}
+      const result = await qmetryClient().post(
+        "/testcycles/search",
+        { filter: { projectId: args.project_id, key: args.key } },
+        { startAt: 0, maxResults: 1 }
       );
-      if (cycle && cycle.projectId && jiraIsConfigured()) {
+      const cycle = result?.data?.[0] ?? result;
+      if (cycle && args.project_id && jiraIsConfigured()) {
         try {
           const project = await jiraClient().projects.getProject({
-            projectIdOrKey: String(cycle.projectId)
+            projectIdOrKey: String(args.project_id)
           });
           cycle.jira = {
             project_key: project.key,
@@ -165851,7 +165868,7 @@ function registerQMetryTestCycleTools(server2, opts) {
     name: "qmetry_update_test_cycle",
     description: "Update an existing test cycle's summary, status, or dates.",
     parameters: external_exports4.object({
-      test_cycle_id: external_exports4.string().describe("Test cycle ID from search results"),
+      test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID (opaque string from search results)"),
       summary: external_exports4.string().optional(),
       description: external_exports4.string().optional(),
       status: external_exports4.string().optional(),
@@ -165876,22 +165893,26 @@ function registerQMetryTestCycleTools(server2, opts) {
     name: "qmetry_get_test_cycle_test_cases",
     description: "List the test cases assigned to a specific test cycle, including their execution status within that cycle.",
     parameters: external_exports4.object({
-      test_cycle_id: external_exports4.string().describe("Test cycle ID"),
+      test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID (opaque string from search results)"),
       start_at: external_exports4.number().int().min(0).default(0),
       max_results: external_exports4.number().int().min(1).max(100).default(50)
     }),
     execute: async (args) => safeQMetry(
-      () => qmetryClient().get(
-        `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases`,
-        { startAt: args.start_at, maxResults: args.max_results }
+      () => (
+        // POST /testcycles/{id}/testcases/search — not GET /testcycles/{id}/testcases
+        qmetryClient().post(
+          `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases/search`,
+          {},
+          { startAt: args.start_at, maxResults: args.max_results }
+        )
       )
     )
   });
   server2.addTool({
     name: "qmetry_add_test_cases_to_cycle",
-    description: "Add one or more test cases to a test cycle by their IDs.",
+    description: "Add one or more test cases to a test cycle by their internal IDs.",
     parameters: external_exports4.object({
-      test_cycle_id: external_exports4.string().describe("Test cycle ID"),
+      test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID"),
       test_case_ids: external_exports4.array(external_exports4.string()).min(1).describe("Internal QMetry test case IDs (opaque id strings, not keys)")
     }),
     execute: async (args) => safeQMetry(() => {
@@ -165912,6 +165933,7 @@ function registerQMetryTestPlanTools(server2) {
     parameters: external_exports4.object({
       project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
       search_text: external_exports4.string().optional(),
+      key: external_exports4.string().optional().describe("Exact test plan key"),
       status: external_exports4.array(external_exports4.string()).optional(),
       start_at: external_exports4.number().int().min(0).default(0),
       max_results: external_exports4.number().int().min(1).max(100).default(50)
@@ -165919,6 +165941,7 @@ function registerQMetryTestPlanTools(server2) {
     execute: async (args) => safeQMetry(() => {
       const filter2 = { projectId: args.project_id };
       if (args.search_text) filter2.searchText = args.search_text;
+      if (args.key) filter2.key = args.key;
       if (args.status?.length) filter2.status = args.status;
       return qmetryClient().post(
         "/testplans/search",
@@ -165929,13 +165952,19 @@ function registerQMetryTestPlanTools(server2) {
   });
   server2.addTool({
     name: "qmetry_get_test_plan",
-    description: "Get details for a single test plan by ID, including linked test cycles.",
+    description: "Get details for a single test plan by its key and project ID, including linked test cycles. Uses POST /testplans/search internally \u2014 there is no GET-by-ID endpoint in the QMetry API.",
     parameters: external_exports4.object({
-      test_plan_id: external_exports4.string().describe("Test plan ID from search results")
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      key: external_exports4.string().describe("Test plan key from search results")
     }),
-    execute: async (args) => safeQMetry(
-      () => qmetryClient().post(`/testplans/${encodeURIComponent(args.test_plan_id)}`, {})
-    )
+    execute: async (args) => safeQMetry(async () => {
+      const result = await qmetryClient().post(
+        "/testplans/search",
+        { filter: { projectId: args.project_id, key: args.key } },
+        { startAt: 0, maxResults: 1 }
+      );
+      return result?.data?.[0] ?? result;
+    })
   });
 }
 
@@ -165944,42 +165973,41 @@ var EXECUTION_STATUSES = ["PASS", "FAIL", "BLOCKED", "NOT RUN", "IN PROGRESS"];
 function registerQMetryExecutionTools(server2, opts) {
   server2.addTool({
     name: "qmetry_search_executions",
-    description: "Search test case executions (runs) within a test cycle. Returns each test case's execution status and last-run details.",
+    description: "List execution results for a QMetry project. Returns test case execution history across all cycles in the project. Uses GET /projects/{projectId}/execution-results.",
     parameters: external_exports4.object({
       project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
-      test_cycle_id: external_exports4.string().optional().describe("Restrict to a specific test cycle ID"),
-      test_case_key: external_exports4.string().optional().describe("Restrict to a specific test case key, e.g. PROJ-TC-5"),
-      status: external_exports4.array(external_exports4.string()).optional().describe("Filter by execution status, e.g. ['PASS', 'FAIL']"),
       start_at: external_exports4.number().int().min(0).default(0),
       max_results: external_exports4.number().int().min(1).max(100).default(50)
     }),
-    execute: async (args) => safeQMetry(() => {
-      const filter2 = { projectId: args.project_id };
-      if (args.test_cycle_id) filter2.testCycleId = args.test_cycle_id;
-      if (args.test_case_key) filter2.testCaseKey = args.test_case_key;
-      if (args.status?.length) filter2.status = args.status;
-      return qmetryClient().post(
-        "/testcaseruns/search",
-        { filter: filter2 },
+    execute: async (args) => safeQMetry(
+      () => qmetryClient().get(
+        `/projects/${args.project_id}/execution-results`,
         { startAt: args.start_at, maxResults: args.max_results }
-      );
-    })
+      )
+    )
   });
   server2.addTool({
     name: "qmetry_get_execution",
-    description: "Get full details of a single test case execution result by its ID, including status, comment, executed-by, and timestamps.",
+    description: "Get details of a single test case execution result within a test cycle. Requires both the test cycle ID and the execution ID. Execution IDs come from qmetry_get_test_cycle_test_cases results.",
     parameters: external_exports4.object({
-      execution_id: external_exports4.string().describe("Execution / test-case-run ID from qmetry_search_executions")
+      test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID"),
+      execution_id: external_exports4.string().describe("Test case execution ID from qmetry_get_test_cycle_test_cases results")
     }),
     execute: async (args) => safeQMetry(
-      () => qmetryClient().post(`/testcaseruns/${encodeURIComponent(args.execution_id)}`, {})
+      () => (
+        // GET /testcycles/{id}/testcases/{testCycleTestCaseMapId}/executions
+        qmetryClient().get(
+          `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases/${encodeURIComponent(args.execution_id)}/executions`
+        )
+      )
     )
   });
   server2.addTool({
     name: "qmetry_update_execution",
-    description: "Update the execution status of a test case run (pass, fail, blocked, etc.).",
+    description: "Update the execution status of a test case within a test cycle (pass, fail, blocked, etc.). Requires both the test cycle ID and the test case execution ID.",
     parameters: external_exports4.object({
-      execution_id: external_exports4.string().describe("Execution / test-case-run ID from qmetry_search_executions"),
+      test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID (from qmetry_search_test_cycles or qmetry_get_test_cycle)"),
+      execution_id: external_exports4.string().describe("Test case execution ID from qmetry_get_test_cycle_test_cases results"),
       status: external_exports4.enum(EXECUTION_STATUSES).describe("New execution status"),
       comment: external_exports4.string().optional().describe("Optional comment / notes for this execution result")
     }),
@@ -165990,7 +166018,7 @@ function registerQMetryExecutionTools(server2, opts) {
       };
       if (args.comment) body.comment = args.comment;
       return qmetryClient().put(
-        `/testcaseruns/${encodeURIComponent(args.execution_id)}`,
+        `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcase-executions/${encodeURIComponent(args.execution_id)}`,
         body
       );
     })
@@ -166001,24 +166029,19 @@ function registerQMetryExecutionTools(server2, opts) {
 function registerQMetryRequirementTools(server2) {
   server2.addTool({
     name: "qmetry_search_requirements",
-    description: "Search QMetry requirements (Jira issue traceability links) across a project. Returns Jira issues that have test cases linked to them. Use this to find which stories/tasks have test coverage and which don't.",
+    description: "Get test cases linked to a specific Jira requirement (issue). In QMetry, 'requirements' are Jira issues \u2014 this returns all test cases that cover a given Jira issue key. Uses POST /requirements/{id}/testcases where {id} is the Jira issue key.",
     parameters: external_exports4.object({
-      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
-      search_text: external_exports4.string().optional().describe("Free-text search on requirement summary"),
-      jira_issue_key: external_exports4.string().optional().describe("Filter by a specific Jira issue key, e.g. PROJ-123"),
+      jira_issue_key: external_exports4.string().describe("Jira issue key, e.g. PROJ-123. QMetry uses Jira issue keys as requirement IDs."),
       start_at: external_exports4.number().int().min(0).default(0),
       max_results: external_exports4.number().int().min(1).max(100).default(50)
     }),
-    execute: async (args) => safeQMetry(() => {
-      const filter2 = { projectId: args.project_id };
-      if (args.search_text) filter2.searchText = args.search_text;
-      if (args.jira_issue_key) filter2.issueKey = args.jira_issue_key;
-      return qmetryClient().post(
-        "/requirements/search",
-        { filter: filter2 },
+    execute: async (args) => safeQMetry(
+      () => qmetryClient().post(
+        `/requirements/${encodeURIComponent(args.jira_issue_key)}/testcases`,
+        {},
         { startAt: args.start_at, maxResults: args.max_results }
-      );
-    })
+      )
+    )
   });
 }
 
@@ -166026,20 +166049,17 @@ function registerQMetryRequirementTools(server2) {
 function registerQMetryFolderTools(server2, opts) {
   server2.addTool({
     name: "qmetry_search_folders",
-    description: "Search test case folders in a QMetry project. Folders organise test cases into suites \u2014 use folder IDs when filtering test case searches.",
+    description: "Search test case folders in a QMetry project by name. Folders organise test cases into suites \u2014 use the returned folder IDs to filter test case searches.",
     parameters: external_exports4.object({
       project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
-      search_text: external_exports4.string().optional().describe("Free-text search on folder name"),
-      start_at: external_exports4.number().int().min(0).default(0),
-      max_results: external_exports4.number().int().min(1).max(100).default(50)
+      folder_name: external_exports4.string().optional().describe("Folder name to search for")
     }),
     execute: async (args) => safeQMetry(() => {
-      const filter2 = {};
-      if (args.search_text) filter2.searchText = args.search_text;
-      return qmetryClient().post(
-        `/projects/${args.project_id}/folders/search`,
-        { filter: filter2 },
-        { startAt: args.start_at, maxResults: args.max_results }
+      const query = { projectId: args.project_id };
+      if (args.folder_name) query.folderName = args.folder_name;
+      return qmetryClient().get(
+        `/projects/${args.project_id}/testcase-folders/search`,
+        query
       );
     })
   });
@@ -166055,7 +166075,7 @@ function registerQMetryFolderTools(server2, opts) {
       ensureWritable4(opts.readOnly);
       const body = { name: args.name };
       if (args.parent_id) body.parentId = args.parent_id;
-      return qmetryClient().post(`/projects/${args.project_id}/folders`, body);
+      return qmetryClient().post(`/projects/${args.project_id}/testcase-folders`, body);
     })
   });
 }

@@ -52,7 +52,7 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     description:
       "Get full details for a single test case by key, including the step grid (action/expected-result rows), " +
       "status, priority, description, and linked items. " +
-      "Steps are fetched automatically from the testcases/{id}/versions/{v}/teststeps sub-resource. " +
+      "Steps are fetched automatically from the testcases/{id}/versions/{v}/teststeps/search sub-resource. " +
       "Automatically includes Jira project context when Jira is configured.",
     parameters: z.object({
       project_id: z.number().int().describe("Numeric QMetry project ID (equals the Jira project ID)"),
@@ -67,7 +67,7 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
         );
 
         // Fetch test steps from the separate sub-resource.
-        // Steps endpoint uses POST (QMetry reads are often POST, not GET).
+        // Read endpoint: POST /testcases/{id}/versions/{no}/teststeps/search
         const tc = result?.data?.[0] ?? result;
         const tcId = tc?.id;
         const versionNo = tc?.version?.versionNo ?? 1;
@@ -111,7 +111,6 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     name: "qmetry_get_test_case_steps",
     description:
       "Get the step grid (action + expected-result rows) for a specific test case version. " +
-      "Steps are stored on a separate QMetry sub-resource and are not returned by qmetry_search_test_cases. " +
       "Use qmetry_get_test_case instead for a combined view; call this directly when you already have the internal test case ID and version number.",
     parameters: z.object({
       test_case_id: z.string().describe("Internal QMetry test case ID (opaque string from search results, e.g. the 'id' field — not the human-readable key)"),
@@ -157,9 +156,10 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
 
   server.addTool({
     name: "qmetry_update_test_case",
-    description: "Update fields on an existing test case (status, priority, summary, description).",
+    description: "Update fields on an existing test case version (status, priority, summary, description).",
     parameters: z.object({
-      test_case_id: z.string().describe("Internal QMetry test case ID (the opaque id string, not the human-readable key)"),
+      test_case_id: z.string().describe("Internal QMetry test case ID (opaque string, not the human-readable key)"),
+      version: z.number().int().min(1).default(1).describe("Version number to update. Use 1 for the latest version."),
       summary: z.string().optional(),
       status: z.string().optional().describe("New status name"),
       priority: z.string().optional().describe("New priority name"),
@@ -175,7 +175,11 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
         if (args.priority) body.priority = { name: args.priority };
         if (args.description) body.description = args.description;
         if (args.labels) body.labels = args.labels;
-        return qmetryClient().put<unknown>(`/testcases/${encodeURIComponent(args.test_case_id)}`, body);
+        // Correct endpoint: PUT /testcases/{id}/versions/{no}
+        return qmetryClient().put<unknown>(
+          `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}`,
+          body,
+        );
       }),
   });
 
@@ -183,13 +187,15 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
 
   server.addTool({
     name: "qmetry_list_test_case_versions",
-    description: "List all versions of a test case. QMetry test cases are versioned; use this to find version numbers before fetching steps for a specific version.",
+    description: "Get the test case detail by its internal ID, including version information. Use this when you have the opaque ID (not the human-readable key) and need version numbers before fetching steps.",
     parameters: z.object({
       test_case_id: z.string().describe("Internal QMetry test case ID (opaque string)"),
     }),
     execute: async (args) =>
       safeQMetry(() =>
-        qmetryClient().get<unknown>(`/testcases/${encodeURIComponent(args.test_case_id)}/versions`),
+        // GET /testcases/{id} returns the test case including version info.
+        // Note: POST /testcases/{id}/versions creates a new version — not used here.
+        qmetryClient().get<unknown>(`/testcases/${encodeURIComponent(args.test_case_id)}`),
       ),
   });
 
@@ -211,6 +217,7 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
         const body: Record<string, unknown> = { step: args.step };
         if (args.expected_result) body.expectedResult = args.expected_result;
         if (args.test_data) body.testData = args.test_data;
+        // POST /testcases/{id}/versions/{no}/teststeps creates one or more steps
         return qmetryClient().post<unknown>(
           `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
           body,
@@ -220,11 +227,11 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
 
   server.addTool({
     name: "qmetry_update_test_step",
-    description: "Update an existing test step's action, expected result, or test data.",
+    description: "Update an existing test step's action, expected result, or test data. The step ID must come from qmetry_get_test_case_steps results.",
     parameters: z.object({
       test_case_id: z.string().describe("Internal QMetry test case ID"),
       version: z.number().int().min(1).default(1),
-      step_id: z.string().describe("Test step ID from qmetry_get_test_case_steps results"),
+      step_id: z.number().int().describe("Numeric test step ID from qmetry_get_test_case_steps results (the 'id' field)"),
       step: z.string().optional().describe("Updated step action"),
       expected_result: z.string().optional(),
       test_data: z.string().optional(),
@@ -232,12 +239,13 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     execute: async (args) =>
       safeQMetry(() => {
         ensureWritable(opts.readOnly);
-        const body: Record<string, unknown> = {};
+        // PUT /testcases/{id}/versions/{no}/teststeps updates steps; pass id in body
+        const body: Record<string, unknown> = { id: args.step_id };
         if (args.step) body.step = args.step;
         if (args.expected_result !== undefined) body.expectedResult = args.expected_result;
         if (args.test_data !== undefined) body.testData = args.test_data;
         return qmetryClient().put<unknown>(
-          `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps/${encodeURIComponent(args.step_id)}`,
+          `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
           body,
         );
       }),
@@ -249,13 +257,15 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     parameters: z.object({
       test_case_id: z.string().describe("Internal QMetry test case ID"),
       version: z.number().int().min(1).default(1),
-      step_id: z.string().describe("Test step ID from qmetry_get_test_case_steps results"),
+      step_id: z.number().int().describe("Numeric test step ID from qmetry_get_test_case_steps results"),
     }),
     execute: async (args) =>
       safeQMetry(() => {
         ensureWritable(opts.readOnly);
+        // DELETE /testcases/{id}/versions/{no}/teststeps; pass id in body
         return qmetryClient().delete<unknown>(
-          `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps/${encodeURIComponent(args.step_id)}`,
+          `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
+          { id: args.step_id } as any,
         );
       }),
   });
@@ -266,8 +276,7 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     name: "qmetry_get_test_case_requirements",
     description:
       "Get the Jira issues (requirements) linked to a test case for traceability. " +
-      "This is the authoritative QMetry API for the 'Directly Linked to Stories' relationship — " +
-      "shows which Jira issues this test case covers.",
+      "This is the authoritative QMetry API for the 'Directly Linked to Stories' relationship.",
     parameters: z.object({
       test_case_id: z.string().describe("Internal QMetry test case ID"),
       start_at: z.number().int().min(0).default(0),
@@ -285,17 +294,19 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
   server.addTool({
     name: "qmetry_link_requirement",
     description:
-      "Link a test case to a Jira issue (requirement) for traceability. " +
-      "This creates the 'Directly Linked to Stories' relationship visible in Jira's QMetry panel.",
+      "Link a test case version to a Jira issue (requirement) for traceability. " +
+      "Creates the 'Directly Linked to Stories' relationship visible in Jira's QMetry panel.",
     parameters: z.object({
       test_case_id: z.string().describe("Internal QMetry test case ID"),
+      version: z.number().int().min(1).default(1).describe("Test case version number (default 1)"),
       jira_issue_key: z.string().describe("Jira issue key, e.g. PROJ-123"),
     }),
     execute: async (args) =>
       safeQMetry(() => {
         ensureWritable(opts.readOnly);
+        // POST /testcases/{id}/version/{no}/requirements/link  (singular 'version')
         return qmetryClient().post<unknown>(
-          `/testcases/${encodeURIComponent(args.test_case_id)}/requirements`,
+          `/testcases/${encodeURIComponent(args.test_case_id)}/version/${args.version}/requirements/link`,
           { issueKey: args.jira_issue_key },
         );
       }),
@@ -303,16 +314,19 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
 
   server.addTool({
     name: "qmetry_unlink_requirement",
-    description: "Remove the traceability link between a test case and a Jira issue.",
+    description: "Remove the traceability link between a test case version and a Jira issue.",
     parameters: z.object({
       test_case_id: z.string().describe("Internal QMetry test case ID"),
-      requirement_id: z.string().describe("Requirement link ID from qmetry_get_test_case_requirements"),
+      version: z.number().int().min(1).default(1),
+      requirement_id: z.string().describe("Requirement ID from qmetry_get_test_case_requirements"),
     }),
     execute: async (args) =>
       safeQMetry(() => {
         ensureWritable(opts.readOnly);
-        return qmetryClient().delete<unknown>(
-          `/testcases/${encodeURIComponent(args.test_case_id)}/requirements/${encodeURIComponent(args.requirement_id)}`,
+        // POST /testcases/{id}/versions/{no}/requirements/unlink  (plural 'versions')
+        return qmetryClient().post<unknown>(
+          `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/requirements/unlink`,
+          { id: args.requirement_id },
         );
       }),
   });

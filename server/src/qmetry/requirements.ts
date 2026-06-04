@@ -7,26 +7,21 @@ export function registerQMetryRequirementTools(server: FastMCP): void {
   server.addTool({
     name: "qmetry_search_requirements",
     description:
-      "Search QMetry requirements (Jira issue traceability links) across a project. " +
-      "Returns Jira issues that have test cases linked to them. " +
-      "Use this to find which stories/tasks have test coverage and which don't.",
+      "Get test cases linked to a specific Jira requirement (issue). " +
+      "In QMetry, 'requirements' are Jira issues — this returns all test cases that cover a given Jira issue key. " +
+      "Uses POST /requirements/{id}/testcases where {id} is the Jira issue key.",
     parameters: z.object({
-      project_id: z.number().int().describe("Numeric QMetry project ID"),
-      search_text: z.string().optional().describe("Free-text search on requirement summary"),
-      jira_issue_key: z.string().optional().describe("Filter by a specific Jira issue key, e.g. PROJ-123"),
+      jira_issue_key: z.string().describe("Jira issue key, e.g. PROJ-123. QMetry uses Jira issue keys as requirement IDs."),
       start_at: z.number().int().min(0).default(0),
       max_results: z.number().int().min(1).max(100).default(50),
     }),
     execute: async (args) =>
-      safeQMetry(() => {
-        const filter: Record<string, unknown> = { projectId: args.project_id };
-        if (args.search_text) filter.searchText = args.search_text;
-        if (args.jira_issue_key) filter.issueKey = args.jira_issue_key;
-        return qmetryClient().post<unknown>(
-          "/requirements/search",
-          { filter },
+      safeQMetry(() =>
+        qmetryClient().post<unknown>(
+          `/requirements/${encodeURIComponent(args.jira_issue_key)}/testcases`,
+          {},
           { startAt: args.start_at, maxResults: args.max_results },
-        );
-      }),
+        ),
+      ),
   });
 }

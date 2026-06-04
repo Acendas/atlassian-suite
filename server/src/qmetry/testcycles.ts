@@ -11,6 +11,7 @@ export function registerQMetryTestCycleTools(server: FastMCP, opts: { readOnly: 
     parameters: z.object({
       project_id: z.number().int().describe("Numeric QMetry project ID (equals the Jira project ID for the same project)"),
       search_text: z.string().optional().describe("Free-text search on cycle name/summary"),
+      key: z.string().optional().describe("Exact cycle key, e.g. PROJ-TR-50"),
       status: z.array(z.string()).optional(),
       start_at: z.number().int().min(0).default(0),
       max_results: z.number().int().min(1).max(100).default(50),
@@ -19,6 +20,7 @@ export function registerQMetryTestCycleTools(server: FastMCP, opts: { readOnly: 
       safeQMetry(() => {
         const filter: Record<string, unknown> = { projectId: args.project_id };
         if (args.search_text) filter.searchText = args.search_text;
+        if (args.key) filter.key = args.key;
         if (args.status?.length) filter.status = args.status;
         return qmetryClient().post<unknown>(
           "/testcycles/search",
@@ -31,24 +33,29 @@ export function registerQMetryTestCycleTools(server: FastMCP, opts: { readOnly: 
   server.addTool({
     name: "qmetry_get_test_cycle",
     description:
-      "Get details for a single test cycle by its ID, including linked test cases and execution summary. " +
-      "Automatically includes Jira project context when Jira is configured — " +
-      "QMetry project ID equals Jira project ID.",
+      "Get details for a single test cycle by its key (e.g. PROJ-TR-50) and project ID. " +
+      "Uses POST /testcycles/search internally — there is no GET-by-ID endpoint in the QMetry API. " +
+      "Automatically includes Jira project context when Jira is configured.",
     parameters: z.object({
-      test_cycle_id: z.string().describe("Test cycle ID from qmetry_search_test_cycles results"),
+      project_id: z.number().int().describe("Numeric QMetry project ID"),
+      key: z.string().describe("Test cycle key, e.g. PROJ-TR-50 (from qmetry_search_test_cycles results)"),
     }),
     execute: async (args) =>
       safeQMetry(async () => {
-        const cycle: any = await qmetryClient().post<unknown>(
-          `/testcycles/${encodeURIComponent(args.test_cycle_id)}`,
-          {},
+        // No GET /testcycles/{id} in the spec — use search by key
+        const result: any = await qmetryClient().post<unknown>(
+          "/testcycles/search",
+          { filter: { projectId: args.project_id, key: args.key } },
+          { startAt: 0, maxResults: 1 },
         );
 
-        // Jira context: QMetry project ID = Jira project ID — fetch project details.
-        if (cycle && cycle.projectId && jiraIsConfigured()) {
+        const cycle = result?.data?.[0] ?? result;
+
+        // Jira context: QMetry project ID = Jira project ID
+        if (cycle && args.project_id && jiraIsConfigured()) {
           try {
             const project: any = await jiraClient().projects.getProject({
-              projectIdOrKey: String(cycle.projectId),
+              projectIdOrKey: String(args.project_id),
             } as never);
             cycle.jira = {
               project_key: project.key,
@@ -94,7 +101,7 @@ export function registerQMetryTestCycleTools(server: FastMCP, opts: { readOnly: 
     name: "qmetry_update_test_cycle",
     description: "Update an existing test cycle's summary, status, or dates.",
     parameters: z.object({
-      test_cycle_id: z.string().describe("Test cycle ID from search results"),
+      test_cycle_id: z.string().describe("Internal QMetry test cycle ID (opaque string from search results)"),
       summary: z.string().optional(),
       description: z.string().optional(),
       status: z.string().optional(),
@@ -121,14 +128,16 @@ export function registerQMetryTestCycleTools(server: FastMCP, opts: { readOnly: 
     name: "qmetry_get_test_cycle_test_cases",
     description: "List the test cases assigned to a specific test cycle, including their execution status within that cycle.",
     parameters: z.object({
-      test_cycle_id: z.string().describe("Test cycle ID"),
+      test_cycle_id: z.string().describe("Internal QMetry test cycle ID (opaque string from search results)"),
       start_at: z.number().int().min(0).default(0),
       max_results: z.number().int().min(1).max(100).default(50),
     }),
     execute: async (args) =>
       safeQMetry(() =>
-        qmetryClient().get<unknown>(
-          `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases`,
+        // POST /testcycles/{id}/testcases/search — not GET /testcycles/{id}/testcases
+        qmetryClient().post<unknown>(
+          `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases/search`,
+          {},
           { startAt: args.start_at, maxResults: args.max_results },
         ),
       ),
@@ -136,9 +145,9 @@ export function registerQMetryTestCycleTools(server: FastMCP, opts: { readOnly: 
 
   server.addTool({
     name: "qmetry_add_test_cases_to_cycle",
-    description: "Add one or more test cases to a test cycle by their IDs.",
+    description: "Add one or more test cases to a test cycle by their internal IDs.",
     parameters: z.object({
-      test_cycle_id: z.string().describe("Test cycle ID"),
+      test_cycle_id: z.string().describe("Internal QMetry test cycle ID"),
       test_case_ids: z.array(z.string()).min(1).describe("Internal QMetry test case IDs (opaque id strings, not keys)"),
     }),
     execute: async (args) =>

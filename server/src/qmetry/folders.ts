@@ -6,21 +6,21 @@ import { safeQMetry, ensureWritable } from "./_helpers.js";
 export function registerQMetryFolderTools(server: FastMCP, opts: { readOnly: boolean }): void {
   server.addTool({
     name: "qmetry_search_folders",
-    description: "Search test case folders in a QMetry project. Folders organise test cases into suites — use folder IDs when filtering test case searches.",
+    description:
+      "Search test case folders in a QMetry project by name. " +
+      "Folders organise test cases into suites — use the returned folder IDs to filter test case searches.",
     parameters: z.object({
       project_id: z.number().int().describe("Numeric QMetry project ID"),
-      search_text: z.string().optional().describe("Free-text search on folder name"),
-      start_at: z.number().int().min(0).default(0),
-      max_results: z.number().int().min(1).max(100).default(50),
+      folder_name: z.string().optional().describe("Folder name to search for"),
     }),
     execute: async (args) =>
       safeQMetry(() => {
-        const filter: Record<string, unknown> = {};
-        if (args.search_text) filter.searchText = args.search_text;
-        return qmetryClient().post<unknown>(
-          `/projects/${args.project_id}/folders/search`,
-          { filter },
-          { startAt: args.start_at, maxResults: args.max_results },
+        const query: Record<string, string | number | boolean | null | undefined> = { projectId: args.project_id };
+        if (args.folder_name) query.folderName = args.folder_name;
+        // GET /projects/{projectId}/testcase-folders/search
+        return qmetryClient().get<unknown>(
+          `/projects/${args.project_id}/testcase-folders/search`,
+          query,
         );
       }),
   });
@@ -38,7 +38,8 @@ export function registerQMetryFolderTools(server: FastMCP, opts: { readOnly: boo
         ensureWritable(opts.readOnly);
         const body: Record<string, unknown> = { name: args.name };
         if (args.parent_id) body.parentId = args.parent_id;
-        return qmetryClient().post<unknown>(`/projects/${args.project_id}/folders`, body);
+        // POST /projects/{projectId}/testcase-folders
+        return qmetryClient().post<unknown>(`/projects/${args.project_id}/testcase-folders`, body);
       }),
   });
 }
