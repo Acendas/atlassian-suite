@@ -165568,8 +165568,9 @@ function registerQMetryTestCaseTools(server2, opts) {
       if (tcId) {
         try {
           const steps = await qmetryClient().post(
-            `/testcases/${encodeURIComponent(tcId)}/versions/${versionNo}/teststeps`,
-            {}
+            `/testcases/${encodeURIComponent(tcId)}/versions/${versionNo}/teststeps/search`,
+            {},
+            { startAt: 0, maxResults: 100 }
           );
           tc.steps = steps;
         } catch {
@@ -165603,8 +165604,9 @@ function registerQMetryTestCaseTools(server2, opts) {
     }),
     execute: async (args) => safeQMetry(
       () => qmetryClient().post(
-        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
-        {}
+        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps/search`,
+        {},
+        { startAt: 0, maxResults: 100 }
       )
     )
   });

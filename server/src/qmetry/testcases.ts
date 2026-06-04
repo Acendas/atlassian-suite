@@ -74,8 +74,9 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
         if (tcId) {
           try {
             const steps = await qmetryClient().post<unknown>(
-              `/testcases/${encodeURIComponent(tcId)}/versions/${versionNo}/teststeps`,
+              `/testcases/${encodeURIComponent(tcId)}/versions/${versionNo}/teststeps/search`,
               {},
+              { startAt: 0, maxResults: 100 },
             );
             tc.steps = steps;
           } catch {
@@ -119,8 +120,9 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     execute: async (args) =>
       safeQMetry(() =>
         qmetryClient().post<unknown>(
-          `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
+          `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps/search`,
           {},
+          { startAt: 0, maxResults: 100 },
         ),
       ),
   });
