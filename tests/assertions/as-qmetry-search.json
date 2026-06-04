@@ -1,0 +1,64 @@
+[
+  {
+    "name": "allows_credentials_status",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "get_credentials_status"
+  },
+  {
+    "name": "allows_list_projects",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "qmetry_list_projects"
+  },
+  {
+    "name": "allows_search_test_cases",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "qmetry_search_test_cases"
+  },
+  {
+    "name": "allows_jira_get_issue",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_get_issue"
+  },
+  {
+    "name": "has_preflight_check",
+    "type": "contains",
+    "pattern": "qmetry\\.configured"
+  },
+  {
+    "name": "routes_to_init_when_unconfigured",
+    "type": "contains",
+    "pattern": "/atlassian-suite:init"
+  },
+  {
+    "name": "accepts_jira_issue_key_as_input",
+    "type": "contains",
+    "pattern": "Jira issue key"
+  },
+  {
+    "name": "resolves_project_id_from_key",
+    "type": "contains",
+    "pattern": "qmetry_list_projects"
+  },
+  {
+    "name": "documents_project_id_identity",
+    "type": "contains",
+    "pattern": "Jira project ID.*QMetry project ID|QMetry project ID.*Jira project ID",
+    "dotall": false
+  },
+  {
+    "name": "no_real_customer_names",
+    "type": "not_contains",
+    "pattern": "(?:NYW|ventek|venVUE|Caracal|NYWATERWAY)",
+    "_comment": "Skill is public — no real customer or product names allowed"
+  },
+  {
+    "name": "no_real_project_ids",
+    "type": "not_contains",
+    "pattern": "\\b(?:10608|11359|10929)\\b",
+    "_comment": "No hardcoded real project IDs"
+  }
+]

@@ -1,0 +1,85 @@
+[
+  {
+    "name": "allows_credentials_status",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "get_credentials_status"
+  },
+  {
+    "name": "allows_jira_get_issue",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_get_issue"
+  },
+  {
+    "name": "allows_jira_get_issue_property_keys",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_get_issue_property_keys"
+  },
+  {
+    "name": "allows_jira_get_issue_property",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_get_issue_property"
+  },
+  {
+    "name": "allows_search_test_cycles",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "qmetry_search_test_cycles"
+  },
+  {
+    "name": "allows_get_test_cycle",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "qmetry_get_test_cycle"
+  },
+  {
+    "name": "has_preflight_check",
+    "type": "contains",
+    "pattern": "qmetry\\.configured"
+  },
+  {
+    "name": "routes_to_init_when_unconfigured",
+    "type": "contains",
+    "pattern": "/atlassian-suite:init"
+  },
+  {
+    "name": "documents_project_id_identity",
+    "type": "contains",
+    "pattern": "Jira project ID.*QMetry project ID|QMetry project ID.*Jira project ID",
+    "dotall": false
+  },
+  {
+    "name": "uses_fields_project_id",
+    "type": "contains",
+    "pattern": "fields\\.project\\.id"
+  },
+  {
+    "name": "checks_testcycle_panel_property",
+    "type": "contains",
+    "pattern": "testcycle-execution-panel"
+  },
+  {
+    "name": "extracts_project_id_from_jira_issue",
+    "type": "contains",
+    "pattern": "jira_get_issue"
+  },
+  {
+    "name": "searches_test_cycles",
+    "type": "contains",
+    "pattern": "qmetry_search_test_cycles"
+  },
+  {
+    "name": "no_real_customer_names",
+    "type": "not_contains",
+    "pattern": "(?:NYW|ventek|venVUE|Caracal|NYWATERWAY|AllClients|NYWY)",
+    "_comment": "Skill is public — no real customer or product names allowed"
+  },
+  {
+    "name": "no_real_project_ids",
+    "type": "not_contains",
+    "pattern": "\\b(?:10608|11359|10929)\\b"
+  }
+]
