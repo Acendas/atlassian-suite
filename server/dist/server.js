@@ -165477,7 +165477,7 @@ function registerQMetryTestCaseTools(server2, opts) {
     description: "Search test cases in a QMetry project. Filter by key, summary text, status, priority, or folder. Returns lean objects by default; use fields param to expand.",
     parameters: external_exports4.object({
       project_id: external_exports4.number().int().describe("Numeric QMetry project ID (from qmetry_list_projects)"),
-      key: external_exports4.string().optional().describe("Exact test case key, e.g. NYW-TC-209"),
+      key: external_exports4.string().optional().describe("Exact test case key, e.g. PROJ-TC-5"),
       search_text: external_exports4.string().optional().describe("Free-text search across summary"),
       status: external_exports4.array(external_exports4.string()).optional().describe("Filter by status names, e.g. ['To Do', 'In Progress']"),
       priority: external_exports4.array(external_exports4.string()).optional().describe("Filter by priority names, e.g. ['High', 'Medium']"),
@@ -165512,7 +165512,7 @@ function registerQMetryTestCaseTools(server2, opts) {
     description: "Get full details for a single test case by key, including steps, status, priority, description, and linked items.",
     parameters: external_exports4.object({
       project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
-      key: external_exports4.string().describe("Test case key, e.g. NYW-TC-209")
+      key: external_exports4.string().describe("Test case key, e.g. PROJ-TC-5")
     }),
     execute: async (args) => safeQMetry(
       () => qmetryClient().post(
@@ -165651,7 +165651,7 @@ function registerQMetryExecutionTools(server2, opts) {
     parameters: external_exports4.object({
       project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
       test_cycle_id: external_exports4.string().optional().describe("Restrict to a specific test cycle ID"),
-      test_case_key: external_exports4.string().optional().describe("Restrict to a specific test case key, e.g. NYW-TC-209"),
+      test_case_key: external_exports4.string().optional().describe("Restrict to a specific test case key, e.g. PROJ-TC-5"),
       status: external_exports4.array(external_exports4.string()).optional().describe("Filter by execution status, e.g. ['PASS', 'FAIL']"),
       start_at: external_exports4.number().int().min(0).default(0),
       max_results: external_exports4.number().int().min(1).max(100).default(50)

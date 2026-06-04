@@ -13,7 +13,7 @@ export function registerQMetryExecutionTools(server: FastMCP, opts: { readOnly: 
     parameters: z.object({
       project_id: z.number().int().describe("Numeric QMetry project ID"),
       test_cycle_id: z.string().optional().describe("Restrict to a specific test cycle ID"),
-      test_case_key: z.string().optional().describe("Restrict to a specific test case key, e.g. NYW-TC-209"),
+      test_case_key: z.string().optional().describe("Restrict to a specific test case key, e.g. PROJ-TC-5"),
       status: z.array(z.string()).optional().describe("Filter by execution status, e.g. ['PASS', 'FAIL']"),
       start_at: z.number().int().min(0).default(0),
       max_results: z.number().int().min(1).max(100).default(50),

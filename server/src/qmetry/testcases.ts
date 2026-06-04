@@ -14,7 +14,7 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     description: "Search test cases in a QMetry project. Filter by key, summary text, status, priority, or folder. Returns lean objects by default; use fields param to expand.",
     parameters: z.object({
       project_id: z.number().int().describe("Numeric QMetry project ID (from qmetry_list_projects)"),
-      key: z.string().optional().describe("Exact test case key, e.g. NYW-TC-209"),
+      key: z.string().optional().describe("Exact test case key, e.g. PROJ-TC-5"),
       search_text: z.string().optional().describe("Free-text search across summary"),
       status: z.array(z.string()).optional().describe("Filter by status names, e.g. ['To Do', 'In Progress']"),
       priority: z.array(z.string()).optional().describe("Filter by priority names, e.g. ['High', 'Medium']"),
@@ -51,7 +51,7 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     description: "Get full details for a single test case by key, including steps, status, priority, description, and linked items.",
     parameters: z.object({
       project_id: z.number().int().describe("Numeric QMetry project ID"),
-      key: z.string().describe("Test case key, e.g. NYW-TC-209"),
+      key: z.string().describe("Test case key, e.g. PROJ-TC-5"),
     }),
     execute: async (args) =>
       safeQMetry(() =>

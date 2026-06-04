@@ -7,7 +7,7 @@
 // trivial to port.
 //
 // Fixtures in tests/fixtures/ are real Confluence responses — v1 captured
-// from the ventek.atlassian.net tenant. A v2 fixture will be added once
+// from a live Confluence Cloud tenant. A v2 fixture will be added once
 // the scope list ships granular scopes.
 
 import { readFileSync } from "node:fs";
