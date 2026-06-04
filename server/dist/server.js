@@ -165453,10 +165453,40 @@ function registerConfluenceTools(server2, opts) {
 }
 
 // src/qmetry/_helpers.ts
+var STRIP_KEYS = /* @__PURE__ */ new Set([
+  "iconUrl",
+  // CDN URLs with signed tokens — huge, meaningless to users
+  "avatarUrl",
+  // same
+  "isArchive",
+  // internal archival flag
+  "testcase_version_id",
+  // internal join-table key on step rows
+  "shareable"
+  // internal flag (cross-project sharing)
+]);
+var NAMED_VALUE_KEYS = /* @__PURE__ */ new Set(["priority", "status", "issuetype", "assignee", "reporter"]);
+function stripInternalFields(value, parentKey) {
+  if (Array.isArray(value)) {
+    return value.map((v) => stripInternalFields(v));
+  }
+  if (value !== null && typeof value === "object") {
+    const obj2 = value;
+    const out = {};
+    for (const [k, v] of Object.entries(obj2)) {
+      if (STRIP_KEYS.has(k)) continue;
+      if (k === "id" && parentKey && NAMED_VALUE_KEYS.has(parentKey)) continue;
+      if (typeof v === "string" && v.startsWith("https://") && v.length > 200) continue;
+      out[k] = stripInternalFields(v, k);
+    }
+    return out;
+  }
+  return value;
+}
 async function safeQMetry(fn) {
   try {
     const result = await fn();
-    return JSON.stringify(result, null, 2);
+    return JSON.stringify(stripInternalFields(result), null, 2);
   } catch (err) {
     if (err?.name === "AtlassianHttpError") {
       const body = err.body;
@@ -165468,9 +165498,7 @@ async function safeQMetry(fn) {
           status: err.status,
           message,
           errors: errors ?? null,
-          // Sanitize body: mask any string value that looks like an API key
-          // (length > 50, no spaces — same heuristic as Atlassian tokens).
-          body: sanitizeBody(body)
+          body: sanitizeErrorBody(body)
         },
         null,
         2
@@ -165482,14 +165510,14 @@ async function safeQMetry(fn) {
 function ensureWritable4(readOnly2) {
   if (readOnly2) throw new Error("READ_ONLY_MODE is enabled \u2014 write operations are blocked.");
 }
-function sanitizeBody(body) {
+function sanitizeErrorBody(body) {
   if (typeof body === "string" && body.length > 50 && !body.includes(" ")) {
     return maskToken(body);
   }
   if (typeof body === "object" && body !== null) {
     const out = {};
     for (const [k, v] of Object.entries(body)) {
-      out[k] = sanitizeBody(v);
+      out[k] = sanitizeErrorBody(v);
     }
     return out;
   }
