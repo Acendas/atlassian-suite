@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { FastMCP } from "fastmcp";
 import { qmetryClient } from "../common/qmetryClient.js";
-import { safeQMetry, ensureWritable } from "./_helpers.js";
+import { safeQMetry, ensureWritable, resolveNamedId } from "./_helpers.js";
 import { jiraIsConfigured, jiraClient } from "../common/jiraClient.js";
 
 const paginationParams = {
@@ -139,16 +139,33 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
       folder_id: z.number().int().optional(),
     }),
     execute: async (args) =>
-      safeQMetry(() => {
+      safeQMetry(async () => {
         ensureWritable(opts.readOnly);
         const body: Record<string, unknown> = {
           projectId: args.project_id,
           summary: args.summary,
         };
-        if (args.status) body.status = { name: args.status };
-        if (args.priority) body.priority = { name: args.priority };
+        // Test Case Create Request Body wants bare integer ids for status /
+        // priority / labels — resolve the agent-supplied names to ids.
+        if (args.status)
+          body.status = await resolveNamedId(
+            `/projects/${args.project_id}/testcase-statuses`,
+            args.status,
+            "test case status",
+          );
+        if (args.priority)
+          body.priority = await resolveNamedId(
+            `/projects/${args.project_id}/priorities`,
+            args.priority,
+            "priority",
+          );
         if (args.description) body.description = args.description;
-        if (args.labels?.length) body.labels = args.labels;
+        if (args.labels?.length)
+          body.labels = await Promise.all(
+            args.labels.map((l) =>
+              resolveNamedId(`/projects/${args.project_id}/labels`, l, "label"),
+            ),
+          );
         if (args.folder_id) body.folderId = args.folder_id;
         return qmetryClient().post<unknown>("/testcases", body);
       }),
@@ -160,21 +177,39 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     parameters: z.object({
       test_case_id: z.string().describe("Internal QMetry test case ID (opaque string, not the human-readable key)"),
       version: z.number().int().min(1).default(1).describe("Version number to update. Use 1 for the latest version."),
+      project_id: z.number().int().optional().describe("Numeric QMetry project ID — required when status or priority is provided (used to look up the correct status/priority id for this project)."),
       summary: z.string().optional(),
-      status: z.string().optional().describe("New status name"),
-      priority: z.string().optional().describe("New priority name"),
+      status: z.string().optional().describe("New status name, e.g. 'In Progress'. Requires project_id."),
+      priority: z.string().optional().describe("New priority name, e.g. 'High'. Requires project_id."),
       description: z.string().optional(),
-      labels: z.array(z.string()).optional(),
     }),
     execute: async (args) =>
-      safeQMetry(() => {
+      safeQMetry(async () => {
         ensureWritable(opts.readOnly);
         const body: Record<string, unknown> = {};
         if (args.summary) body.summary = args.summary;
-        if (args.status) body.status = { name: args.status };
-        if (args.priority) body.priority = { name: args.priority };
+        if (args.status || args.priority) {
+          if (!args.project_id) {
+            throw new Error("project_id is required when status or priority is provided (used to look up the id for this project).");
+          }
+          if (args.status)
+            body.status = await resolveNamedId(
+              `/projects/${args.project_id}/testcase-statuses`,
+              args.status,
+              "test case status",
+            );
+          if (args.priority)
+            body.priority = await resolveNamedId(
+              `/projects/${args.project_id}/priorities`,
+              args.priority,
+              "priority",
+            );
+        }
         if (args.description) body.description = args.description;
-        if (args.labels) body.labels = args.labels;
+        // TestCaseUpdateRequest takes integer status/priority ids. Labels here
+        // use a MetaDataUpdateRequest (add/remove) shape, not a flat array — so
+        // label edits are intentionally not exposed on this tool rather than
+        // sending a shape QMetry would reject.
         // Correct endpoint: PUT /testcases/{id}/versions/{no}
         return qmetryClient().put<unknown>(
           `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}`,
@@ -214,7 +249,9 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     execute: async (args) =>
       safeQMetry(() => {
         ensureWritable(opts.readOnly);
-        const body: Record<string, unknown> = { step: args.step };
+        // CreateTestStepRequest: the action field is `stepDetails` (required),
+        // not `step`. Sending `step` leaves the action blank.
+        const body: Record<string, unknown> = { stepDetails: args.step };
         if (args.expected_result) body.expectedResult = args.expected_result;
         if (args.test_data) body.testData = args.test_data;
         // POST /testcases/{id}/versions/{no}/teststeps creates one or more steps
@@ -239,9 +276,10 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     execute: async (args) =>
       safeQMetry(() => {
         ensureWritable(opts.readOnly);
-        // PUT /testcases/{id}/versions/{no}/teststeps updates steps; pass id in body
+        // PUT /testcases/{id}/versions/{no}/teststeps updates steps; pass id in body.
+        // UpdateTestStepRequest names the action field `stepDetails`, not `step`.
         const body: Record<string, unknown> = { id: args.step_id };
-        if (args.step) body.step = args.step;
+        if (args.step) body.stepDetails = args.step;
         if (args.expected_result !== undefined) body.expectedResult = args.expected_result;
         if (args.test_data !== undefined) body.testData = args.test_data;
         return qmetryClient().put<unknown>(
@@ -262,10 +300,13 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     execute: async (args) =>
       safeQMetry(() => {
         ensureWritable(opts.readOnly);
-        // DELETE /testcases/{id}/versions/{no}/teststeps; pass id in body
-        return qmetryClient().delete<unknown>(
+        // DeleteTestStepRequest takes `stepIds: [int]` in the request BODY (not
+        // an `id` query param). The `delete` shorthand only sends a query, so go
+        // through `request` to attach a JSON body to the DELETE.
+        return qmetryClient().request<unknown>(
+          "DELETE",
           `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
-          { id: args.step_id } as any,
+          { body: { stepIds: [args.step_id] } },
         );
       }),
   });
@@ -304,10 +345,15 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     execute: async (args) =>
       safeQMetry(() => {
         ensureWritable(opts.readOnly);
-        // POST /testcases/{id}/version/{no}/requirements/link  (singular 'version')
+        // Link via the requirement-centric endpoint: the requirement is
+        // addressed by its Jira issue key in the path, and the test case by
+        // {id, versionNo} in the body. This avoids needing QMetry's internal
+        // integer requirement id (which the test-case-centric link endpoint
+        // demands as requirementIds:[int]). issueKey-in-body is not a field the
+        // API accepts — LinkTestCaseToRequirementRequest takes `testcases`.
         return qmetryClient().post<unknown>(
-          `/testcases/${encodeURIComponent(args.test_case_id)}/version/${args.version}/requirements/link`,
-          { issueKey: args.jira_issue_key },
+          `/requirements/${encodeURIComponent(args.jira_issue_key)}/testcases/link`,
+          { testcases: [{ id: args.test_case_id, versionNo: args.version }] },
         );
       }),
   });
@@ -318,15 +364,19 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
     parameters: z.object({
       test_case_id: z.string().describe("Internal QMetry test case ID"),
       version: z.number().int().min(1).default(1),
-      requirement_id: z.string().describe("Requirement ID from qmetry_get_test_case_requirements"),
+      jira_issue_key: z.string().describe("Jira issue key whose link to remove, e.g. PROJ-123"),
     }),
     execute: async (args) =>
       safeQMetry(() => {
         ensureWritable(opts.readOnly);
-        // POST /testcases/{id}/versions/{no}/requirements/unlink  (plural 'versions')
-        return qmetryClient().post<unknown>(
-          `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/requirements/unlink`,
-          { id: args.requirement_id },
+        // Mirror of link: DELETE /requirements/{jiraKey}/testcases/unlink with
+        // the test case addressed by {id, versionNo}. UnLinkTestCaseToRequirement
+        // takes `testcases`, and the unlink endpoint is a DELETE-with-body, so
+        // go through `request` (the `delete` shorthand sends only a query).
+        return qmetryClient().request<unknown>(
+          "DELETE",
+          `/requirements/${encodeURIComponent(args.jira_issue_key)}/testcases/unlink`,
+          { body: { testcases: [{ id: args.test_case_id, versionNo: args.version }] } },
         );
       }),
   });

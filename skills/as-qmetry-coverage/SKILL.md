@@ -60,6 +60,6 @@ If linked count from step 2 is known, note "X cycle(s) directly linked to this s
 ### 5. Offer drill-downs
 
 - "View test cases in a cycle" → call `qmetry_get_test_cycle_test_cases(test_cycle_id: <id>)` — shows each test case's execution status within the cycle
-- "Show traceability — which Jira stories have test coverage" → call `qmetry_search_requirements(project_id: <id>, jira_issue_key: $1)` to find coverage for the specific issue
+- "Show traceability — which test cases cover this issue" → call `qmetry_search_requirements(jira_issue_key: $1)`. QMetry uses the Jira issue key itself as the requirement id, so this tool takes only the key (no `project_id`).
 - "Search test cases in this project" → call `qmetry_search_test_cases(project_id: <id>)`
 - "View a specific test case" → `/atlassian-suite:as-qmetry-testcase <TC-key>`

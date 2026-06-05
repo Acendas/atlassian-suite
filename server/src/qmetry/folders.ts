@@ -31,13 +31,16 @@ export function registerQMetryFolderTools(server: FastMCP, opts: { readOnly: boo
     parameters: z.object({
       project_id: z.number().int().describe("Numeric QMetry project ID"),
       name: z.string().describe("Folder name"),
-      parent_id: z.number().int().optional().describe("Parent folder ID for nesting. Omit for a top-level folder."),
+      parent_id: z.number().int().optional().describe("Parent folder ID. QMetry requires a parent; for a top-level folder pass the project's root folder ID (from qmetry_search_folders)."),
     }),
     execute: async (args) =>
       safeQMetry(() => {
         ensureWritable(opts.readOnly);
-        const body: Record<string, unknown> = { name: args.name };
-        if (args.parent_id) body.parentId = args.parent_id;
+        // FolderRequest field is `folderName` (not `name`). `parentId` is
+        // required by the API; for a top-level folder pass the project's root
+        // folder id (visible in qmetry_search_folders).
+        const body: Record<string, unknown> = { folderName: args.name };
+        if (args.parent_id != null) body.parentId = args.parent_id;
         // POST /projects/{projectId}/testcase-folders
         return qmetryClient().post<unknown>(`/projects/${args.project_id}/testcase-folders`, body);
       }),

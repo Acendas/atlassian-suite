@@ -43,12 +43,15 @@ Call `get_credentials_status` → check `effective.qmetry.configured`. If `false
 
 4. **Linked test cycles on a Jira issue.** Call `jira_get_issue_property_keys` on the issue. Look for a key containing `testcycle-execution-panel`. If found, call `jira_get_issue_property` with that key — the value array length is the number of linked cycles. The individual IDs in the array are panel-internal UI references, **not** QMetry API IDs; use `qmetry_search_test_cycles(project_id)` to find the actual cycles.
 
+5. **Updating an execution is a four-id chase.** An execution lives inside a test cycle, not on the test case. To set a result / comment / assignee or attach evidence you need project → cycle (internal id, not the `PROJ-TR-n` key) → `testCycleTestCaseMapId` (from `qmetry_search_executions`) → `testCaseExecutionId` (from `qmetry_get_execution`). The `as-qmetry-testcase` skill drives this whole chain — route all execution writes (result, comment, **assignee**, **evidence attachment**) there rather than calling the tools raw. Assignee is an Atlassian account id (resolve via `jira_get_user_profile`); evidence attachment links to the specific execution. Always read back (`qmetry_get_execution` / `qmetry_list_execution_attachments`) to confirm — QMetry can return 2xx on a write it silently ignored.
+
 ### QMetry routing table
 
 | User intent | Route | Key inputs |
 |---|---|---|
 | "Search / browse test cases in a project" | `as-qmetry-search` skill | project key, Jira project key, Jira issue key, or numeric ID |
 | "View or update a specific test case" | `as-qmetry-testcase` skill | test case key (e.g. `PROJ-TC-5`); project_id auto-resolved from prefix |
+| "Set execution result / comment / **assign** / **attach evidence**" | `as-qmetry-testcase` skill (action `update-execution`) | test case key + cycle; assignee = Atlassian account id; evidence = local file path |
 | "Show test coverage / test cycles for a Jira issue" | `as-qmetry-coverage` skill | Jira issue key (e.g. `PROJ-123`) |
 | "Search test cycles in a project" | `qmetry_search_test_cycles` directly | project_id (= Jira project ID from `jira_get_issue`) |
 | "Get details of a specific test cycle" | `qmetry_get_test_cycle` directly | test cycle ID from search results |

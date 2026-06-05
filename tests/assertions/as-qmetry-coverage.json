@@ -86,6 +86,12 @@
     "pattern": "qmetry_search_requirements|traceability"
   },
   {
+    "name": "no_bad_search_requirements_project_id_arg",
+    "type": "not_contains",
+    "pattern": "qmetry_search_requirements\\s*\\([^)]*project_id",
+    "_comment": "Regression guard: qmetry_search_requirements keys off the Jira issue key only — it has no project_id parameter."
+  },
+  {
     "name": "no_real_customer_names",
     "type": "not_contains",
     "pattern": "(?:NYW|ventek|venVUE|Caracal|NYWATERWAY|AllClients|NYWY)"

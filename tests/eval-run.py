@@ -12,7 +12,10 @@ Checks:
     2. Description length (>= 80 chars — short descriptions don't trigger reliably)
     3. File references resolve (paths mentioned in skill bodies that look like
        repo-relative paths must exist on disk)
-    4. Per-skill assertions from tests/assertions/<dirname>.json with check types:
+    4. Tool cross-reference (allowed-tools + body-referenced tools must be
+       registered) and tool-argument validation (every `tool(arg: …)` named
+       argument in a skill body must be a real parameter of that tool).
+    5. Per-skill assertions from tests/assertions/<dirname>.json with check types:
          - contains: regex must match in skill body (+ references/)
          - not_contains: regex must NOT match in SKILL.md body (refs ignored)
          - frontmatter_field: a frontmatter key must equal a given value
@@ -125,16 +128,29 @@ def check_frontmatter(result, skill_filter=None):
                     f"missing or empty '{field}' in frontmatter",
                 )
 
+        # Description must be a tight, picker-label-sized imperative line:
+        # 5–10 words per the workspace Hard Rule (the slash-command picker
+        # renders it verbatim, so long descriptions become a wall of text).
+        # Trigger-phrase discovery belongs in agents/, not here. A little
+        # slack (4–12 words) keeps the check from nagging on edge cases.
         desc = fm.get("description") or ""
         if isinstance(desc, list):
             desc = " ".join(desc)
-        if len(desc) >= 80:
+        words = len(desc.split())
+        banned_prefix = re.match(r"\s*this skill should be used when", desc, re.I)
+        if banned_prefix:
+            result.fail(
+                f"frontmatter:{dirname}:description_style",
+                "description starts with the banned 'This skill should be "
+                "used when…' prefix — keep it to a 5–10 word imperative line",
+            )
+        elif 4 <= words <= 12:
             result.ok(f"frontmatter:{dirname}:description_length")
         else:
             result.warn(
                 f"frontmatter:{dirname}:description_length",
-                f"description is only {len(desc)} chars — short descriptions "
-                f"don't trigger the skill reliably; aim for >= 80",
+                f"description is {words} words — the workspace rule is a "
+                f"5–10 word imperative line (picker renders it verbatim)",
             )
 
 
@@ -392,6 +408,154 @@ def check_tool_skill_crossref(result, skill_filter=None):
                 )
 
 
+# ─── Check 7: Tool-argument validation ───
+#
+# Check 4 proves a tool a skill calls EXISTS. This goes further: every
+# named argument a skill body passes to a tool call — `tool_name(arg: …)`
+# — must be a real parameter of that tool. Catches the silent class of bug
+# where a skill confidently passes an argument the tool ignores, e.g.
+# `qmetry_search_requirements(project_id: …)` (that tool keys off the Jira
+# issue key only) or `qmetry_search_executions(project_id: …)` (it takes
+# test_cycle_id). Those produce wrong-or-empty results with no error, so
+# only a contract check like this catches them. Params are parsed from the
+# `z.object({ … })` of each `server.addTool`, resolving `...spread` objects.
+
+
+def _find_matching(s, i, open_ch, close_ch):
+    """i points at open_ch; return index of the matching close_ch (or -1)."""
+    depth = 0
+    while i < len(s):
+        c = s[i]
+        if c == open_ch:
+            depth += 1
+        elif c == close_ch:
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return -1
+
+
+def _top_level_members(obj_body):
+    """Given the text inside a `{ … }`, return (keys, spread_names) that sit
+    at brace-depth 0 — i.e. the object's own members, not nested ones."""
+    keys, spreads, depth, i = [], [], 0, 0
+    while i < len(obj_body):
+        c = obj_body[i]
+        if c in "{[(":
+            depth += 1
+            i += 1
+            continue
+        if c in "}])":
+            depth -= 1
+            i += 1
+            continue
+        if depth == 0:
+            m = re.match(r"\.\.\.(\w+)", obj_body[i:])
+            if m:
+                spreads.append(m.group(1))
+                i += m.end()
+                continue
+            m = re.match(r"(\w+)\s*:", obj_body[i:])
+            if m:
+                keys.append(m.group(1))
+                i += m.end()
+                continue
+        i += 1
+    return keys, spreads
+
+
+def collect_tool_params():
+    """tool_name -> set(param names), parsed from server/src/**/*.ts.
+    Resolves module-level `const NAME = { … }` objects used as `...NAME`."""
+    spread_map = {}
+    tool_params = {}
+    if not SERVER_SRC.exists():
+        return tool_params
+    for ts in SERVER_SRC.rglob("*.ts"):
+        try:
+            text = ts.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        # Module-level const objects (potential spreads).
+        for m in re.finditer(r"const\s+(\w+)\s*=\s*\{", text):
+            st = m.end() - 1
+            end = _find_matching(text, st, "{", "}")
+            if end > 0:
+                ks, _ = _top_level_members(text[st + 1 : end])
+                spread_map[m.group(1)] = ks
+        # Tool registrations.
+        for m in re.finditer(r"server\.addTool\(\s*\{", text):
+            bs = m.end() - 1
+            be = _find_matching(text, bs, "{", "}")
+            if be < 0:
+                continue
+            block = text[bs : be + 1]
+            nm = re.search(r'name:\s*"([a-zA-Z0-9_]+)"', block)
+            if not nm:
+                continue
+            po = re.search(r"parameters:\s*z\.object\(", block)
+            params = set()
+            if po:
+                try:
+                    br = block.index("{", po.end())
+                except ValueError:
+                    br = -1
+                if br >= 0:
+                    bce = _find_matching(block, br, "{", "}")
+                    if bce > 0:
+                        ks, sp = _top_level_members(block[br + 1 : bce])
+                        params.update(ks)
+                        for s in sp:
+                            params.update(spread_map.get(s, []))
+            tool_params[nm.group(1)] = params
+    return tool_params
+
+
+# Arg names appear right after `(` or a top-level `,` as `name:`. Anchoring
+# on those delimiters avoids matching colons inside argument *values*.
+_ARG_NAME_RE = re.compile(r"(?:\(|,)\s*(\w+)\s*:")
+
+
+def check_tool_arg_validation(result, skill_filter=None):
+    tool_params = collect_tool_params()
+    if not tool_params:
+        result.fail(
+            "argcheck:server_src_discovery",
+            f"no tool params parsed under {SERVER_SRC}",
+        )
+        return
+    # Sort tool names longest-first so e.g. `jira_get_issue` is matched
+    # before the shorter `get_issue`; a leading word-boundary guard then
+    # prevents the short name from matching the tail of the long one.
+    names = sorted(tool_params, key=len, reverse=True)
+    for dirname, skill_file in list_skill_dirs():
+        if skill_filter and dirname != skill_filter:
+            continue
+        body = read_file(skill_file)
+        found_bad = False
+        for tn in names:
+            params = tool_params[tn]
+            for cm in re.finditer(r"(?<![A-Za-z0-9_])" + re.escape(tn) + r"\s*\(", body):
+                op = cm.end() - 1
+                ce = _find_matching(body, op, "(", ")")
+                if ce < 0:
+                    continue
+                arglist = body[op + 1 : ce]
+                for am in _ARG_NAME_RE.finditer("(" + arglist):
+                    arg = am.group(1)
+                    if arg not in params:
+                        line_num = body[: cm.start()].count("\n") + 1
+                        result.fail(
+                            f"argcheck:{dirname}:{tn}:{arg}",
+                            f"SKILL.md:L{line_num} calls {tn}({arg}: …) but {arg!r} "
+                            f"is not a parameter of {tn}. Valid: {sorted(params)}",
+                        )
+                        found_bad = True
+        if not found_bad:
+            result.ok(f"argcheck:{dirname}")
+
+
 # ─── Check 5: Scope list structural validation ───
 #
 # Every entry in SCOPES.confluence (and .jira, .bitbucket) must have
@@ -502,44 +666,50 @@ def check_scope_list(result):
 # fail the eval suite if any unit test fails.
 
 STORAGE_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_storage.test.ts"
+QMETRY_WRITE_TEST = PROJECT_ROOT / "server" / "src" / "qmetry" / "_write.test.ts"
 
 
-def check_storage_unit_tests(result):
-    if not STORAGE_TEST.exists():
+def _run_tsx_unit_test(result, check_id, test_path):
+    """Run a `N passed, M failed`-emitting tsx unit test and record the result."""
+    if not test_path.exists():
         # Absent file → skip silently; other checks will flag missing tests.
         return
     try:
         proc = subprocess.run(
-            ["npx", "tsx", str(STORAGE_TEST)],
+            ["npx", "tsx", str(test_path)],
             capture_output=True,
             text=True,
             cwd=str(PROJECT_ROOT / "server"),
             timeout=60,
         )
     except Exception as e:
-        result.fail("storage:unit_tests", f"failed to spawn: {e}")
+        result.fail(check_id, f"failed to spawn: {e}")
         return
 
     out = (proc.stdout or "") + (proc.stderr or "")
-    # Parse the "N passed, M failed" summary the runner emits.
     summary = re.search(r"(\d+)\s+passed,\s+(\d+)\s+failed", out)
     if not summary:
-        result.fail(
-            "storage:unit_tests",
-            f"could not parse test output\n{out.strip()[:400]}",
-        )
+        result.fail(check_id, f"could not parse test output\n{out.strip()[:400]}")
         return
     passed = int(summary.group(1))
     failed = int(summary.group(2))
     if failed == 0:
-        result.ok(f"storage:unit_tests ({passed} tests)")
+        result.ok(f"{check_id} ({passed} tests)")
     else:
-        # Show the FAIL lines from the test output.
         fails = "\n".join(l for l in out.splitlines() if "FAIL:" in l)
-        result.fail(
-            "storage:unit_tests",
-            f"{failed} of {passed + failed} tests failed\n{fails}",
-        )
+        result.fail(check_id, f"{failed} of {passed + failed} tests failed\n{fails}")
+
+
+def check_storage_unit_tests(result):
+    _run_tsx_unit_test(result, "storage:unit_tests", STORAGE_TEST)
+
+
+def check_qmetry_write_tests(result):
+    # Pins the exact request body/path of every QMetry create/update/link tool
+    # against the qTM4J Cloud OpenAPI spec. These writes 2xx-succeed even when
+    # the body is wrong (silent no-op), so wire-shape assertions are the only
+    # way to catch a regression without creating in live production.
+    _run_tsx_unit_test(result, "qmetry:write_tests", QMETRY_WRITE_TEST)
 
 
 # ─── Report ───
@@ -618,9 +788,11 @@ def main():
     check_file_references(result, skill_filter)
     check_skill_assertions(result, skill_filter)
     check_tool_skill_crossref(result, skill_filter)
+    check_tool_arg_validation(result, skill_filter)
     if skill_filter is None:
         check_scope_list(result)
         check_storage_unit_tests(result)
+        check_qmetry_write_tests(result)
 
     sys.exit(print_report(result, verbose))
 

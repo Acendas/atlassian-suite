@@ -80,7 +80,7 @@ export function registerQMetryExecutionTools(server: FastMCP, opts: { readOnly: 
       status_name: z.string().optional().describe("Execution result name, e.g. 'Pass', 'Fail', 'Blocked', 'Not Executed', 'Work In Progress'. Requires project_id."),
       project_id: z.number().int().optional().describe("Numeric QMetry project ID — required when status_name is provided to look up the correct executionResultId"),
       comment: z.string().optional().describe("Comment or notes for this execution"),
-      assignee_account_id: z.string().optional().describe("Atlassian account ID of the person to assign (e.g. '712020:abc...'). Find account IDs via jira_get_user_profile or jira_search."),
+      assignee_account_id: z.string().optional().describe("Atlassian account ID of the person to assign, in the '712020:abc...' form (verified live against QMetry Cloud — the API's own example shows a legacy 'JIRAUSER01' key, but Cloud requires the account ID). Find account IDs via jira_get_user_profile or jira_search. The user must be a member of the QMetry project or the assignment silently won't persist."),
     }),
     execute: async (args) =>
       safeQMetry(async () => {
@@ -107,7 +107,10 @@ export function registerQMetryExecutionTools(server: FastMCP, opts: { readOnly: 
         }
 
         if (args.comment !== undefined) body.comment = args.comment;
-        if (args.assignee_account_id) body.assignee = args.assignee_account_id;
+        // QMetry's EditTestCaseExecution schema names this field `executionAssignee`
+        // (it accepts the Atlassian account id). Sending `assignee` — the obvious guess —
+        // is silently dropped: the PUT still 204s but the value never persists.
+        if (args.assignee_account_id) body.executionAssignee = args.assignee_account_id;
 
         if (Object.keys(body).length === 0) {
           throw new Error("Provide at least one of: status_name, comment, or assignee_account_id.");
@@ -119,6 +122,28 @@ export function registerQMetryExecutionTools(server: FastMCP, opts: { readOnly: 
           body,
         );
         return { updated: true, fields: Object.keys(body) };
+      }),
+  });
+
+  // ─── Delete an execution ─────────────────────────────────────────────────
+
+  server.addTool({
+    name: "qmetry_delete_execution",
+    description:
+      "Delete a test case execution record within a test cycle. " +
+      "Irreversible — removes the execution and its result/comment/attachments. " +
+      "Get execution_id (testCaseExecutionId) from qmetry_get_execution.",
+    parameters: z.object({
+      test_cycle_id: z.string().describe("Internal QMetry test cycle ID"),
+      execution_id: z.number().int().describe("testCaseExecutionId from qmetry_get_execution results"),
+    }),
+    execute: async (args) =>
+      safeQMetry(() => {
+        ensureWritable(opts.readOnly);
+        // DELETE /testcycles/{id}/testcase-executions/{execId} — no request body.
+        return qmetryClient().delete<unknown>(
+          `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcase-executions/${args.execution_id}`,
+        );
       }),
   });
 
@@ -147,11 +172,12 @@ export function registerQMetryExecutionTools(server: FastMCP, opts: { readOnly: 
   server.addTool({
     name: "qmetry_upload_execution_attachment",
     description:
-      "Upload a local file to a QMetry test cycle's file store (2-step: get S3 policy from QMetry, POST to S3). " +
-      "Files are stored at the test cycle level in QMetry. " +
-      "To see uploaded files use qmetry_list_execution_attachments (shows execution-scoped attachments added via the QMetry app).",
+      "Attach a local file to a specific test case execution (2-step: get an execution-scoped S3 policy from QMetry, POST the file to S3). " +
+      "The uploaded file links to the given execution and appears in qmetry_list_execution_attachments (hasAttachment becomes true). " +
+      "Requires execution_id (testCaseExecutionId from qmetry_get_execution).",
     parameters: z.object({
       test_cycle_id: z.string().describe("Internal QMetry test cycle ID"),
+      execution_id: z.number().int().describe("testCaseExecutionId from qmetry_get_execution — the execution the file attaches to"),
       project_id: z.number().int().describe("Numeric QMetry project ID"),
       local_file_path: z.string().describe("Absolute path to the file on this machine to upload"),
       file_name: z.string().optional().describe("Override file name (defaults to the filename from local_file_path)"),
@@ -169,16 +195,21 @@ export function registerQMetryExecutionTools(server: FastMCP, opts: { readOnly: 
         // Check file exists
         await stat(args.local_file_path);
 
-        // Step 1: get S3 upload policy from QMetry
+        // Step 1: get an EXECUTION-scoped S3 upload policy from QMetry.
+        // The execution endpoint (testcaseExecutionId param) returns a policy whose S3
+        // `key` is scoped to this execution — that scoping IS the link, so uploading to
+        // S3 makes the file show up on the execution. The cycle-level endpoint
+        // (/testcycles/attachments/url, testCycleId param) only lands the file in the
+        // cycle's file store and never links it to any execution (hasAttachment stays false).
         const policy = await qmetryClient().get<{
           endpoint_url: string;
           params: Record<string, string>;
         }>(
-          "/testcycles/attachments/url",
+          `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcase-executions/attachments/url`,
           {
             projectId: args.project_id,
             fileName,
-            testCycleId: args.test_cycle_id,
+            testcaseExecutionId: args.execution_id,
           },
         );
 

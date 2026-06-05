@@ -165453,6 +165453,20 @@ function registerConfluenceTools(server2, opts) {
 }
 
 // src/qmetry/_helpers.ts
+async function resolveNamedId(listPath, name, kind) {
+  const res = await qmetryClient().get(listPath);
+  const arr = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+  const match2 = arr.find(
+    (r) => String(r?.name ?? r?.value ?? "").toLowerCase() === name.toLowerCase()
+  );
+  if (!match2 || match2.id == null) {
+    const available = arr.map((r) => r?.name ?? r?.value).filter((n) => n != null && n !== "").join(", ");
+    throw new Error(
+      `Unknown ${kind} '${name}'${available ? `. Available: ${available}` : ""}.`
+    );
+  }
+  return Number(match2.id);
+}
 var STRIP_KEYS = /* @__PURE__ */ new Set([
   "iconUrl",
   // CDN URLs with signed tokens — huge, meaningless to users
@@ -165650,16 +165664,31 @@ function registerQMetryTestCaseTools(server2, opts) {
       labels: external_exports4.array(external_exports4.string()).optional(),
       folder_id: external_exports4.number().int().optional()
     }),
-    execute: async (args) => safeQMetry(() => {
+    execute: async (args) => safeQMetry(async () => {
       ensureWritable4(opts.readOnly);
       const body = {
         projectId: args.project_id,
         summary: args.summary
       };
-      if (args.status) body.status = { name: args.status };
-      if (args.priority) body.priority = { name: args.priority };
+      if (args.status)
+        body.status = await resolveNamedId(
+          `/projects/${args.project_id}/testcase-statuses`,
+          args.status,
+          "test case status"
+        );
+      if (args.priority)
+        body.priority = await resolveNamedId(
+          `/projects/${args.project_id}/priorities`,
+          args.priority,
+          "priority"
+        );
       if (args.description) body.description = args.description;
-      if (args.labels?.length) body.labels = args.labels;
+      if (args.labels?.length)
+        body.labels = await Promise.all(
+          args.labels.map(
+            (l) => resolveNamedId(`/projects/${args.project_id}/labels`, l, "label")
+          )
+        );
       if (args.folder_id) body.folderId = args.folder_id;
       return qmetryClient().post("/testcases", body);
     })
@@ -165670,20 +165699,34 @@ function registerQMetryTestCaseTools(server2, opts) {
     parameters: external_exports4.object({
       test_case_id: external_exports4.string().describe("Internal QMetry test case ID (opaque string, not the human-readable key)"),
       version: external_exports4.number().int().min(1).default(1).describe("Version number to update. Use 1 for the latest version."),
+      project_id: external_exports4.number().int().optional().describe("Numeric QMetry project ID \u2014 required when status or priority is provided (used to look up the correct status/priority id for this project)."),
       summary: external_exports4.string().optional(),
-      status: external_exports4.string().optional().describe("New status name"),
-      priority: external_exports4.string().optional().describe("New priority name"),
-      description: external_exports4.string().optional(),
-      labels: external_exports4.array(external_exports4.string()).optional()
+      status: external_exports4.string().optional().describe("New status name, e.g. 'In Progress'. Requires project_id."),
+      priority: external_exports4.string().optional().describe("New priority name, e.g. 'High'. Requires project_id."),
+      description: external_exports4.string().optional()
     }),
-    execute: async (args) => safeQMetry(() => {
+    execute: async (args) => safeQMetry(async () => {
       ensureWritable4(opts.readOnly);
       const body = {};
       if (args.summary) body.summary = args.summary;
-      if (args.status) body.status = { name: args.status };
-      if (args.priority) body.priority = { name: args.priority };
+      if (args.status || args.priority) {
+        if (!args.project_id) {
+          throw new Error("project_id is required when status or priority is provided (used to look up the id for this project).");
+        }
+        if (args.status)
+          body.status = await resolveNamedId(
+            `/projects/${args.project_id}/testcase-statuses`,
+            args.status,
+            "test case status"
+          );
+        if (args.priority)
+          body.priority = await resolveNamedId(
+            `/projects/${args.project_id}/priorities`,
+            args.priority,
+            "priority"
+          );
+      }
       if (args.description) body.description = args.description;
-      if (args.labels) body.labels = args.labels;
       return qmetryClient().put(
         `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}`,
         body
@@ -165716,7 +165759,7 @@ function registerQMetryTestCaseTools(server2, opts) {
     }),
     execute: async (args) => safeQMetry(() => {
       ensureWritable4(opts.readOnly);
-      const body = { step: args.step };
+      const body = { stepDetails: args.step };
       if (args.expected_result) body.expectedResult = args.expected_result;
       if (args.test_data) body.testData = args.test_data;
       return qmetryClient().post(
@@ -165739,7 +165782,7 @@ function registerQMetryTestCaseTools(server2, opts) {
     execute: async (args) => safeQMetry(() => {
       ensureWritable4(opts.readOnly);
       const body = { id: args.step_id };
-      if (args.step) body.step = args.step;
+      if (args.step) body.stepDetails = args.step;
       if (args.expected_result !== void 0) body.expectedResult = args.expected_result;
       if (args.test_data !== void 0) body.testData = args.test_data;
       return qmetryClient().put(
@@ -165758,9 +165801,10 @@ function registerQMetryTestCaseTools(server2, opts) {
     }),
     execute: async (args) => safeQMetry(() => {
       ensureWritable4(opts.readOnly);
-      return qmetryClient().delete(
+      return qmetryClient().request(
+        "DELETE",
         `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
-        { id: args.step_id }
+        { body: { stepIds: [args.step_id] } }
       );
     })
   });
@@ -165790,8 +165834,8 @@ function registerQMetryTestCaseTools(server2, opts) {
     execute: async (args) => safeQMetry(() => {
       ensureWritable4(opts.readOnly);
       return qmetryClient().post(
-        `/testcases/${encodeURIComponent(args.test_case_id)}/version/${args.version}/requirements/link`,
-        { issueKey: args.jira_issue_key }
+        `/requirements/${encodeURIComponent(args.jira_issue_key)}/testcases/link`,
+        { testcases: [{ id: args.test_case_id, versionNo: args.version }] }
       );
     })
   });
@@ -165801,13 +165845,14 @@ function registerQMetryTestCaseTools(server2, opts) {
     parameters: external_exports4.object({
       test_case_id: external_exports4.string().describe("Internal QMetry test case ID"),
       version: external_exports4.number().int().min(1).default(1),
-      requirement_id: external_exports4.string().describe("Requirement ID from qmetry_get_test_case_requirements")
+      jira_issue_key: external_exports4.string().describe("Jira issue key whose link to remove, e.g. PROJ-123")
     }),
     execute: async (args) => safeQMetry(() => {
       ensureWritable4(opts.readOnly);
-      return qmetryClient().post(
-        `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/requirements/unlink`,
-        { id: args.requirement_id }
+      return qmetryClient().request(
+        "DELETE",
+        `/requirements/${encodeURIComponent(args.jira_issue_key)}/testcases/unlink`,
+        { body: { testcases: [{ id: args.test_case_id, versionNo: args.version }] } }
       );
     })
   });
@@ -165875,20 +165920,32 @@ function registerQMetryTestCycleTools(server2, opts) {
       project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
       summary: external_exports4.string().describe("Test cycle name / summary"),
       description: external_exports4.string().optional(),
-      status: external_exports4.string().optional().describe("Initial status, e.g. 'Not Started'"),
-      start_date: external_exports4.string().optional().describe("ISO 8601 date, e.g. 2026-07-01"),
-      end_date: external_exports4.string().optional().describe("ISO 8601 date")
+      status: external_exports4.string().optional().describe("Initial status name, e.g. 'Not Started'"),
+      priority: external_exports4.string().optional().describe("Priority name, e.g. 'Medium'"),
+      start_date: external_exports4.string().optional().describe("Planned start, QMetry format 'dd/MMM/yyyy HH:mm', e.g. '01/Jul/2026 09:00'"),
+      end_date: external_exports4.string().optional().describe("Planned end, QMetry format 'dd/MMM/yyyy HH:mm', e.g. '15/Jul/2026 18:00'")
     }),
-    execute: async (args) => safeQMetry(() => {
+    execute: async (args) => safeQMetry(async () => {
       ensureWritable4(opts.readOnly);
       const body = {
         projectId: args.project_id,
         summary: args.summary
       };
       if (args.description) body.description = args.description;
-      if (args.status) body.status = { name: args.status };
-      if (args.start_date) body.startDate = args.start_date;
-      if (args.end_date) body.endDate = args.end_date;
+      if (args.status)
+        body.status = await resolveNamedId(
+          `/projects/${args.project_id}/testcycle-statuses`,
+          args.status,
+          "test cycle status"
+        );
+      if (args.priority)
+        body.priority = await resolveNamedId(
+          `/projects/${args.project_id}/priorities`,
+          args.priority,
+          "priority"
+        );
+      if (args.start_date) body.plannedStartDate = args.start_date;
+      if (args.end_date) body.plannedEndDate = args.end_date;
       return qmetryClient().post("/testcycles", body);
     })
   });
@@ -165897,20 +165954,38 @@ function registerQMetryTestCycleTools(server2, opts) {
     description: "Update an existing test cycle's summary, status, or dates.",
     parameters: external_exports4.object({
       test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID (opaque string from search results)"),
+      project_id: external_exports4.number().int().optional().describe("Numeric QMetry project ID \u2014 required when status or priority is provided (used to look up the id for this project)."),
       summary: external_exports4.string().optional(),
       description: external_exports4.string().optional(),
-      status: external_exports4.string().optional(),
-      start_date: external_exports4.string().optional().describe("ISO 8601 date"),
-      end_date: external_exports4.string().optional().describe("ISO 8601 date")
+      status: external_exports4.string().optional().describe("New status name. Requires project_id."),
+      priority: external_exports4.string().optional().describe("New priority name. Requires project_id."),
+      start_date: external_exports4.string().optional().describe("Planned start, QMetry format 'dd/MMM/yyyy HH:mm'"),
+      end_date: external_exports4.string().optional().describe("Planned end, QMetry format 'dd/MMM/yyyy HH:mm'")
     }),
-    execute: async (args) => safeQMetry(() => {
+    execute: async (args) => safeQMetry(async () => {
       ensureWritable4(opts.readOnly);
       const body = {};
       if (args.summary) body.summary = args.summary;
       if (args.description) body.description = args.description;
-      if (args.status) body.status = { name: args.status };
-      if (args.start_date) body.startDate = args.start_date;
-      if (args.end_date) body.endDate = args.end_date;
+      if (args.status || args.priority) {
+        if (!args.project_id) {
+          throw new Error("project_id is required when status or priority is provided (used to look up the id for this project).");
+        }
+        if (args.status)
+          body.status = await resolveNamedId(
+            `/projects/${args.project_id}/testcycle-statuses`,
+            args.status,
+            "test cycle status"
+          );
+        if (args.priority)
+          body.priority = await resolveNamedId(
+            `/projects/${args.project_id}/priorities`,
+            args.priority,
+            "priority"
+          );
+      }
+      if (args.start_date) body.plannedStartDate = args.start_date;
+      if (args.end_date) body.plannedEndDate = args.end_date;
       return qmetryClient().put(
         `/testcycles/${encodeURIComponent(args.test_cycle_id)}`,
         body
@@ -165942,13 +166017,31 @@ function registerQMetryTestCycleTools(server2, opts) {
     description: "Add one or more test cases to a test cycle by their internal IDs.",
     parameters: external_exports4.object({
       test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID"),
-      test_case_ids: external_exports4.array(external_exports4.string()).min(1).describe("Internal QMetry test case IDs (opaque id strings, not keys)")
+      test_case_ids: external_exports4.array(external_exports4.string()).min(1).describe("Internal QMetry test case IDs (opaque id strings, not keys)"),
+      version: external_exports4.number().int().min(1).default(1).describe("Test case version number to link (applied to every id). Default 1.")
     }),
     execute: async (args) => safeQMetry(() => {
       ensureWritable4(opts.readOnly);
       return qmetryClient().post(
         `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases`,
-        { testcases: args.test_case_ids.map((id) => ({ id })) }
+        { testCases: args.test_case_ids.map((id) => ({ id, versionNo: args.version })) }
+      );
+    })
+  });
+  server2.addTool({
+    name: "qmetry_remove_test_cases_from_cycle",
+    description: "Remove (unlink) one or more test cases from a test cycle by their internal IDs. This unlinks them from the cycle \u2014 it does NOT delete the test cases themselves.",
+    parameters: external_exports4.object({
+      test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID"),
+      test_case_ids: external_exports4.array(external_exports4.string()).min(1).describe("Internal QMetry test case IDs (opaque id strings, not keys)"),
+      version: external_exports4.number().int().min(1).default(1).describe("Test case version number to unlink (applied to every id). Default 1.")
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      return qmetryClient().request(
+        "DELETE",
+        `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases`,
+        { body: { testCases: args.test_case_ids.map((id) => ({ id, versionNo: args.version })) } }
       );
     })
   });
@@ -166054,7 +166147,7 @@ function registerQMetryExecutionTools(server2, opts) {
       status_name: external_exports4.string().optional().describe("Execution result name, e.g. 'Pass', 'Fail', 'Blocked', 'Not Executed', 'Work In Progress'. Requires project_id."),
       project_id: external_exports4.number().int().optional().describe("Numeric QMetry project ID \u2014 required when status_name is provided to look up the correct executionResultId"),
       comment: external_exports4.string().optional().describe("Comment or notes for this execution"),
-      assignee_account_id: external_exports4.string().optional().describe("Atlassian account ID of the person to assign (e.g. '712020:abc...'). Find account IDs via jira_get_user_profile or jira_search.")
+      assignee_account_id: external_exports4.string().optional().describe("Atlassian account ID of the person to assign, in the '712020:abc...' form (verified live against QMetry Cloud \u2014 the API's own example shows a legacy 'JIRAUSER01' key, but Cloud requires the account ID). Find account IDs via jira_get_user_profile or jira_search. The user must be a member of the QMetry project or the assignment silently won't persist.")
     }),
     execute: async (args) => safeQMetry(async () => {
       ensureWritable4(opts.readOnly);
@@ -166076,7 +166169,7 @@ function registerQMetryExecutionTools(server2, opts) {
         body.executionResultId = match2.id;
       }
       if (args.comment !== void 0) body.comment = args.comment;
-      if (args.assignee_account_id) body.assignee = args.assignee_account_id;
+      if (args.assignee_account_id) body.executionAssignee = args.assignee_account_id;
       if (Object.keys(body).length === 0) {
         throw new Error("Provide at least one of: status_name, comment, or assignee_account_id.");
       }
@@ -166085,6 +166178,20 @@ function registerQMetryExecutionTools(server2, opts) {
         body
       );
       return { updated: true, fields: Object.keys(body) };
+    })
+  });
+  server2.addTool({
+    name: "qmetry_delete_execution",
+    description: "Delete a test case execution record within a test cycle. Irreversible \u2014 removes the execution and its result/comment/attachments. Get execution_id (testCaseExecutionId) from qmetry_get_execution.",
+    parameters: external_exports4.object({
+      test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID"),
+      execution_id: external_exports4.number().int().describe("testCaseExecutionId from qmetry_get_execution results")
+    }),
+    execute: async (args) => safeQMetry(() => {
+      ensureWritable4(opts.readOnly);
+      return qmetryClient().delete(
+        `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcase-executions/${args.execution_id}`
+      );
     })
   });
   server2.addTool({
@@ -166105,9 +166212,10 @@ function registerQMetryExecutionTools(server2, opts) {
   });
   server2.addTool({
     name: "qmetry_upload_execution_attachment",
-    description: "Upload a local file to a QMetry test cycle's file store (2-step: get S3 policy from QMetry, POST to S3). Files are stored at the test cycle level in QMetry. To see uploaded files use qmetry_list_execution_attachments (shows execution-scoped attachments added via the QMetry app).",
+    description: "Attach a local file to a specific test case execution (2-step: get an execution-scoped S3 policy from QMetry, POST the file to S3). The uploaded file links to the given execution and appears in qmetry_list_execution_attachments (hasAttachment becomes true). Requires execution_id (testCaseExecutionId from qmetry_get_execution).",
     parameters: external_exports4.object({
       test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID"),
+      execution_id: external_exports4.number().int().describe("testCaseExecutionId from qmetry_get_execution \u2014 the execution the file attaches to"),
       project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
       local_file_path: external_exports4.string().describe("Absolute path to the file on this machine to upload"),
       file_name: external_exports4.string().optional().describe("Override file name (defaults to the filename from local_file_path)")
@@ -166119,11 +166227,11 @@ function registerQMetryExecutionTools(server2, opts) {
       const fileName = args.file_name ?? basename3(args.local_file_path);
       await stat(args.local_file_path);
       const policy = await qmetryClient().get(
-        "/testcycles/attachments/url",
+        `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcase-executions/attachments/url`,
         {
           projectId: args.project_id,
           fileName,
-          testCycleId: args.test_cycle_id
+          testcaseExecutionId: args.execution_id
         }
       );
       if (!policy?.endpoint_url || !policy?.params) {
@@ -166221,12 +166329,12 @@ function registerQMetryFolderTools(server2, opts) {
     parameters: external_exports4.object({
       project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
       name: external_exports4.string().describe("Folder name"),
-      parent_id: external_exports4.number().int().optional().describe("Parent folder ID for nesting. Omit for a top-level folder.")
+      parent_id: external_exports4.number().int().optional().describe("Parent folder ID. QMetry requires a parent; for a top-level folder pass the project's root folder ID (from qmetry_search_folders).")
     }),
     execute: async (args) => safeQMetry(() => {
       ensureWritable4(opts.readOnly);
-      const body = { name: args.name };
-      if (args.parent_id) body.parentId = args.parent_id;
+      const body = { folderName: args.name };
+      if (args.parent_id != null) body.parentId = args.parent_id;
       return qmetryClient().post(`/projects/${args.project_id}/testcase-folders`, body);
     })
   });

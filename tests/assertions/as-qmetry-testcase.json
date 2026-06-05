@@ -37,6 +37,63 @@
     "value": "qmetry_update_execution"
   },
   {
+    "name": "allows_get_execution",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "qmetry_get_execution",
+    "_comment": "Load-bearing: get_execution is the ONLY source of testCaseExecutionId (execution_id), which update_execution requires. Without it the update flow cannot complete."
+  },
+  {
+    "name": "allows_search_test_cycles",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "qmetry_search_test_cycles",
+    "_comment": "Needed to resolve the cycle before search_executions (which takes test_cycle_id, not project_id)."
+  },
+  {
+    "name": "allows_upload_execution_attachment",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "qmetry_upload_execution_attachment"
+  },
+  {
+    "name": "allows_list_execution_attachments",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "qmetry_list_execution_attachments"
+  },
+  {
+    "name": "allows_jira_get_user_profile",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "jira_get_user_profile",
+    "_comment": "Assignee is an Atlassian account id, resolved via jira_get_user_profile."
+  },
+  {
+    "name": "resolves_execution_id",
+    "type": "contains",
+    "pattern": "testCaseExecutionId|execution_id",
+    "_comment": "Flow must resolve the execution id, not stop at the cycle map id."
+  },
+  {
+    "name": "documents_assignee_is_account_id",
+    "type": "contains",
+    "pattern": "account id|account ID|accountId",
+    "_comment": "Assignee must be passed as an Atlassian account id, not a display name."
+  },
+  {
+    "name": "requires_read_back_verification",
+    "type": "contains",
+    "pattern": "(?i)2xx is not proof|read.?back|re-?call .*qmetry_get_execution|confirm.*actually changed",
+    "_comment": "A 2xx from QMetry does not prove persistence (the assignee/attachment bugs were silent false-success); the flow must read back to confirm."
+  },
+  {
+    "name": "no_bad_search_executions_project_id_arg",
+    "type": "not_contains",
+    "pattern": "qmetry_search_executions\\s*\\([^)]*project_id",
+    "_comment": "Regression guard: qmetry_search_executions takes test_cycle_id, NOT project_id. The pre-fix skill called it with project_id and could not complete a write."
+  },
+  {
     "name": "allows_jira_get_issue",
     "type": "frontmatter_contains",
     "field": "allowed-tools",

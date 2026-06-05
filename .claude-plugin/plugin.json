@@ -1,6 +1,6 @@
 {
   "name": "atlassian-suite",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Acendas Atlassian Suite — unified Jira Cloud, Confluence Cloud, Bitbucket Cloud, and QMetry Test Management integration for Claude Code. Jira + Confluence + Bitbucket + QMetry tools, workflow skills, and a multi-scanner PR review pipeline.",
   "author": {
     "name": "Acendas",

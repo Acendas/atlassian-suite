@@ -1,6 +1,48 @@
 // Shared helpers for QMetry tool modules.
 
 import { maskToken } from "../common/credStore.js";
+import { qmetryClient } from "../common/qmetryClient.js";
+
+/**
+ * Resolve a QMetry metadata *name* (status / priority / label) to its numeric
+ * id by reading a project-scoped lookup endpoint and matching on name.
+ *
+ * This exists because QMetry's WRITE schemas (create/update test case, cycle,
+ * execution) take bare integer ids — `status: 231245`, `priority: 7`,
+ * `labels: [12,13]` — even though the READ responses surface those same fields
+ * as `{ id, name }` objects. Sending the read-shaped `{ name: "Pass" }` on a
+ * write is silently dropped (or rejected), which is the whole class of bug that
+ * made assignee/status/priority writes look like they worked but didn't. Agents
+ * speak in names ("Pass", "High", "To Do"), so resolve here and send the id.
+ *
+ * `listPath` examples (all return an array — sometimes bare, sometimes under
+ * a `data` envelope — of `{ id, name }`):
+ *   /projects/{pid}/testcase-statuses   /projects/{pid}/testcycle-statuses
+ *   /projects/{pid}/priorities          /projects/{pid}/labels
+ *
+ * Fails loud with the available names when no match — never silently omits.
+ */
+export async function resolveNamedId(
+  listPath: string,
+  name: string,
+  kind: string,
+): Promise<number> {
+  const res = await qmetryClient().get<any>(listPath);
+  const arr: any[] = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+  const match = arr.find(
+    (r) => String(r?.name ?? r?.value ?? "").toLowerCase() === name.toLowerCase(),
+  );
+  if (!match || match.id == null) {
+    const available = arr
+      .map((r) => r?.name ?? r?.value)
+      .filter((n) => n != null && n !== "")
+      .join(", ");
+    throw new Error(
+      `Unknown ${kind} '${name}'${available ? `. Available: ${available}` : ""}.`,
+    );
+  }
+  return Number(match.id);
+}
 
 // Fields that are always noise for users — internal bookkeeping, CDN tokens, etc.
 const STRIP_KEYS = new Set([
