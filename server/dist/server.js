@@ -37972,7 +37972,7 @@ var require_snapshot_utils = __commonJS({
 var require_snapshot_recorder = __commonJS({
   "node_modules/.pnpm/undici@7.25.0/node_modules/undici/lib/mock/snapshot-recorder.js"(exports, module) {
     "use strict";
-    var { writeFile, readFile: readFile2, mkdir: mkdir3 } = __require("node:fs/promises");
+    var { writeFile, readFile: readFile3, mkdir: mkdir3 } = __require("node:fs/promises");
     var { dirname: dirname3, resolve } = __require("node:path");
     var { setTimeout: setTimeout2, clearTimeout: clearTimeout2 } = __require("node:timers");
     var { InvalidArgumentError, UndiciError } = require_errors3();
@@ -38174,7 +38174,7 @@ var require_snapshot_recorder = __commonJS({
           throw new InvalidArgumentError("Snapshot path is required");
         }
         try {
-          const data = await readFile2(resolve(path), "utf8");
+          const data = await readFile3(resolve(path), "utf8");
           const parsed = JSON.parse(data);
           if (Array.isArray(parsed)) {
             this.#snapshots.clear();
@@ -60013,12 +60013,12 @@ var require_form_data = __commonJS({
         if (value.end != void 0 && value.end != Infinity && value.start != void 0) {
           callback(null, value.end + 1 - (value.start ? value.start : 0));
         } else {
-          fs2.stat(value.path, function(err, stat) {
+          fs2.stat(value.path, function(err, stat2) {
             if (err) {
               callback(err);
               return;
             }
-            var fileSize = stat.size - (value.start ? value.start : 0);
+            var fileSize = stat2.size - (value.start ? value.start : 0);
             callback(null, fileSize);
           });
         }
@@ -163524,8 +163524,8 @@ function registerJiraAttachmentTools(server2, opts) {
       if (!existsSync2(abs)) {
         throw new Error(`file not found: ${abs}`);
       }
-      const { readFile: readFile2 } = await import("node:fs/promises");
-      const bytes = await readFile2(abs);
+      const { readFile: readFile3 } = await import("node:fs/promises");
+      const bytes = await readFile3(abs);
       const form = new FormData();
       const blob = new Blob([new Uint8Array(bytes)]);
       form.append("file", blob, args.filename ?? basename(abs));
@@ -165928,9 +165928,10 @@ function registerQMetryTestCycleTools(server2, opts) {
     execute: async (args) => safeQMetry(
       () => (
         // POST /testcycles/{id}/testcases/search — not GET /testcycles/{id}/testcases
+        // Body must have a non-null filter object (API rejects bare {}).
         qmetryClient().post(
           `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases/search`,
-          {},
+          { filter: {} },
           { startAt: args.start_at, maxResults: args.max_results }
         )
       )
@@ -165997,58 +165998,181 @@ function registerQMetryTestPlanTools(server2) {
 }
 
 // src/qmetry/executions.ts
-var EXECUTION_STATUSES = ["PASS", "FAIL", "BLOCKED", "NOT RUN", "IN PROGRESS"];
+import { readFile as readFile2, stat } from "fs/promises";
+import { basename as basename3 } from "path";
 function registerQMetryExecutionTools(server2, opts) {
   server2.addTool({
-    name: "qmetry_search_executions",
-    description: "List execution results for a QMetry project. Returns test case execution history across all cycles in the project. Uses GET /projects/{projectId}/execution-results.",
+    name: "qmetry_get_execution_results",
+    description: "List execution result statuses (Pass, Fail, Blocked, etc.) with their numeric IDs for a project.",
     parameters: external_exports4.object({
-      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
-      start_at: external_exports4.number().int().min(0).default(0),
-      max_results: external_exports4.number().int().min(1).max(100).default(50)
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID")
     }),
     execute: async (args) => safeQMetry(
-      () => qmetryClient().get(
-        `/projects/${args.project_id}/execution-results`,
-        { startAt: args.start_at, maxResults: args.max_results }
-      )
+      () => qmetryClient().get(`/projects/${args.project_id}/execution-results`)
     )
   });
   server2.addTool({
+    name: "qmetry_search_executions",
+    description: "Search test case executions within a specific test cycle. Returns each test case's execution status, assignee, and execution IDs.",
+    parameters: external_exports4.object({
+      test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID (opaque string from qmetry_search_test_cycles)"),
+      test_case_key: external_exports4.string().optional().describe("Filter to a specific test case key, e.g. PROJ-TC-5"),
+      status: external_exports4.array(external_exports4.string()).optional().describe("Filter by execution result status names, e.g. ['Pass', 'Fail']"),
+      start_at: external_exports4.number().int().min(0).default(0),
+      max_results: external_exports4.number().int().min(1).max(100).default(50)
+    }),
+    execute: async (args) => safeQMetry(() => {
+      const filter2 = {};
+      if (args.test_case_key) filter2.key = args.test_case_key;
+      if (args.status?.length) filter2.status = args.status;
+      return qmetryClient().post(
+        `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases/search`,
+        { filter: filter2 },
+        { startAt: args.start_at, maxResults: args.max_results }
+      );
+    })
+  });
+  server2.addTool({
     name: "qmetry_get_execution",
-    description: "Get details of a single test case execution result within a test cycle. Requires both the test cycle ID and the execution ID. Execution IDs come from qmetry_get_test_cycle_test_cases results.",
+    description: "Get execution history for a test case within a test cycle. Returns the full execution record: status, comment, assignee, attachments flag, step count, timestamps. Use test_cycle_map_id (testCycleTestCaseMapId) from qmetry_search_executions results.",
     parameters: external_exports4.object({
       test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID"),
-      execution_id: external_exports4.string().describe("Test case execution ID from qmetry_get_test_cycle_test_cases results")
+      test_cycle_map_id: external_exports4.number().int().describe("testCycleTestCaseMapId from qmetry_search_executions \u2014 identifies the test case within this cycle")
     }),
     execute: async (args) => safeQMetry(
-      () => (
-        // GET /testcycles/{id}/testcases/{testCycleTestCaseMapId}/executions
-        qmetryClient().get(
-          `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases/${encodeURIComponent(args.execution_id)}/executions`
-        )
+      () => qmetryClient().get(
+        `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases/${args.test_cycle_map_id}/executions`
       )
     )
   });
   server2.addTool({
     name: "qmetry_update_execution",
-    description: "Update the execution status of a test case within a test cycle (pass, fail, blocked, etc.). Requires both the test cycle ID and the test case execution ID.",
+    description: "Update a test case execution within a test cycle: set execution result (Pass/Fail/etc.), add a comment, set the assignee. At least one of status_name, comment, or assignee_account_id is required. Get execution_id (testCaseExecutionId) from qmetry_get_execution or qmetry_search_executions.",
     parameters: external_exports4.object({
-      test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID (from qmetry_search_test_cycles or qmetry_get_test_cycle)"),
-      execution_id: external_exports4.string().describe("Test case execution ID from qmetry_get_test_cycle_test_cases results"),
-      status: external_exports4.enum(EXECUTION_STATUSES).describe("New execution status"),
-      comment: external_exports4.string().optional().describe("Optional comment / notes for this execution result")
+      test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID"),
+      execution_id: external_exports4.number().int().describe("testCaseExecutionId from qmetry_get_execution results"),
+      status_name: external_exports4.string().optional().describe("Execution result name, e.g. 'Pass', 'Fail', 'Blocked', 'Not Executed', 'Work In Progress'. Requires project_id."),
+      project_id: external_exports4.number().int().optional().describe("Numeric QMetry project ID \u2014 required when status_name is provided to look up the correct executionResultId"),
+      comment: external_exports4.string().optional().describe("Comment or notes for this execution"),
+      assignee_account_id: external_exports4.string().optional().describe("Atlassian account ID of the person to assign (e.g. '712020:abc...'). Find account IDs via jira_get_user_profile or jira_search.")
     }),
-    execute: async (args) => safeQMetry(() => {
+    execute: async (args) => safeQMetry(async () => {
       ensureWritable4(opts.readOnly);
-      const body = {
-        status: { name: args.status }
-      };
-      if (args.comment) body.comment = args.comment;
-      return qmetryClient().put(
-        `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcase-executions/${encodeURIComponent(args.execution_id)}`,
+      const body = {};
+      if (args.status_name) {
+        if (!args.project_id) {
+          throw new Error("project_id is required when status_name is provided (used to look up the correct executionResultId for this project).");
+        }
+        const results = await qmetryClient().get(
+          `/projects/${args.project_id}/execution-results`
+        );
+        const match2 = (results ?? []).find(
+          (r) => r.name.toLowerCase() === args.status_name.toLowerCase()
+        );
+        if (!match2) {
+          const available = (results ?? []).map((r) => r.name).join(", ");
+          throw new Error(`Unknown status '${args.status_name}'. Available: ${available}`);
+        }
+        body.executionResultId = match2.id;
+      }
+      if (args.comment !== void 0) body.comment = args.comment;
+      if (args.assignee_account_id) body.assignee = args.assignee_account_id;
+      if (Object.keys(body).length === 0) {
+        throw new Error("Provide at least one of: status_name, comment, or assignee_account_id.");
+      }
+      await qmetryClient().put(
+        `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcase-executions/${args.execution_id}`,
         body
       );
+      return { updated: true, fields: Object.keys(body) };
+    })
+  });
+  server2.addTool({
+    name: "qmetry_list_execution_attachments",
+    description: "List files attached to a test case execution (at execution or step level).",
+    parameters: external_exports4.object({
+      test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID"),
+      execution_id: external_exports4.number().int().describe("testCaseExecutionId from qmetry_get_execution results"),
+      start_at: external_exports4.number().int().min(0).default(0),
+      max_results: external_exports4.number().int().min(1).max(100).default(50)
+    }),
+    execute: async (args) => safeQMetry(
+      () => qmetryClient().get(
+        `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcase-executions/${args.execution_id}/attachments`,
+        { startAt: args.start_at, maxResults: args.max_results }
+      )
+    )
+  });
+  server2.addTool({
+    name: "qmetry_upload_execution_attachment",
+    description: "Upload a local file to a QMetry test cycle's file store (2-step: get S3 policy from QMetry, POST to S3). Files are stored at the test cycle level in QMetry. To see uploaded files use qmetry_list_execution_attachments (shows execution-scoped attachments added via the QMetry app).",
+    parameters: external_exports4.object({
+      test_cycle_id: external_exports4.string().describe("Internal QMetry test cycle ID"),
+      project_id: external_exports4.number().int().describe("Numeric QMetry project ID"),
+      local_file_path: external_exports4.string().describe("Absolute path to the file on this machine to upload"),
+      file_name: external_exports4.string().optional().describe("Override file name (defaults to the filename from local_file_path)")
+    }),
+    execute: async (args) => safeQMetry(async () => {
+      ensureWritable4(opts.readOnly);
+      const cfg = loadQMetryConfig();
+      if (!cfg) throw new Error("QMetry not configured.");
+      const fileName = args.file_name ?? basename3(args.local_file_path);
+      await stat(args.local_file_path);
+      const policy = await qmetryClient().get(
+        "/testcycles/attachments/url",
+        {
+          projectId: args.project_id,
+          fileName,
+          testCycleId: args.test_cycle_id
+        }
+      );
+      if (!policy?.endpoint_url || !policy?.params) {
+        throw new Error("QMetry did not return a valid S3 upload policy.");
+      }
+      const fileData = await readFile2(args.local_file_path);
+      const boundary = `FormBoundary${Date.now()}${Math.random().toString(36).slice(2, 10)}`;
+      const paramParts = [];
+      for (const [k, v] of Object.entries(policy.params)) {
+        paramParts.push(
+          Buffer.from(
+            `--${boundary}\r
+Content-Disposition: form-data; name="${k}"\r
+\r
+${v}\r
+`
+          )
+        );
+      }
+      const filePart = Buffer.from(
+        `--${boundary}\r
+Content-Disposition: form-data; name="file"; filename="${fileName}"\r
+Content-Type: application/octet-stream\r
+\r
+`
+      );
+      const closing = Buffer.from(`\r
+--${boundary}--\r
+`);
+      const body = Buffer.concat([...paramParts, filePart, fileData, closing]);
+      const s3Res = await fetch(policy.endpoint_url, {
+        method: "POST",
+        headers: {
+          "Content-Type": `multipart/form-data; boundary=${boundary}`,
+          "Content-Length": String(body.byteLength)
+        },
+        body
+      });
+      if (s3Res.status !== 201 && !s3Res.ok) {
+        const text = await s3Res.text().catch(() => "");
+        throw new Error(`S3 upload failed: HTTP ${s3Res.status} \u2014 ${text.slice(0, 300)}`);
+      }
+      const s3Key = policy.params.key ?? "(unknown)";
+      return {
+        uploaded: true,
+        file_name: fileName,
+        s3_key: s3Key,
+        size_bytes: fileData.byteLength
+      };
     })
   });
 }

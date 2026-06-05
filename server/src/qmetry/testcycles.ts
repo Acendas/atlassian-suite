@@ -135,9 +135,10 @@ export function registerQMetryTestCycleTools(server: FastMCP, opts: { readOnly: 
     execute: async (args) =>
       safeQMetry(() =>
         // POST /testcycles/{id}/testcases/search — not GET /testcycles/{id}/testcases
+        // Body must have a non-null filter object (API rejects bare {}).
         qmetryClient().post<unknown>(
           `/testcycles/${encodeURIComponent(args.test_cycle_id)}/testcases/search`,
-          {},
+          { filter: {} },
           { startAt: args.start_at, maxResults: args.max_results },
         ),
       ),
