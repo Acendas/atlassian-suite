@@ -221,7 +221,7 @@ export function registerAttachmentTools(
   server.addTool({
     name: "confluence_upload_attachment",
     description:
-      "Upload (or replace) an attachment on a Confluence page from a local file path. v1-backed (v2 has no upload endpoint). Requires `write:confluence-content` classic scope. Returns the attachment id + download link; pair with confluence_render_image_macro to embed.",
+      "Upload or replace an attachment on a Confluence page from a local file path. Uses PUT (create-or-update), so re-uploading an existing filename adds a new version instead of failing. v1-backed (v2 has no upload endpoint). Requires `write:confluence-content` classic scope. Returns the attachment id + download link; pair with confluence_render_image_macro to embed.",
     parameters: z.object({
       page_id: z.string(),
       file_path: z.string().describe("Absolute path to the local file"),
@@ -258,7 +258,11 @@ export function registerAttachmentTools(
         form.append("minorEdit", String(args.minor_edit));
         if (args.comment) form.append("comment", args.comment);
 
-        return confluenceV1().postMultipart<unknown>(
+        // PUT, not POST: `POST /content/{id}/child/attachment` is create-only
+        // and 400s when the filename already exists, so the "(or replace)"
+        // this tool has always advertised never actually worked. PUT is the
+        // documented create-or-update verb.
+        return confluenceV1().putMultipart<unknown>(
           `/content/${encodeURIComponent(args.page_id)}/child/attachment`,
           form,
         );

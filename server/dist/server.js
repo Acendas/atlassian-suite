@@ -49955,6 +49955,11 @@ function createAtlassianHttp(opts) {
       headers: { "X-Atlassian-Token": "no-check" },
       query
     }),
+    putMultipart: (path, form, query) => request("PUT", path, {
+      bodyRaw: form,
+      headers: { "X-Atlassian-Token": "no-check" },
+      query
+    }),
     request
   };
 }
@@ -162033,6 +162038,10 @@ function createQMetryHttp(opts) {
     put: (path, body, query) => request("PUT", path, { body, query }),
     delete: (path, query) => request("DELETE", path, { query }),
     postMultipart: (path, form, query) => request("POST", path, { bodyRaw: form, query }),
+    // QMetry has no create-or-update multipart endpoint of its own; this
+    // exists to satisfy the shared AtlassianHttp shape. No QMetry tool calls
+    // it — attachment uploads there go through S3 pre-signed URLs.
+    putMultipart: (path, form, query) => request("PUT", path, { bodyRaw: form, query }),
     request
   };
 }
@@ -169665,14 +169674,29 @@ function inventory(storage) {
   };
 }
 var summarizeAnchor = (a) => ({ ref: a.ref, text: a.text, context: a.before.trim() });
-async function attachmentHashes(pageId) {
+async function existingAttachments(pageId) {
   const res = await confluenceV2().get(`/pages/${encodeURIComponent(pageId)}/attachments`, { limit: 250 });
   const out = /* @__PURE__ */ new Map();
   for (const a of res.results ?? []) {
+    if (!a.title) continue;
     const m = /sha256:([0-9a-f]{64})/.exec(a.version?.message ?? "");
-    if (a.title && m) out.set(a.title, m[1]);
+    out.set(a.title, {
+      recordedHash: m ? m[1] : void 0,
+      downloadLink: a._links?.download ?? a.downloadLink
+    });
   }
   return out;
+}
+async function remoteContentHash(downloadLink) {
+  if (!downloadLink) return null;
+  try {
+    const buf = await confluenceV1().request("GET", downloadLink, {
+      headers: { Accept: "*/*" }
+    });
+    return createHash2("sha256").update(Buffer.from(buf)).digest("hex");
+  } catch {
+    return null;
+  }
 }
 async function uploadAttachment(pageId, filename, data, hash2) {
   const form = new FormData();
@@ -169680,17 +169704,18 @@ async function uploadAttachment(pageId, filename, data, hash2) {
   form.append("file", new Blob([arr], { type: guessType(filename) }), filename);
   form.append("minorEdit", "true");
   form.append("comment", `sha256:${hash2}`);
-  await confluenceV1().postMultipart(
+  await confluenceV1().putMultipart(
     `/content/${encodeURIComponent(pageId)}/child/attachment`,
     form
   );
 }
 async function renderAndAttachDiagrams(pageId, diagrams, mermaidOpts, force) {
-  const existing = await attachmentHashes(pageId);
+  const existing = await existingAttachments(pageId);
   const outcomes = [];
   for (const d of diagrams) {
     const hash2 = diagramHash(d.source, mermaidOpts);
-    if (!force && existing.get(d.filename) === hash2) {
+    const prior = existing.get(d.filename);
+    if (!force && prior?.recordedHash === hash2) {
       outcomes.push({
         index: d.index,
         filename: d.filename,
@@ -169702,7 +169727,21 @@ async function renderAndAttachDiagrams(pageId, diagrams, mermaidOpts, force) {
     }
     try {
       const { svg } = await renderMermaidToSvg(d.source, mermaidOpts);
-      await uploadAttachment(pageId, d.filename, Buffer.from(svg, "utf8"), hash2);
+      const svgBuf = Buffer.from(svg, "utf8");
+      if (!force && prior && prior.recordedHash === void 0) {
+        const svgHash = createHash2("sha256").update(svgBuf).digest("hex");
+        if (await remoteContentHash(prior.downloadLink) === svgHash) {
+          outcomes.push({
+            index: d.index,
+            filename: d.filename,
+            rendered: true,
+            uploaded: false,
+            reason: "identical_content"
+          });
+          continue;
+        }
+      }
+      await uploadAttachment(pageId, d.filename, svgBuf, hash2);
       outcomes.push({ index: d.index, filename: d.filename, rendered: true, uploaded: true });
     } catch (err) {
       outcomes.push({
@@ -169990,15 +170029,27 @@ function registerPublishTools(server2, opts) {
     }),
     execute: async (args) => safeConfluence(async () => {
       ensureWritable3(opts.readOnly);
-      const priorHash = await attachmentHashes(args.page_id);
+      const existing = await existingAttachments(args.page_id);
       const results = [];
       for (const file2 of args.files) {
         const buf = await readFile(file2.path);
         const filename = file2.filename ?? basename2(file2.path);
         const hash2 = createHash2("sha256").update(buf).digest("hex");
-        if (!args.force && priorHash.get(filename) === hash2) {
+        const prior = existing.get(filename);
+        if (!args.force && prior?.recordedHash === hash2) {
           results.push({ filename, uploaded: false, reason: "unchanged", sha256: hash2 });
           continue;
+        }
+        if (!args.force && prior && prior.recordedHash === void 0) {
+          if (await remoteContentHash(prior.downloadLink) === hash2) {
+            results.push({
+              filename,
+              uploaded: false,
+              reason: "identical_content",
+              sha256: hash2
+            });
+            continue;
+          }
         }
         await uploadAttachment(args.page_id, filename, buf, hash2);
         results.push({ filename, uploaded: true, sha256: hash2 });
@@ -170457,7 +170508,7 @@ function registerAttachmentTools(server2, opts) {
   });
   server2.addTool({
     name: "confluence_upload_attachment",
-    description: "Upload (or replace) an attachment on a Confluence page from a local file path. v1-backed (v2 has no upload endpoint). Requires `write:confluence-content` classic scope. Returns the attachment id + download link; pair with confluence_render_image_macro to embed.",
+    description: "Upload or replace an attachment on a Confluence page from a local file path. Uses PUT (create-or-update), so re-uploading an existing filename adds a new version instead of failing. v1-backed (v2 has no upload endpoint). Requires `write:confluence-content` classic scope. Returns the attachment id + download link; pair with confluence_render_image_macro to embed.",
     parameters: external_exports4.object({
       page_id: external_exports4.string(),
       file_path: external_exports4.string().describe("Absolute path to the local file"),
@@ -170476,7 +170527,7 @@ function registerAttachmentTools(server2, opts) {
       form.append("file", new Blob([arr], { type: ct }), filename);
       form.append("minorEdit", String(args.minor_edit));
       if (args.comment) form.append("comment", args.comment);
-      return confluenceV1().postMultipart(
+      return confluenceV1().putMultipart(
         `/content/${encodeURIComponent(args.page_id)}/child/attachment`,
         form
       );

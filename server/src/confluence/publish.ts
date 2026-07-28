@@ -107,23 +107,64 @@ function inventory(storage: string) {
 
 const summarizeAnchor = (a: Anchor) => ({ ref: a.ref, text: a.text, context: a.before.trim() });
 
-/** Existing attachments keyed by filename -> the sha recorded in their version
- *  comment by a previous sync. Absent for anything uploaded outside this tool. */
-async function attachmentHashes(pageId: string): Promise<Map<string, string>> {
+interface ExistingAttachment {
+  /** sha recorded in the version comment by a previous sync, if any. */
+  recordedHash?: string;
+  /** Absolute-ish download path from the API, for content comparison. */
+  downloadLink?: string;
+}
+
+/** Existing attachments on the page, keyed by filename. `recordedHash` is only
+ *  present for files a previous sync uploaded — anything created by hand or by
+ *  another toolchain has no marker, which is why content comparison below is
+ *  the fallback rather than an optimisation. */
+async function existingAttachments(pageId: string): Promise<Map<string, ExistingAttachment>> {
   const res = await confluenceV2().get<
-    PagedResponse<{ title?: string; version?: { message?: string } }>
+    PagedResponse<{
+      title?: string;
+      version?: { message?: string };
+      _links?: { download?: string };
+      downloadLink?: string;
+    }>
   >(`/pages/${encodeURIComponent(pageId)}/attachments`, { limit: 250 });
-  const out = new Map<string, string>();
+  const out = new Map<string, ExistingAttachment>();
   for (const a of res.results ?? []) {
+    if (!a.title) continue;
     const m = /sha256:([0-9a-f]{64})/.exec(a.version?.message ?? "");
-    if (a.title && m) out.set(a.title, m[1]);
+    out.set(a.title, {
+      recordedHash: m ? m[1] : undefined,
+      downloadLink: a._links?.download ?? a.downloadLink,
+    });
   }
   return out;
 }
 
-/** Single upload path shared by confluence_sync_attachments and the publisher's
- *  diagram step, so both record the sha the same way and the skip-if-unchanged
- *  logic can't drift between them. */
+/** sha256 of what is actually stored at `downloadLink`, or null if it can't be
+ *  fetched. Used to answer "is the file already identical?" for attachments we
+ *  did not upload ourselves and therefore have no recorded hash for. */
+async function remoteContentHash(downloadLink?: string): Promise<string | null> {
+  if (!downloadLink) return null;
+  try {
+    const buf = await confluenceV1().request<ArrayBuffer>("GET", downloadLink, {
+      headers: { Accept: "*/*" },
+    });
+    return createHash("sha256").update(Buffer.from(buf)).digest("hex");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Single upload path shared by confluence_sync_attachments and the publisher's
+ * diagram step, so both record the sha the same way and the skip-if-unchanged
+ * logic can't drift between them.
+ *
+ * PUT, not POST. `POST /content/{id}/child/attachment` is create-only and
+ * returns 400 when the filename already exists — which is every re-publish of
+ * a page whose diagrams were attached before, and every first publish against
+ * pages that were populated by hand. PUT is the documented create-or-update
+ * verb: it adds a new version of the existing attachment instead of failing.
+ */
 async function uploadAttachment(
   pageId: string,
   filename: string,
@@ -135,7 +176,7 @@ async function uploadAttachment(
   form.append("file", new Blob([arr], { type: guessType(filename) }), filename);
   form.append("minorEdit", "true");
   form.append("comment", `sha256:${hash}`);
-  await confluenceV1().postMultipart<unknown>(
+  await confluenceV1().putMultipart<unknown>(
     `/content/${encodeURIComponent(pageId)}/child/attachment`,
     form,
   );
@@ -166,12 +207,15 @@ async function renderAndAttachDiagrams(
   mermaidOpts: MermaidOptions,
   force: boolean,
 ): Promise<{ outcomes: DiagramOutcome[]; failures: DiagramOutcome[] }> {
-  const existing = await attachmentHashes(pageId);
+  const existing = await existingAttachments(pageId);
   const outcomes: DiagramOutcome[] = [];
 
   for (const d of diagrams) {
     const hash = diagramHash(d.source, mermaidOpts);
-    if (!force && existing.get(d.filename) === hash) {
+    const prior = existing.get(d.filename);
+
+    // Cheapest check: we uploaded this before and the source hasn't moved.
+    if (!force && prior?.recordedHash === hash) {
       outcomes.push({
         index: d.index,
         filename: d.filename,
@@ -183,7 +227,27 @@ async function renderAndAttachDiagrams(
     }
     try {
       const { svg } = await renderMermaidToSvg(d.source, mermaidOpts);
-      await uploadAttachment(pageId, d.filename, Buffer.from(svg, "utf8"), hash);
+      const svgBuf = Buffer.from(svg, "utf8");
+
+      // No recorded hash means the attachment predates this tool (hand-made,
+      // or from another toolchain). Rather than blindly re-uploading, compare
+      // actual bytes — mermaid renders deterministically, so an unchanged
+      // diagram produces an identical SVG and needs no new version.
+      if (!force && prior && prior.recordedHash === undefined) {
+        const svgHash = createHash("sha256").update(svgBuf).digest("hex");
+        if ((await remoteContentHash(prior.downloadLink)) === svgHash) {
+          outcomes.push({
+            index: d.index,
+            filename: d.filename,
+            rendered: true,
+            uploaded: false,
+            reason: "identical_content",
+          });
+          continue;
+        }
+      }
+
+      await uploadAttachment(pageId, d.filename, svgBuf, hash);
       outcomes.push({ index: d.index, filename: d.filename, rendered: true, uploaded: true });
     } catch (err) {
       outcomes.push({
@@ -602,7 +666,7 @@ export function registerPublishTools(server: FastMCP, opts: PublishOpts): void {
       safeConfluence(async () => {
         ensureWritable(opts.readOnly);
 
-        const priorHash = await attachmentHashes(args.page_id);
+        const existing = await existingAttachments(args.page_id);
 
         const results: Array<Record<string, unknown>> = [];
         for (const file of args.files) {
@@ -610,9 +674,23 @@ export function registerPublishTools(server: FastMCP, opts: PublishOpts): void {
           const filename = file.filename ?? basename(file.path);
           const hash = createHash("sha256").update(buf).digest("hex");
 
-          if (!args.force && priorHash.get(filename) === hash) {
+          const prior = existing.get(filename);
+          if (!args.force && prior?.recordedHash === hash) {
             results.push({ filename, uploaded: false, reason: "unchanged", sha256: hash });
             continue;
+          }
+          // Attachment exists but predates this tool, so there is no recorded
+          // hash to compare. Check the bytes before spending a version on it.
+          if (!args.force && prior && prior.recordedHash === undefined) {
+            if ((await remoteContentHash(prior.downloadLink)) === hash) {
+              results.push({
+                filename,
+                uploaded: false,
+                reason: "identical_content",
+                sha256: hash,
+              });
+              continue;
+            }
           }
 
           await uploadAttachment(args.page_id, filename, buf, hash);

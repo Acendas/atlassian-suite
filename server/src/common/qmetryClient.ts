@@ -130,6 +130,11 @@ export function createQMetryHttp(opts: {
     delete: (path, query) => request("DELETE", path, { query }),
     postMultipart: (path, form, query) =>
       request("POST", path, { bodyRaw: form, query }),
+    // QMetry has no create-or-update multipart endpoint of its own; this
+    // exists to satisfy the shared AtlassianHttp shape. No QMetry tool calls
+    // it — attachment uploads there go through S3 pre-signed URLs.
+    putMultipart: (path, form, query) =>
+      request("PUT", path, { bodyRaw: form, query }),
     request,
   };
 }

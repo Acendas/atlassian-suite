@@ -84,6 +84,18 @@ const call = async (name: string, args: any) => {
   return JSON.parse(await fn(args));
 };
 
+// A real file to upload. /etc/hostname does not exist on macOS, and the
+// content-comparison tests need bytes they can hash on both sides.
+const { writeFileSync, mkdtempSync } = await import("node:fs");
+const { tmpdir } = await import("node:os");
+const { join } = await import("node:path");
+const { createHash } = await import("node:crypto");
+const FIXTURE_DIR = mkdtempSync(join(tmpdir(), "as-publish-test-"));
+const FIXTURE_PATH = join(FIXTURE_DIR, "ch-02-0.svg");
+const FIXTURE_BYTES = Buffer.from("<svg><g>catalog</g></svg>");
+writeFileSync(FIXTURE_PATH, FIXTURE_BYTES);
+const FIXTURE_HASH = createHash("sha256").update(FIXTURE_BYTES).digest("hex");
+
 const marker = (ref: string, text: string) =>
   `<ac:inline-comment-marker ac:ref="${ref}">${text}</ac:inline-comment-marker>`;
 
@@ -465,6 +477,138 @@ test("the rendered body references the diagram the renderer will attach", async 
     ),
     "storage must point at exactly the filename the render step produces",
   );
+});
+
+// ─── attachment upload verb (regression: v0.9.0-0.9.2 used create-only POST) ───
+//
+// `POST /content/{id}/child/attachment` only ADDS an attachment and returns
+// 400 when the filename already exists. Every diagram upload used it, so the
+// second publish of any page — and the first publish of any page whose
+// diagrams were attached by hand — failed with an unexplained 400. PUT is the
+// documented create-or-update verb. Pinning the verb because the failure is
+// invisible until a page already has the attachment.
+
+test("attachment uploads use PUT, never create-only POST", async () => {
+  reset("<p>old</p>");
+  await call("confluence_sync_attachments", {
+    page_id: "123",
+    files: [{ path: FIXTURE_PATH, filename: "ch-02-0.svg" }],
+  });
+  const uploads = calls.filter((c) => c.url.includes("/child/attachment") && c.method !== "GET");
+  eq(uploads.length, 1, "one upload");
+  eq(uploads[0].method, "PUT", "POST is create-only and 400s on an existing filename");
+});
+
+test("sync_attachments skips a file whose recorded hash already matches", async () => {
+  reset("<p>old</p>");
+  const origFetch = (globalThis as any).fetch;
+  const hash = FIXTURE_HASH;
+  (globalThis as any).fetch = async (url: string, init: any = {}) => {
+    if (String(url).includes("/attachments")) {
+      return jsonResponse({
+        results: [{ title: "ch-02-0.svg", version: { message: `sha256:${hash}` } }],
+      });
+    }
+    return origFetch(url, init);
+  };
+  try {
+    const out = await call("confluence_sync_attachments", {
+      page_id: "123",
+      files: [{ path: FIXTURE_PATH, filename: "ch-02-0.svg" }],
+    });
+    eq(out.uploaded, 0, "unchanged file must not be re-uploaded");
+    eq(out.files[0].reason, "unchanged", "");
+  } finally {
+    (globalThis as any).fetch = origFetch;
+  }
+});
+
+test("an attachment with no recorded hash is compared by CONTENT before re-upload", async () => {
+  // The customer's case: diagrams attached by hand months earlier carry no
+  // sha marker, so the metadata check can't help. Without a content fallback
+  // every such file is re-uploaded on every sync, spending a version to store
+  // bytes that are already there.
+  reset("<p>old</p>");
+  const origFetch = (globalThis as any).fetch;
+  const content = FIXTURE_BYTES;
+  (globalThis as any).fetch = async (url: string, init: any = {}) => {
+    const u = String(url);
+    if (u.includes("/attachments")) {
+      // No version.message -> no recorded hash, but a download link exists.
+      return jsonResponse({
+        results: [{ title: "ch-02-0.svg", _links: { download: "/download/ch-02-0.svg" } }],
+      });
+    }
+    if (u.includes("/download/")) {
+      return new Response(content, { status: 200 });
+    }
+    return origFetch(url, init);
+  };
+  try {
+    const out = await call("confluence_sync_attachments", {
+      page_id: "123",
+      files: [{ path: FIXTURE_PATH, filename: "ch-02-0.svg" }],
+    });
+    eq(out.uploaded, 0, "identical bytes must not be re-uploaded");
+    eq(out.files[0].reason, "identical_content", "and the reason says why");
+    eq(
+      calls.filter((c) => c.method === "PUT").length,
+      0,
+      "no upload call at all",
+    );
+  } finally {
+    (globalThis as any).fetch = origFetch;
+  }
+});
+
+test("differing content IS uploaded even without a recorded hash", async () => {
+  reset("<p>old</p>");
+  const origFetch = (globalThis as any).fetch;
+  (globalThis as any).fetch = async (url: string, init: any = {}) => {
+    const u = String(url);
+    if (u.includes("/attachments")) {
+      return jsonResponse({
+        results: [{ title: "ch-02-0.svg", _links: { download: "/download/ch-02-0.svg" } }],
+      });
+    }
+    if (u.includes("/download/")) {
+      return new Response(Buffer.from("totally different bytes"), { status: 200 });
+    }
+    return origFetch(url, init);
+  };
+  try {
+    const out = await call("confluence_sync_attachments", {
+      page_id: "123",
+      files: [{ path: FIXTURE_PATH, filename: "ch-02-0.svg" }],
+    });
+    eq(out.uploaded, 1, "changed content must still upload");
+  } finally {
+    (globalThis as any).fetch = origFetch;
+  }
+});
+
+test("force re-uploads even when the hash matches", async () => {
+  reset("<p>old</p>");
+  const origFetch = (globalThis as any).fetch;
+  const hash = FIXTURE_HASH;
+  (globalThis as any).fetch = async (url: string, init: any = {}) => {
+    if (String(url).includes("/attachments")) {
+      return jsonResponse({
+        results: [{ title: "ch-02-0.svg", version: { message: `sha256:${hash}` } }],
+      });
+    }
+    return origFetch(url, init);
+  };
+  try {
+    const out = await call("confluence_sync_attachments", {
+      page_id: "123",
+      files: [{ path: FIXTURE_PATH, filename: "ch-02-0.svg" }],
+      force: true,
+    });
+    eq(out.uploaded, 1, "force overrides both skip paths");
+  } finally {
+    (globalThis as any).fetch = origFetch;
+  }
 });
 
 // ─── read-only mode ───

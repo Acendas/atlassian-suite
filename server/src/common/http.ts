@@ -44,8 +44,16 @@ export interface AtlassianHttp {
   delete<T>(path: string, query?: Query): Promise<T>;
   /** Multipart form upload — no JSON serialization. Automatically sets
    *  `X-Atlassian-Token: no-check` which Confluence requires for
-   *  CSRF-exempt multipart attachment POSTs. */
+   *  CSRF-exempt multipart attachment POSTs.
+   *
+   *  For Confluence attachments this is CREATE-ONLY: `POST
+   *  /content/{id}/child/attachment` rejects a filename that already exists
+   *  with a 400. Use `putMultipart` for anything that might be re-run. */
   postMultipart<T>(path: string, form: FormData, query?: Query): Promise<T>;
+  /** Multipart upload via PUT — the create-or-update verb. Confluence's
+   *  attachment endpoint updates an existing attachment (adding a new
+   *  version) instead of failing when the filename is already present. */
+  putMultipart<T>(path: string, form: FormData, query?: Query): Promise<T>;
   /** Escape hatch for callers that need full control (custom headers,
    *  raw body types). Prefer the helpers above. */
   request<T>(method: string, path: string, opts?: {
@@ -206,6 +214,12 @@ export function createAtlassianHttp(opts: CreateAtlassianHttpOpts): AtlassianHtt
     delete: (path, query) => request("DELETE", path, { query }),
     postMultipart: (path, form, query) =>
       request("POST", path, {
+        bodyRaw: form,
+        headers: { "X-Atlassian-Token": "no-check" },
+        query,
+      }),
+    putMultipart: (path, form, query) =>
+      request("PUT", path, {
         bodyRaw: form,
         headers: { "X-Atlassian-Token": "no-check" },
         query,
