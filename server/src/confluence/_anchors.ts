@@ -25,7 +25,13 @@
 // Like _storage.ts these are regex-on-XML, not a parser — same tradeoff,
 // same reasoning (see that file's header).
 
-import { escapeAttr } from "./_storage.js";
+import {
+  escapeAttr,
+  decodeEntity,
+  decodeEntities,
+  MAX_ENTITY_LEN,
+  NBSP,
+} from "./_storage.js";
 
 /** One inline-comment anchor lifted off a page body. */
 export interface Anchor {
@@ -55,20 +61,64 @@ const MARKER_RE =
 
 const CONTEXT_CHARS = 40;
 
-/** Strip inline tags and decode the common entities. Mirrors _storage.ts's
- *  private stripTags — duplicated rather than exported from there because
- *  these two callers want to diverge over time (this one must also drop
- *  CDATA payloads). */
+// ─── entity handling ───
+//
+// The decoder itself lives in _storage.ts so there is exactly one set of rules
+// (see its header for why). What matters here is the asymmetry it exists to
+// resolve: anchor text is compared DECODED while the storage body is ENCODED.
+// v0.9.0 searched decoded text against raw storage, so an anchor on
+// `"maintenance mode"` — stored as `&quot;maintenance mode&quot;` — found zero
+// hits and came back unmatched, reporting a live comment thread as unsaveable.
+// Plain-text anchors were unaffected, which is what made it survive review.
+//
+// The fix is decodeSpan below: search in decoded space, splice in raw space.
+
+/** Strip inline tags and CDATA, then decode entities. Used for anchor text and
+ *  context — everything that gets compared. */
 function visibleText(s: string): string {
-  return s
-    .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ");
+  return decodeEntities(
+    s.replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "").replace(/<[^>]+>/g, ""),
+  );
+}
+
+/**
+ * Decode the raw range [start, end) while recording, for each decoded
+ * character, the raw offset it came from. `map[i]` is the raw offset of
+ * decoded character `i`; `map[decoded.length]` is the raw end, so a decoded
+ * match [i, j) maps back to raw [map[i], map[j]).
+ *
+ * This is what lets the search run in decoded space (where `"` is `"`) while
+ * the splice happens in raw space (where it is `&quot;`) — so the original
+ * encoding is preserved verbatim inside the marker rather than being
+ * normalised on write.
+ */
+function decodeSpan(
+  storage: string,
+  start: number,
+  end: number,
+): { decoded: string; map: number[] } {
+  let decoded = "";
+  const map: number[] = [];
+  let i = start;
+  while (i < end) {
+    if (storage[i] === "&") {
+      const semi = storage.indexOf(";", i + 1);
+      if (semi !== -1 && semi < end && semi - i <= MAX_ENTITY_LEN) {
+        const ch = decodeEntity(storage.slice(i, semi + 1));
+        if (ch !== null) {
+          map.push(i);
+          decoded += ch;
+          i = semi + 1;
+          continue;
+        }
+      }
+    }
+    map.push(i);
+    decoded += storage[i] === NBSP ? " " : storage[i];
+    i++;
+  }
+  map.push(end);
+  return { decoded, map };
 }
 
 /**
@@ -93,29 +143,41 @@ export function textSpans(storage: string): Array<{ start: number; end: number }
   return spans;
 }
 
+/** A match, expressed in RAW storage coordinates. `rawLength` can exceed the
+ *  needle's length when the matched region contains entities. */
+export interface TextHit {
+  start: number;
+  rawLength: number;
+}
+
 /**
  * Every position at which `needle` occurs inside a text span, in document
- * order. A hit that would straddle a tag boundary is not a hit — the anchor
- * text has to live in one contiguous text node for us to be able to wrap it
- * without restructuring the markup.
+ * order. The needle is decoded text; the search runs against a decoded view of
+ * each span and the results are mapped back to raw offsets, so an anchor on
+ * `"maintenance mode"` matches a body containing `&quot;maintenance mode&quot;`.
  *
- * That restriction is why an anchor over `<strong>Adj</strong>ustment` comes
- * back unmatched rather than half-wrapped: splitting one marker across an
- * element boundary needs two markers sharing a ref, and Confluence treats
- * that as two anchors. Reporting it is the honest outcome.
+ * A hit that would straddle a tag boundary is not a hit — the anchor text has
+ * to live in one contiguous text node for us to wrap it without restructuring
+ * the markup. That restriction is why an anchor over `<strong>Adj</strong>ustment`
+ * comes back unmatched rather than half-wrapped: splitting one marker across an
+ * element boundary needs two markers sharing a ref, and Confluence treats that
+ * as two anchors. Reporting it is the honest outcome.
  */
-export function findInText(storage: string, needle: string): number[] {
-  if (!needle) return [];
-  const out: number[] = [];
+export function findInText(storage: string, needle: string): TextHit[] {
+  const target = decodeEntities(needle);
+  if (!target) return [];
+  const out: TextHit[] = [];
   for (const span of textSpans(storage)) {
-    const chunk = storage.slice(span.start, span.end);
-    let idx = chunk.indexOf(needle);
+    const { decoded, map } = decodeSpan(storage, span.start, span.end);
+    let idx = decoded.indexOf(target);
     while (idx !== -1) {
-      out.push(span.start + idx);
-      idx = chunk.indexOf(needle, idx + 1);
+      const rawStart = map[idx];
+      const rawEnd = map[idx + target.length];
+      out.push({ start: rawStart, rawLength: rawEnd - rawStart });
+      idx = decoded.indexOf(target, idx + 1);
     }
   }
-  return out.sort((a, b) => a - b);
+  return out.sort((a, b) => a.start - b.start);
 }
 
 /** Lift every inline-comment marker off a page body. */
@@ -177,15 +239,15 @@ export function applyAnchors(storage: string, anchors: Anchor[]): ApplyResult {
     // claiming occurrence 1 shifts every later anchor's index by one and
     // occurrence 2 silently lands on occurrence 3.
     const all = findInText(storage, anchor.text);
-    const free = all.filter((i) => !claimed.has(i));
+    const free = all.filter((h) => !claimed.has(h.start));
     if (free.length === 0) {
       unmatched.push(anchor);
       continue;
     }
 
     const byOccurrence = all[anchor.occurrence - 1];
-    let chosen: number;
-    if (byOccurrence !== undefined && !claimed.has(byOccurrence)) {
+    let chosen: TextHit;
+    if (byOccurrence !== undefined && !claimed.has(byOccurrence.start)) {
       chosen = byOccurrence;
     } else if (free.length === 1) {
       chosen = free[0];
@@ -193,8 +255,10 @@ export function applyAnchors(storage: string, anchors: Anchor[]): ApplyResult {
       chosen = bestByContext(storage, free, anchor);
     }
 
-    claimed.add(chosen);
-    inserts.push({ at: chosen, len: anchor.text.length, anchor });
+    claimed.add(chosen.start);
+    // Splice by the RAW length, not the decoded text length: the matched
+    // region may contain entities and is wider on the wire than it reads.
+    inserts.push({ at: chosen.start, len: chosen.rawLength, anchor });
     preserved.push(anchor);
   }
 
@@ -215,20 +279,20 @@ export function applyAnchors(storage: string, anchors: Anchor[]): ApplyResult {
 /** Score candidates by how much of the remembered before/after context still
  *  surrounds them, and take the best. Ties resolve to the earliest candidate,
  *  which keeps the result deterministic. */
-function bestByContext(storage: string, candidates: number[], anchor: Anchor): number {
+function bestByContext(storage: string, candidates: TextHit[], anchor: Anchor): TextHit {
   let best = candidates[0];
   let bestScore = -1;
-  for (const at of candidates) {
+  for (const hit of candidates) {
+    const at = hit.start;
+    const end = hit.start + hit.rawLength;
     const before = visibleText(storage.slice(Math.max(0, at - 200), at)).slice(
       -CONTEXT_CHARS,
     );
-    const after = visibleText(
-      storage.slice(at + anchor.text.length, at + anchor.text.length + 200),
-    ).slice(0, CONTEXT_CHARS);
+    const after = visibleText(storage.slice(end, end + 200)).slice(0, CONTEXT_CHARS);
     const score = commonSuffix(before, anchor.before) + commonPrefix(after, anchor.after);
     if (score > bestScore) {
       bestScore = score;
-      best = at;
+      best = hit;
     }
   }
   return best;

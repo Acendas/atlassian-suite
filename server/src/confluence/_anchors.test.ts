@@ -106,10 +106,10 @@ test("findInText ignores matches inside attribute values", () => {
   const hits = findInText(storage, "Adjustment");
   assertEq(hits.length, 1);
   assert(
-    storage.slice(hits[0], hits[0] + 10) === "Adjustment",
+    storage.slice(hits[0].start, hits[0].start + hits[0].rawLength) === "Adjustment",
     "hit should land on the real text occurrence",
   );
-  assert(hits[0] > storage.indexOf("ac:alt"), "hit must be after the attribute");
+  assert(hits[0].start > storage.indexOf("ac:alt"), "hit must be after the attribute");
 });
 
 test("findInText ignores matches inside a CDATA code body", () => {
@@ -202,6 +202,125 @@ test("multiple anchors splice without corrupting each other's offsets", () => {
   const out = applyAnchors(stripAnchors(original), anchors);
   assertEq(out.unmatched.length, 0);
   assertEq(out.storage, original);
+});
+
+// ─── entity-bearing anchors (regression: v0.9.0 could not re-match these) ───
+//
+// Anchor text is compared decoded while the body is encoded. v0.9.0 searched
+// decoded text against raw storage, so ANY anchor containing " & < > found
+// zero hits and came back unmatched — a live comment thread reported as
+// unsaveable. Plain-text anchors were unaffected, which is what made it easy
+// to miss: it only showed up on the one anchor in a page that had quotes in it.
+
+test("an anchor containing &quot; entities re-matches", () => {
+  // The exact shape a customer hit: quotes around a term inside prose.
+  const live =
+    `<p>operational kill switches (<ac:inline-comment-marker ac:ref="mart-1">` +
+    `&quot;maintenance mode&quot;</ac:inline-comment-marker>) with a UI for ops</p>`;
+  const anchors = extractAnchors(live);
+  assertEq(anchors[0].text, '"maintenance mode"', "text is stored decoded");
+
+  const rerendered = `<p>operational kill switches (&quot;maintenance mode&quot;) with a UI for ops</p>`;
+  const out = applyAnchors(rerendered, anchors);
+  assertEq(out.unmatched.length, 0, "entity-bearing anchor must re-match");
+  assertEq(out.preserved[0].ref, "mart-1");
+});
+
+test("the re-applied marker preserves the original entity encoding", () => {
+  const anchors = extractAnchors(
+    `<p><ac:inline-comment-marker ac:ref="r1">&quot;maintenance mode&quot;</ac:inline-comment-marker></p>`,
+  );
+  const out = applyAnchors(`<p>the &quot;maintenance mode&quot; flag</p>`, anchors);
+  assert(
+    out.storage.includes(
+      `<ac:inline-comment-marker ac:ref="r1">&quot;maintenance mode&quot;</ac:inline-comment-marker>`,
+    ),
+    `entities must not be normalised to raw characters on write-back — got ${out.storage}`,
+  );
+  assert(!out.storage.includes('">"maintenance'), "must not emit a bare quote into the XML");
+});
+
+test("anchors containing & < > all re-match", () => {
+  for (const [entity, plain] of [
+    ["&amp;", "&"],
+    ["&lt;", "<"],
+    ["&gt;", ">"],
+    ["&apos;", "'"],
+  ] as Array<[string, string]>) {
+    const anchors = extractAnchors(
+      `<p><ac:inline-comment-marker ac:ref="r1">Tom ${entity} Jerry</ac:inline-comment-marker></p>`,
+    );
+    assertEq(anchors[0].text, `Tom ${plain} Jerry`, `${entity} should decode`);
+    const out = applyAnchors(`<p>see Tom ${entity} Jerry today</p>`, anchors);
+    assertEq(out.unmatched.length, 0, `${entity} anchor should re-match`);
+  }
+});
+
+test("numeric entity forms match their named equivalents", () => {
+  // Confluence is not consistent about &quot; vs &#34; across editors.
+  const anchors = extractAnchors(
+    `<p><ac:inline-comment-marker ac:ref="r1">&#34;mode&#34;</ac:inline-comment-marker></p>`,
+  );
+  assertEq(anchors[0].text, '"mode"', "numeric entity decodes");
+  const out = applyAnchors(`<p>the &quot;mode&quot; flag</p>`, anchors);
+  assertEq(out.unmatched.length, 0, "numeric-form anchor matches a named-form body");
+});
+
+test("hex entity forms decode too", () => {
+  const anchors = extractAnchors(
+    `<p><ac:inline-comment-marker ac:ref="r1">&#x22;mode&#x22;</ac:inline-comment-marker></p>`,
+  );
+  assertEq(anchors[0].text, '"mode"');
+});
+
+test("non-breaking spaces fold to plain spaces on both sides", () => {
+  const anchors = extractAnchors(
+    `<p><ac:inline-comment-marker ac:ref="r1">maintenance&nbsp;mode</ac:inline-comment-marker></p>`,
+  );
+  assertEq(anchors[0].text, "maintenance mode", "nbsp folds to a plain space");
+  const out = applyAnchors(`<p>the maintenance mode flag</p>`, anchors);
+  assertEq(out.unmatched.length, 0, "should match prose written with a normal space");
+});
+
+test("findInText reports the RAW width of an entity-bearing match", () => {
+  const storage = `<p>a &quot;b&quot; c</p>`;
+  const hits = findInText(storage, '"b"');
+  assertEq(hits.length, 1);
+  const slice = storage.slice(hits[0].start, hits[0].start + hits[0].rawLength);
+  assertEq(slice, "&quot;b&quot;", "raw length must cover the encoded form, not the decoded one");
+});
+
+test("an entity-bearing anchor does not truncate the text around it", () => {
+  // A wrong rawLength would eat neighbouring characters or leave a stray tail.
+  const anchors = extractAnchors(
+    `<p><ac:inline-comment-marker ac:ref="r1">&quot;x&quot;</ac:inline-comment-marker></p>`,
+  );
+  const out = applyAnchors(`<p>before &quot;x&quot; after</p>`, anchors);
+  assertEq(
+    out.storage,
+    `<p>before <ac:inline-comment-marker ac:ref="r1">&quot;x&quot;</ac:inline-comment-marker> after</p>`,
+    "surrounding text must be intact",
+  );
+});
+
+test("entity anchors round-trip through strip and re-apply", () => {
+  const original =
+    `<p>ops use <ac:inline-comment-marker ac:ref="r1">&quot;maintenance mode&quot;</ac:inline-comment-marker> ` +
+    `and <ac:inline-comment-marker ac:ref="r2">Tom &amp; Jerry</ac:inline-comment-marker></p>`;
+  const anchors = extractAnchors(original);
+  const out = applyAnchors(stripAnchors(original), anchors);
+  assertEq(out.unmatched.length, 0);
+  assertEq(out.storage, original, "byte-for-byte round trip");
+});
+
+test("a stray ampersand that is not an entity is still matchable", () => {
+  // Confluence should always escape this, but a hand-edited body might not.
+  const anchors = extractAnchors(
+    `<p><ac:inline-comment-marker ac:ref="r1">R&D team</ac:inline-comment-marker></p>`,
+  );
+  assertEq(anchors[0].text, "R&D team", "a bare & is left alone, not swallowed");
+  const out = applyAnchors(`<p>the R&D team ships</p>`, anchors);
+  assertEq(out.unmatched.length, 0);
 });
 
 // ─── honest failure ───

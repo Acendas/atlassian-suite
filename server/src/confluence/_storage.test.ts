@@ -25,6 +25,8 @@ import {
   renderImageMacro,
   escapeAttr,
   HeadingNotFoundError,
+  decodeEntity,
+  decodeEntities,
 } from "./_storage.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -258,6 +260,78 @@ test("v1 fixture: replaceText on macro parameter value", () => {
 
 // ---------------------------------------------------------------------------
 // Runner
+
+
+// ─── entity decoding ───
+//
+// Heading text is compared DECODED against the caller's plain-text locator, so
+// the decoder has to cover what Confluence actually emits. It previously
+// handled the named entities and `&#39;` only, with a comment saying full
+// decoding "would require a dependency" — it doesn't, and the gap meant a
+// heading written with a numeric entity could not be addressed at all. Same
+// root cause as the inline-comment anchor bug: one decoder now serves both.
+
+test("decodeEntities handles the named entities", () => {
+  assertEq(decodeEntities("Tom &amp; Jerry"), "Tom & Jerry");
+  assertEq(decodeEntities("&lt;tag&gt;"), "<tag>");
+  assertEq(decodeEntities("&quot;quoted&quot;"), '"quoted"');
+  assertEq(decodeEntities("it&apos;s"), "it's");
+});
+
+test("decodeEntities handles decimal and hex numeric forms", () => {
+  assertEq(decodeEntities("&#34;x&#34;"), '"x"');
+  assertEq(decodeEntities("&#x22;x&#x22;"), '"x"');
+  assertEq(decodeEntities("&#39;"), "'");
+});
+
+test("decodeEntities folds both nbsp spellings to a plain space", () => {
+  assertEq(decodeEntities("maintenance&nbsp;mode"), "maintenance mode");
+  assertEq(decodeEntities("maintenance&#160;mode"), "maintenance mode");
+  assertEq(decodeEntities("maintenance\u00a0mode"), "maintenance mode");
+});
+
+test("decodeEntities leaves a bare ampersand alone", () => {
+  // Hand-edited bodies contain these; swallowing one would corrupt the text.
+  assertEq(decodeEntities("R&D team"), "R&D team");
+  assertEq(decodeEntities("a & b"), "a & b");
+});
+
+test("decodeEntities ignores unknown and malformed entities", () => {
+  assertEq(decodeEntities("&notarealentity;"), "&notarealentity;");
+  assertEq(decodeEntities("&#;"), "&#;");
+  assertEq(decodeEntities("&#999999999;"), "&#999999999;");
+});
+
+test("decodeEntity refuses multi-character decodings", () => {
+  // The 1:1 invariant is what keeps _anchors.ts's offset map aligned.
+  assertEq(decodeEntity("&#128512;"), null, "astral codepoints are 2 UTF-16 units");
+  assertEq(decodeEntity("&quot;"), '"');
+});
+
+test("findHeadings decodes entities in heading text", () => {
+  const headings = findHeadings('<h2>Ops &amp; &quot;maintenance mode&quot;</h2>');
+  assertEq(headings[0].text, 'Ops & "maintenance mode"');
+});
+
+test("locateSection matches a heading containing entities by its plain text", () => {
+  const storage =
+    '<h2>Ops &amp; &quot;maintenance mode&quot;</h2><p>body</p><h2>Next</h2>';
+  const found = locateSection(storage, 2, 'Ops & "maintenance mode"');
+  assertEq(found !== null, true, "a heading with entities must be addressable by plain text");
+});
+
+test("locateSection matches a heading written with a numeric entity", () => {
+  // Regression: the old decoder handled &quot; but not &#34;, so this heading
+  // could not be targeted by any locator a human would type.
+  const storage = '<h2>The &#34;Catalog&#34;</h2><p>body</p>';
+  const found = locateSection(storage, 2, 'the "catalog"');
+  assertEq(found !== null, true, "numeric entity form must decode too");
+});
+
+test("locateSection matches across an nbsp in the heading", () => {
+  const storage = '<h2>maintenance&nbsp;mode</h2><p>body</p>';
+  assertEq(locateSection(storage, 2, "maintenance mode") !== null, true, "nbsp folds to a space");
+});
 
 export function run(): { passed: number; failed: number; failures: string[] } {
   const failures: string[] = [];

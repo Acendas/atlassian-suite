@@ -163646,8 +163646,62 @@ function findHeadings(storage) {
   }
   return out;
 }
+var NAMED_ENTITIES = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&apos;": "'",
+  // Confluence emits a lot of non-breaking spaces. Folding them to a plain
+  // space on both sides means text written with one matches text rendered
+  // with the other.
+  "&nbsp;": " "
+};
+var NBSP = "\xA0";
+var MAX_ENTITY_LEN = 12;
+function decodeEntity(token) {
+  const named = NAMED_ENTITIES[token];
+  if (named !== void 0) return named;
+  let m = /^&#(\d+);$/.exec(token);
+  let codePoint = m ? Number.parseInt(m[1], 10) : null;
+  if (codePoint === null) {
+    m = /^&#[xX]([0-9a-fA-F]+);$/.exec(token);
+    codePoint = m ? Number.parseInt(m[1], 16) : null;
+  }
+  if (codePoint === null || !Number.isFinite(codePoint) || codePoint < 0 || codePoint > 1114111) {
+    return null;
+  }
+  if (codePoint === 160) return " ";
+  let ch;
+  try {
+    ch = String.fromCodePoint(codePoint);
+  } catch {
+    return null;
+  }
+  return ch.length === 1 ? ch : null;
+}
+function decodeEntities(s) {
+  let out = "";
+  let i = 0;
+  while (i < s.length) {
+    if (s[i] === "&") {
+      const semi = s.indexOf(";", i + 1);
+      if (semi !== -1 && semi - i <= MAX_ENTITY_LEN) {
+        const decoded = decodeEntity(s.slice(i, semi + 1));
+        if (decoded !== null) {
+          out += decoded;
+          i = semi + 1;
+          continue;
+        }
+      }
+    }
+    out += s[i] === NBSP ? " " : s[i];
+    i++;
+  }
+  return out;
+}
 function stripTags(s) {
-  return s.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ");
+  return decodeEntities(s.replace(/<[^>]+>/g, ""));
 }
 function locateSection(storage, level, textLocator) {
   const needle = textLocator.toLowerCase();
@@ -169291,7 +169345,33 @@ function markdownToStorage(markdown, opts = {}) {
 var MARKER_RE = /<ac:inline-comment-marker\s+(?:ac:)?ref="([^"]+)"\s*>([\s\S]*?)<\/ac:inline-comment-marker>/gi;
 var CONTEXT_CHARS = 40;
 function visibleText(s) {
-  return s.replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ");
+  return decodeEntities(
+    s.replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "").replace(/<[^>]+>/g, "")
+  );
+}
+function decodeSpan(storage, start, end) {
+  let decoded = "";
+  const map2 = [];
+  let i = start;
+  while (i < end) {
+    if (storage[i] === "&") {
+      const semi = storage.indexOf(";", i + 1);
+      if (semi !== -1 && semi < end && semi - i <= MAX_ENTITY_LEN) {
+        const ch = decodeEntity(storage.slice(i, semi + 1));
+        if (ch !== null) {
+          map2.push(i);
+          decoded += ch;
+          i = semi + 1;
+          continue;
+        }
+      }
+    }
+    map2.push(i);
+    decoded += storage[i] === NBSP ? " " : storage[i];
+    i++;
+  }
+  map2.push(end);
+  return { decoded, map: map2 };
 }
 function textSpans(storage) {
   const spans = [];
@@ -169306,17 +169386,20 @@ function textSpans(storage) {
   return spans;
 }
 function findInText(storage, needle) {
-  if (!needle) return [];
+  const target = decodeEntities(needle);
+  if (!target) return [];
   const out = [];
   for (const span of textSpans(storage)) {
-    const chunk = storage.slice(span.start, span.end);
-    let idx = chunk.indexOf(needle);
+    const { decoded, map: map2 } = decodeSpan(storage, span.start, span.end);
+    let idx = decoded.indexOf(target);
     while (idx !== -1) {
-      out.push(span.start + idx);
-      idx = chunk.indexOf(needle, idx + 1);
+      const rawStart = map2[idx];
+      const rawEnd = map2[idx + target.length];
+      out.push({ start: rawStart, rawLength: rawEnd - rawStart });
+      idx = decoded.indexOf(target, idx + 1);
     }
   }
-  return out.sort((a, b) => a - b);
+  return out.sort((a, b) => a.start - b.start);
 }
 function extractAnchors(storage) {
   const out = [];
@@ -169350,22 +169433,22 @@ function applyAnchors(storage, anchors) {
   const inserts = [];
   for (const anchor of anchors) {
     const all3 = findInText(storage, anchor.text);
-    const free = all3.filter((i) => !claimed.has(i));
+    const free = all3.filter((h) => !claimed.has(h.start));
     if (free.length === 0) {
       unmatched.push(anchor);
       continue;
     }
     const byOccurrence = all3[anchor.occurrence - 1];
     let chosen;
-    if (byOccurrence !== void 0 && !claimed.has(byOccurrence)) {
+    if (byOccurrence !== void 0 && !claimed.has(byOccurrence.start)) {
       chosen = byOccurrence;
     } else if (free.length === 1) {
       chosen = free[0];
     } else {
       chosen = bestByContext(storage, free, anchor);
     }
-    claimed.add(chosen);
-    inserts.push({ at: chosen, len: anchor.text.length, anchor });
+    claimed.add(chosen.start);
+    inserts.push({ at: chosen.start, len: chosen.rawLength, anchor });
     preserved.push(anchor);
   }
   inserts.sort((a, b) => b.at - a.at);
@@ -169383,17 +169466,17 @@ function applyAnchors(storage, anchors) {
 function bestByContext(storage, candidates, anchor) {
   let best = candidates[0];
   let bestScore = -1;
-  for (const at of candidates) {
+  for (const hit of candidates) {
+    const at = hit.start;
+    const end = hit.start + hit.rawLength;
     const before = visibleText(storage.slice(Math.max(0, at - 200), at)).slice(
       -CONTEXT_CHARS
     );
-    const after = visibleText(
-      storage.slice(at + anchor.text.length, at + anchor.text.length + 200)
-    ).slice(0, CONTEXT_CHARS);
+    const after = visibleText(storage.slice(end, end + 200)).slice(0, CONTEXT_CHARS);
     const score = commonSuffix(before, anchor.before) + commonPrefix(after, anchor.after);
     if (score > bestScore) {
       bestScore = score;
-      best = at;
+      best = hit;
     }
   }
   return best;

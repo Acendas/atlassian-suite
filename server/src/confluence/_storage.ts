@@ -41,21 +41,92 @@ export function findHeadings(storage: string): HeadingInfo[] {
   return out;
 }
 
-/** Strip inline HTML-ish tags and decode the most common entities.
- *  Used only for text-match comparison — not for rendering.
- *
- *  We intentionally do NOT attempt to decode numeric entities or the
- *  full HTML5 entity set. Heading text in Confluence is overwhelmingly
- *  plain, and full decoding would require a dependency.  */
+// ─── entity decoding ───
+//
+// Every text comparison against a storage body runs through this. It lives
+// here, in the lowest-level module, because more than one caller needs it and
+// a second copy is how they drift: _anchors.ts once had its own decoder that
+// handled the named entities but not the numeric ones, and separately compared
+// decoded text against an ENCODED body — so every inline-comment anchor
+// containing " & < > silently failed to re-match. One decoder, one set of
+// rules, imported by everyone.
+//
+// Every entity here decodes to exactly ONE character. That invariant lets
+// _anchors.ts keep a 1:1 offset map from decoded positions back to raw ones;
+// a multi-character decoding would desynchronise it, so anything that doesn't
+// decode to a single char is deliberately left as literal text.
+
+const NAMED_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&apos;": "'",
+  // Confluence emits a lot of non-breaking spaces. Folding them to a plain
+  // space on both sides means text written with one matches text rendered
+  // with the other.
+  "&nbsp;": " ",
+};
+
+/** U+00A0. Folded to a plain space wherever text is compared. */
+export const NBSP = " ";
+
+/** Longest entity token worth considering, e.g. `&#x10FFFF;`. */
+export const MAX_ENTITY_LEN = 12;
+
+/** Decode one entity token to a single character, or null if it isn't one we
+ *  handle (or doesn't decode to exactly one character). */
+export function decodeEntity(token: string): string | null {
+  const named = NAMED_ENTITIES[token];
+  if (named !== undefined) return named;
+
+  let m = /^&#(\d+);$/.exec(token);
+  let codePoint: number | null = m ? Number.parseInt(m[1], 10) : null;
+  if (codePoint === null) {
+    m = /^&#[xX]([0-9a-fA-F]+);$/.exec(token);
+    codePoint = m ? Number.parseInt(m[1], 16) : null;
+  }
+  if (codePoint === null || !Number.isFinite(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
+    return null;
+  }
+  if (codePoint === 0xa0) return " "; // numeric nbsp, folded like the named one
+  let ch: string;
+  try {
+    ch = String.fromCodePoint(codePoint);
+  } catch {
+    return null;
+  }
+  return ch.length === 1 ? ch : null;
+}
+
+/** Decode entities in a plain string. A `&` that doesn't open a recognised
+ *  entity is left alone rather than swallowed — hand-edited bodies do contain
+ *  bare ampersands. */
+export function decodeEntities(s: string): string {
+  let out = "";
+  let i = 0;
+  while (i < s.length) {
+    if (s[i] === "&") {
+      const semi = s.indexOf(";", i + 1);
+      if (semi !== -1 && semi - i <= MAX_ENTITY_LEN) {
+        const decoded = decodeEntity(s.slice(i, semi + 1));
+        if (decoded !== null) {
+          out += decoded;
+          i = semi + 1;
+          continue;
+        }
+      }
+    }
+    out += s[i] === NBSP ? " " : s[i];
+    i++;
+  }
+  return out;
+}
+
+/** Strip inline HTML-ish tags and decode entities.
+ *  Used only for text-match comparison — not for rendering. */
 function stripTags(s: string): string {
-  return s
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ");
+  return decodeEntities(s.replace(/<[^>]+>/g, ""));
 }
 
 /** Locate a section defined by a heading. A "section" is the heading
