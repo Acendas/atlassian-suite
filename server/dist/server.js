@@ -74228,7 +74228,7 @@ var require_NetworkCore = __commonJS({
     var StatsigMetadata_1 = require_StatsigMetadata();
     var StatsigOptionsCommon_1 = require_StatsigOptionsCommon();
     var VisibilityObserving_1 = require_VisibilityObserving();
-    var DEFAULT_TIMEOUT_MS = 1e4;
+    var DEFAULT_TIMEOUT_MS2 = 1e4;
     var BACKOFF_BASE_MS = 500;
     var BACKOFF_MAX_MS = 3e4;
     var RATE_LIMIT_WINDOW_MS = 1e3;
@@ -74248,7 +74248,7 @@ var require_NetworkCore = __commonJS({
       constructor(options, _emitter) {
         this._emitter = _emitter;
         this._errorBoundary = null;
-        this._timeout = DEFAULT_TIMEOUT_MS;
+        this._timeout = DEFAULT_TIMEOUT_MS2;
         this._netConfig = {};
         this._options = {};
         this._leakyBucket = {};
@@ -163878,7 +163878,7 @@ function registerEditTools(server2, opts) {
 }
 
 // src/confluence/publish.ts
-import { createHash } from "node:crypto";
+import { createHash as createHash2 } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename as basename2 } from "node:path";
 
@@ -169411,6 +169411,141 @@ function commonSuffix(a, b) {
   return i;
 }
 
+// src/confluence/_mermaid.ts
+import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+var MermaidRenderError = class extends Error {
+  constructor(message, hint) {
+    super(message);
+    this.hint = hint;
+    this.name = "MermaidRenderError";
+  }
+  hint;
+};
+var DEFAULT_TIMEOUT_MS = 6e4;
+function diagramHash(source, opts = {}) {
+  return createHash("sha256").update(
+    JSON.stringify({
+      source: source.trim(),
+      theme: opts.theme ?? "default",
+      backgroundColor: opts.backgroundColor ?? "transparent",
+      scale: opts.scale ?? 1
+    })
+  ).digest("hex");
+}
+function runWithStdin(cmd, args, input, timeoutMs) {
+  return new Promise((resolvePromise, reject) => {
+    let child;
+    try {
+      child = spawn(cmd, args, { stdio: ["pipe", "pipe", "pipe"] });
+    } catch (err) {
+      reject(new MermaidRenderError(`could not start ${cmd}: ${err.message}`));
+      return;
+    }
+    const outChunks = [];
+    const errChunks = [];
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill("SIGKILL");
+      reject(new MermaidRenderError(`${cmd} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    child.stdout?.on("data", (c) => outChunks.push(c));
+    child.stderr?.on("data", (c) => errChunks.push(c));
+    child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(new MermaidRenderError(`could not start ${cmd}: ${err.message}`));
+    });
+    child.on("close", (code2) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (code2 === 0) {
+        resolvePromise(Buffer.concat(outChunks).toString("utf8"));
+      } else {
+        const stderr = Buffer.concat(errChunks).toString("utf8").trim();
+        reject(
+          new MermaidRenderError(
+            `${cmd} exited ${code2}${stderr ? `: ${stderr.slice(0, 800)}` : ""}`
+          )
+        );
+      }
+    });
+    child.stdin?.on("error", () => {
+    });
+    child.stdin?.end(input);
+  });
+}
+async function detectCli(opts = {}) {
+  const cmd = opts.cliPath ?? process.env.MERMAID_CLI_PATH ?? "mmdc";
+  try {
+    const out = await runWithStdin(cmd, ["--version"], "", 15e3);
+    return { kind: "cli", detail: `${cmd} (${out.trim() || "version unknown"})` };
+  } catch {
+    return null;
+  }
+}
+async function detectBackend(opts = {}) {
+  const cli = await detectCli(opts);
+  if (cli) return cli;
+  const url4 = opts.httpUrl ?? process.env.MERMAID_RENDER_URL;
+  if (url4) return { kind: "http", detail: url4 };
+  return null;
+}
+var NO_BACKEND_HINT = "No mermaid renderer available. Either install the CLI (`npm i -g @mermaid-js/mermaid-cli`, which provides `mmdc`), point MERMAID_CLI_PATH at an existing one, or set MERMAID_RENDER_URL to a self-hosted Kroki-compatible endpoint. Alternatively render the SVGs in your own toolchain and pass them via confluence_sync_attachments + asset_map.";
+async function renderMermaidToSvg(source, opts = {}) {
+  if (!source.trim()) throw new MermaidRenderError("empty mermaid source");
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const cli = await detectCli(opts);
+  if (cli) {
+    const cmd = opts.cliPath ?? process.env.MERMAID_CLI_PATH ?? "mmdc";
+    const args = ["-i", "-", "-o", "-", "-e", "svg"];
+    args.push("-b", opts.backgroundColor ?? "transparent");
+    if (opts.theme) args.push("-t", opts.theme);
+    if (opts.scale) args.push("-s", String(opts.scale));
+    const puppeteerConfig = opts.puppeteerConfigFile ?? process.env.MERMAID_PUPPETEER_CONFIG;
+    if (puppeteerConfig) args.push("-p", puppeteerConfig);
+    const svg = await runWithStdin(cmd, args, source, timeoutMs);
+    if (!svg.includes("<svg")) {
+      throw new MermaidRenderError(
+        "mermaid CLI produced no SVG \u2014 the diagram source is probably invalid"
+      );
+    }
+    return { svg: extractSvg(svg), backend: cli };
+  }
+  const url4 = opts.httpUrl ?? process.env.MERMAID_RENDER_URL;
+  if (url4) {
+    const endpoint = url4.replace(/\/+$/, "") + "/mermaid/svg";
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: source,
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    if (!res.ok) {
+      throw new MermaidRenderError(
+        `mermaid render endpoint ${endpoint} returned ${res.status}`,
+        (await res.text().catch(() => "")).slice(0, 500) || void 0
+      );
+    }
+    const svg = await res.text();
+    if (!svg.includes("<svg")) {
+      throw new MermaidRenderError(`mermaid render endpoint ${endpoint} did not return SVG`);
+    }
+    return { svg: extractSvg(svg), backend: { kind: "http", detail: url4 } };
+  }
+  throw new MermaidRenderError("no mermaid renderer available", NO_BACKEND_HINT);
+}
+function extractSvg(out) {
+  const start = out.indexOf("<svg");
+  const endTag = out.lastIndexOf("</svg>");
+  if (start === -1 || endTag === -1) return out.trim();
+  return out.slice(start, endTag + "</svg>".length);
+}
+
 // src/confluence/publish.ts
 async function fetchPageStorage2(pageId) {
   const raw2 = await confluenceV2().get(`/pages/${encodeURIComponent(pageId)}`, { "body-format": "storage" });
@@ -169447,6 +169582,57 @@ function inventory(storage) {
   };
 }
 var summarizeAnchor = (a) => ({ ref: a.ref, text: a.text, context: a.before.trim() });
+async function attachmentHashes(pageId) {
+  const res = await confluenceV2().get(`/pages/${encodeURIComponent(pageId)}/attachments`, { limit: 250 });
+  const out = /* @__PURE__ */ new Map();
+  for (const a of res.results ?? []) {
+    const m = /sha256:([0-9a-f]{64})/.exec(a.version?.message ?? "");
+    if (a.title && m) out.set(a.title, m[1]);
+  }
+  return out;
+}
+async function uploadAttachment(pageId, filename, data, hash2) {
+  const form = new FormData();
+  const arr = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+  form.append("file", new Blob([arr], { type: guessType(filename) }), filename);
+  form.append("minorEdit", "true");
+  form.append("comment", `sha256:${hash2}`);
+  await confluenceV1().postMultipart(
+    `/content/${encodeURIComponent(pageId)}/child/attachment`,
+    form
+  );
+}
+async function renderAndAttachDiagrams(pageId, diagrams, mermaidOpts, force) {
+  const existing = await attachmentHashes(pageId);
+  const outcomes = [];
+  for (const d of diagrams) {
+    const hash2 = diagramHash(d.source, mermaidOpts);
+    if (!force && existing.get(d.filename) === hash2) {
+      outcomes.push({
+        index: d.index,
+        filename: d.filename,
+        rendered: false,
+        uploaded: false,
+        reason: "unchanged"
+      });
+      continue;
+    }
+    try {
+      const { svg } = await renderMermaidToSvg(d.source, mermaidOpts);
+      await uploadAttachment(pageId, d.filename, Buffer.from(svg, "utf8"), hash2);
+      outcomes.push({ index: d.index, filename: d.filename, rendered: true, uploaded: true });
+    } catch (err) {
+      outcomes.push({
+        index: d.index,
+        filename: d.filename,
+        rendered: false,
+        uploaded: false,
+        error: err instanceof MermaidRenderError ? `${err.message}${err.hint ? ` \u2014 ${err.hint}` : ""}` : err.message
+      });
+    }
+  }
+  return { outcomes, failures: outcomes.filter((o) => o.error) };
+}
 function registerPublishTools(server2, opts) {
   server2.addTool({
     name: "confluence_markdown_to_storage",
@@ -169468,6 +169654,57 @@ function registerPublishTools(server2, opts) {
         diagrams: out.diagrams,
         missing_assets: out.missingAssets,
         unresolved_links: out.unresolvedLinks
+      };
+    })
+  });
+  server2.addTool({
+    name: "confluence_render_mermaid",
+    description: "Render the ```mermaid fences in a Markdown document to SVG and attach them to a page, named to match what confluence_publish_page references (<diagram_prefix>-<n>.svg, zero-indexed). Uses a local mermaid CLI (mmdc) if present, else a Kroki-compatible endpoint named by MERMAID_RENDER_URL; diagram sources are never sent to any third-party service by default. Skips diagrams whose source is unchanged since the last render. Pass page_id to upload, or omit it to just check which backend is available and what would be rendered.",
+    parameters: external_exports4.object({
+      markdown: external_exports4.string(),
+      page_id: external_exports4.string().optional().describe("Attach the SVGs here. Omit for a dry run."),
+      diagram_prefix: external_exports4.string().optional(),
+      theme: external_exports4.enum(["default", "forest", "dark", "neutral"]).optional(),
+      background_color: external_exports4.string().optional().describe("Default 'transparent', which reads best on a Confluence page"),
+      scale: external_exports4.number().positive().optional(),
+      force: external_exports4.boolean().default(false).describe("Re-render even when the source is unchanged")
+    }),
+    execute: async (args) => safeConfluence(async () => {
+      const mermaidOpts = {
+        theme: args.theme,
+        backgroundColor: args.background_color,
+        scale: args.scale
+      };
+      const rendered = markdownToStorage(args.markdown, {
+        diagramPrefix: args.diagram_prefix
+      });
+      const backend = await detectBackend(mermaidOpts);
+      if (!args.page_id) {
+        return {
+          dry_run: true,
+          backend: backend ?? null,
+          backend_available: backend !== null,
+          hint: backend ? void 0 : NO_BACKEND_HINT,
+          diagrams: rendered.diagrams.map((d) => ({ index: d.index, filename: d.filename }))
+        };
+      }
+      ensureWritable3(opts.readOnly);
+      if (!backend) {
+        return { rendered: 0, backend: null, error: "no_renderer", hint: NO_BACKEND_HINT };
+      }
+      const { outcomes, failures } = await renderAndAttachDiagrams(
+        args.page_id,
+        rendered.diagrams,
+        mermaidOpts,
+        args.force
+      );
+      return {
+        page_id: args.page_id,
+        backend,
+        rendered: outcomes.filter((o) => o.rendered).length,
+        skipped_unchanged: outcomes.filter((o) => o.reason === "unchanged").length,
+        failed: failures.length,
+        diagrams: outcomes
       };
     })
   });
@@ -169540,8 +169777,15 @@ function registerPublishTools(server2, opts) {
       page_map: external_exports4.record(external_exports4.string()).optional(),
       diagram_prefix: external_exports4.string().optional(),
       version_message: external_exports4.string().optional(),
+      render_diagrams: external_exports4.boolean().default(true).describe(
+        "Render ```mermaid fences to SVG and attach them before publishing. Requires a mermaid CLI (mmdc) or MERMAID_RENDER_URL; set false to reference pre-rendered SVGs via asset_map instead."
+      ),
+      diagram_theme: external_exports4.enum(["default", "forest", "dark", "neutral"]).optional(),
+      diagram_background: external_exports4.string().optional(),
+      force_render: external_exports4.boolean().default(false).describe("Re-render diagrams even when their source is unchanged"),
       accept_anchor_loss: external_exports4.boolean().default(false).describe("Publish even though listed inline comments will be orphaned"),
-      accept_missing_assets: external_exports4.boolean().default(false).describe("Publish even though some images have no attachment mapping")
+      accept_missing_assets: external_exports4.boolean().default(false).describe("Publish even though some images have no attachment mapping"),
+      accept_diagram_failure: external_exports4.boolean().default(false).describe("Publish even though a diagram failed to render (leaves a broken image)")
     }),
     execute: async (args) => safeConfluence(async () => {
       ensureWritable3(opts.readOnly);
@@ -169571,6 +169815,45 @@ function registerPublishTools(server2, opts) {
           version: state.versionNumber
         };
       }
+      let diagramOutcomes = [];
+      if (args.render_diagrams !== false && rendered.diagrams.length > 0) {
+        const mermaidOpts = {
+          theme: args.diagram_theme,
+          backgroundColor: args.diagram_background
+        };
+        const backend = await detectBackend(mermaidOpts);
+        if (!backend) {
+          if (!args.accept_diagram_failure) {
+            return {
+              published: false,
+              refused: "no_mermaid_renderer",
+              message: `This document has ${rendered.diagrams.length} mermaid diagram(s) and no renderer is available. ${NO_BACKEND_HINT}`,
+              diagrams: rendered.diagrams.map((d) => ({
+                index: d.index,
+                filename: d.filename
+              })),
+              version: state.versionNumber
+            };
+          }
+        } else {
+          const { outcomes, failures } = await renderAndAttachDiagrams(
+            args.page_id,
+            rendered.diagrams,
+            mermaidOpts,
+            args.force_render
+          );
+          diagramOutcomes = outcomes;
+          if (failures.length > 0 && !args.accept_diagram_failure) {
+            return {
+              published: false,
+              refused: "diagram_render_failed",
+              message: `${failures.length} diagram(s) failed to render. Publishing now would leave broken images on the page. Fix the mermaid source, or pass accept_diagram_failure: true.`,
+              diagrams: outcomes,
+              version: state.versionNumber
+            };
+          }
+        }
+      }
       const danglingBefore = new Set(await danglingRefs(args.page_id));
       const raw2 = await confluenceV2().put(
         `/pages/${encodeURIComponent(state.id)}`,
@@ -169594,7 +169877,7 @@ function registerPublishTools(server2, opts) {
         version_after: state.versionNumber + 1,
         anchors_preserved: applied.preserved.map(summarizeAnchor),
         anchors_orphaned: applied.unmatched.map(summarizeAnchor),
-        diagrams: rendered.diagrams,
+        diagrams: diagramOutcomes.length > 0 ? diagramOutcomes : rendered.diagrams,
         unresolved_links: rendered.unresolvedLinks,
         verification: newlyDangling.length === 0 ? { ok: true, newly_dangling: [] } : {
           ok: false,
@@ -169624,34 +169907,17 @@ function registerPublishTools(server2, opts) {
     }),
     execute: async (args) => safeConfluence(async () => {
       ensureWritable3(opts.readOnly);
-      const existing = await confluenceV2().get(`/pages/${encodeURIComponent(args.page_id)}/attachments`, { limit: 250 });
-      const priorHash = /* @__PURE__ */ new Map();
-      for (const a of existing.results ?? []) {
-        const msg = a.version?.message ?? "";
-        const m = /sha256:([0-9a-f]{64})/.exec(msg);
-        if (a.title && m) priorHash.set(a.title, m[1]);
-      }
+      const priorHash = await attachmentHashes(args.page_id);
       const results = [];
       for (const file2 of args.files) {
         const buf = await readFile(file2.path);
         const filename = file2.filename ?? basename2(file2.path);
-        const hash2 = createHash("sha256").update(buf).digest("hex");
+        const hash2 = createHash2("sha256").update(buf).digest("hex");
         if (!args.force && priorHash.get(filename) === hash2) {
           results.push({ filename, uploaded: false, reason: "unchanged", sha256: hash2 });
           continue;
         }
-        const form = new FormData();
-        const arr = buf.buffer.slice(
-          buf.byteOffset,
-          buf.byteOffset + buf.byteLength
-        );
-        form.append("file", new Blob([arr], { type: guessType(filename) }), filename);
-        form.append("minorEdit", "true");
-        form.append("comment", `sha256:${hash2}`);
-        await confluenceV1().postMultipart(
-          `/content/${encodeURIComponent(args.page_id)}/child/attachment`,
-          form
-        );
+        await uploadAttachment(args.page_id, filename, buf, hash2);
         results.push({ filename, uploaded: true, sha256: hash2 });
       }
       return {

@@ -38,6 +38,14 @@ import {
 } from "./_helpers.js";
 import { markdownToStorage } from "./_markdown.js";
 import { extractAnchors, applyAnchors, type Anchor } from "./_anchors.js";
+import {
+  renderMermaidToSvg,
+  detectBackend,
+  diagramHash,
+  MermaidRenderError,
+  NO_BACKEND_HINT,
+  type MermaidOptions,
+} from "./_mermaid.js";
 
 export interface PublishOpts {
   readOnly: boolean;
@@ -99,6 +107,101 @@ function inventory(storage: string) {
 
 const summarizeAnchor = (a: Anchor) => ({ ref: a.ref, text: a.text, context: a.before.trim() });
 
+/** Existing attachments keyed by filename -> the sha recorded in their version
+ *  comment by a previous sync. Absent for anything uploaded outside this tool. */
+async function attachmentHashes(pageId: string): Promise<Map<string, string>> {
+  const res = await confluenceV2().get<
+    PagedResponse<{ title?: string; version?: { message?: string } }>
+  >(`/pages/${encodeURIComponent(pageId)}/attachments`, { limit: 250 });
+  const out = new Map<string, string>();
+  for (const a of res.results ?? []) {
+    const m = /sha256:([0-9a-f]{64})/.exec(a.version?.message ?? "");
+    if (a.title && m) out.set(a.title, m[1]);
+  }
+  return out;
+}
+
+/** Single upload path shared by confluence_sync_attachments and the publisher's
+ *  diagram step, so both record the sha the same way and the skip-if-unchanged
+ *  logic can't drift between them. */
+async function uploadAttachment(
+  pageId: string,
+  filename: string,
+  data: Buffer,
+  hash: string,
+): Promise<void> {
+  const form = new FormData();
+  const arr = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+  form.append("file", new Blob([arr], { type: guessType(filename) }), filename);
+  form.append("minorEdit", "true");
+  form.append("comment", `sha256:${hash}`);
+  await confluenceV1().postMultipart<unknown>(
+    `/content/${encodeURIComponent(pageId)}/child/attachment`,
+    form,
+  );
+}
+
+interface DiagramOutcome {
+  index: number;
+  filename: string;
+  rendered: boolean;
+  uploaded: boolean;
+  reason?: string;
+  error?: string;
+}
+
+/**
+ * Render each mermaid diagram and attach it under the filename the rendered
+ * storage already points at.
+ *
+ * Skipping is keyed on a hash of the diagram SOURCE (plus the options that
+ * change its pixels), stored in the attachment's version comment. Chromium
+ * startup dominates publish time, so on a re-sync where the prose moved but
+ * the diagrams didn't, this is the difference between seconds and minutes —
+ * and it stops every diagram's attachment version from churning on every run.
+ */
+async function renderAndAttachDiagrams(
+  pageId: string,
+  diagrams: Array<{ index: number; filename: string; source: string }>,
+  mermaidOpts: MermaidOptions,
+  force: boolean,
+): Promise<{ outcomes: DiagramOutcome[]; failures: DiagramOutcome[] }> {
+  const existing = await attachmentHashes(pageId);
+  const outcomes: DiagramOutcome[] = [];
+
+  for (const d of diagrams) {
+    const hash = diagramHash(d.source, mermaidOpts);
+    if (!force && existing.get(d.filename) === hash) {
+      outcomes.push({
+        index: d.index,
+        filename: d.filename,
+        rendered: false,
+        uploaded: false,
+        reason: "unchanged",
+      });
+      continue;
+    }
+    try {
+      const { svg } = await renderMermaidToSvg(d.source, mermaidOpts);
+      await uploadAttachment(pageId, d.filename, Buffer.from(svg, "utf8"), hash);
+      outcomes.push({ index: d.index, filename: d.filename, rendered: true, uploaded: true });
+    } catch (err) {
+      outcomes.push({
+        index: d.index,
+        filename: d.filename,
+        rendered: false,
+        uploaded: false,
+        error:
+          err instanceof MermaidRenderError
+            ? `${err.message}${err.hint ? ` — ${err.hint}` : ""}`
+            : (err as Error).message,
+      });
+    }
+  }
+
+  return { outcomes, failures: outcomes.filter((o) => o.error) };
+}
+
 export function registerPublishTools(server: FastMCP, opts: PublishOpts): void {
   // ---------- Pure render (no API call, no write) ----------
 
@@ -138,6 +241,75 @@ export function registerPublishTools(server: FastMCP, opts: PublishOpts): void {
           diagrams: out.diagrams,
           missing_assets: out.missingAssets,
           unresolved_links: out.unresolvedLinks,
+        };
+      }),
+  });
+
+  // ---------- Mermaid rendering ----------
+
+  server.addTool({
+    name: "confluence_render_mermaid",
+    description:
+      "Render the ```mermaid fences in a Markdown document to SVG and attach them to a page, named to match what confluence_publish_page references (<diagram_prefix>-<n>.svg, zero-indexed). Uses a local mermaid CLI (mmdc) if present, else a Kroki-compatible endpoint named by MERMAID_RENDER_URL; diagram sources are never sent to any third-party service by default. Skips diagrams whose source is unchanged since the last render. Pass page_id to upload, or omit it to just check which backend is available and what would be rendered.",
+    parameters: z.object({
+      markdown: z.string(),
+      page_id: z.string().optional().describe("Attach the SVGs here. Omit for a dry run."),
+      diagram_prefix: z.string().optional(),
+      theme: z.enum(["default", "forest", "dark", "neutral"]).optional(),
+      background_color: z
+        .string()
+        .optional()
+        .describe("Default 'transparent', which reads best on a Confluence page"),
+      scale: z.number().positive().optional(),
+      force: z.boolean().default(false).describe("Re-render even when the source is unchanged"),
+    }),
+    execute: async (args: {
+      markdown: string;
+      page_id?: string;
+      diagram_prefix?: string;
+      theme?: "default" | "forest" | "dark" | "neutral";
+      background_color?: string;
+      scale?: number;
+      force: boolean;
+    }) =>
+      safeConfluence(async () => {
+        const mermaidOpts: MermaidOptions = {
+          theme: args.theme,
+          backgroundColor: args.background_color,
+          scale: args.scale,
+        };
+        const rendered = markdownToStorage(args.markdown, {
+          diagramPrefix: args.diagram_prefix,
+        });
+        const backend = await detectBackend(mermaidOpts);
+
+        if (!args.page_id) {
+          return {
+            dry_run: true,
+            backend: backend ?? null,
+            backend_available: backend !== null,
+            hint: backend ? undefined : NO_BACKEND_HINT,
+            diagrams: rendered.diagrams.map((d) => ({ index: d.index, filename: d.filename })),
+          };
+        }
+
+        ensureWritable(opts.readOnly);
+        if (!backend) {
+          return { rendered: 0, backend: null, error: "no_renderer", hint: NO_BACKEND_HINT };
+        }
+        const { outcomes, failures } = await renderAndAttachDiagrams(
+          args.page_id,
+          rendered.diagrams,
+          mermaidOpts,
+          args.force,
+        );
+        return {
+          page_id: args.page_id,
+          backend,
+          rendered: outcomes.filter((o) => o.rendered).length,
+          skipped_unchanged: outcomes.filter((o) => o.reason === "unchanged").length,
+          failed: failures.length,
+          diagrams: outcomes,
         };
       }),
   });
@@ -232,6 +404,18 @@ export function registerPublishTools(server: FastMCP, opts: PublishOpts): void {
       page_map: z.record(z.string()).optional(),
       diagram_prefix: z.string().optional(),
       version_message: z.string().optional(),
+      render_diagrams: z
+        .boolean()
+        .default(true)
+        .describe(
+          "Render ```mermaid fences to SVG and attach them before publishing. Requires a mermaid CLI (mmdc) or MERMAID_RENDER_URL; set false to reference pre-rendered SVGs via asset_map instead.",
+        ),
+      diagram_theme: z.enum(["default", "forest", "dark", "neutral"]).optional(),
+      diagram_background: z.string().optional(),
+      force_render: z
+        .boolean()
+        .default(false)
+        .describe("Re-render diagrams even when their source is unchanged"),
       accept_anchor_loss: z
         .boolean()
         .default(false)
@@ -240,6 +424,10 @@ export function registerPublishTools(server: FastMCP, opts: PublishOpts): void {
         .boolean()
         .default(false)
         .describe("Publish even though some images have no attachment mapping"),
+      accept_diagram_failure: z
+        .boolean()
+        .default(false)
+        .describe("Publish even though a diagram failed to render (leaves a broken image)"),
     }),
     execute: async (args: {
       page_id: string;
@@ -249,8 +437,13 @@ export function registerPublishTools(server: FastMCP, opts: PublishOpts): void {
       page_map?: Record<string, string>;
       diagram_prefix?: string;
       version_message?: string;
+      render_diagrams: boolean;
+      diagram_theme?: "default" | "forest" | "dark" | "neutral";
+      diagram_background?: string;
+      force_render: boolean;
       accept_anchor_loss: boolean;
       accept_missing_assets: boolean;
+      accept_diagram_failure: boolean;
     }) =>
       safeConfluence(async () => {
         ensureWritable(opts.readOnly);
@@ -286,6 +479,54 @@ export function registerPublishTools(server: FastMCP, opts: PublishOpts): void {
           };
         }
 
+        // Diagrams render AFTER the refusal gates (no point paying for Chromium
+        // on a publish that is about to be refused) and BEFORE the write, so the
+        // attachment exists by the time the page body references it.
+        // Compare against `false` rather than truth-testing: this is the one
+        // flag here that defaults ON, and a caller that reaches execute()
+        // without zod's defaults applied would otherwise silently skip
+        // rendering — failing open on the step whose whole job is to stop a
+        // page shipping with broken images.
+        let diagramOutcomes: DiagramOutcome[] = [];
+        if (args.render_diagrams !== false && rendered.diagrams.length > 0) {
+          const mermaidOpts: MermaidOptions = {
+            theme: args.diagram_theme,
+            backgroundColor: args.diagram_background,
+          };
+          const backend = await detectBackend(mermaidOpts);
+          if (!backend) {
+            if (!args.accept_diagram_failure) {
+              return {
+                published: false,
+                refused: "no_mermaid_renderer",
+                message: `This document has ${rendered.diagrams.length} mermaid diagram(s) and no renderer is available. ${NO_BACKEND_HINT}`,
+                diagrams: rendered.diagrams.map((d) => ({
+                  index: d.index,
+                  filename: d.filename,
+                })),
+                version: state.versionNumber,
+              };
+            }
+          } else {
+            const { outcomes, failures } = await renderAndAttachDiagrams(
+              args.page_id,
+              rendered.diagrams,
+              mermaidOpts,
+              args.force_render,
+            );
+            diagramOutcomes = outcomes;
+            if (failures.length > 0 && !args.accept_diagram_failure) {
+              return {
+                published: false,
+                refused: "diagram_render_failed",
+                message: `${failures.length} diagram(s) failed to render. Publishing now would leave broken images on the page. Fix the mermaid source, or pass accept_diagram_failure: true.`,
+                diagrams: outcomes,
+                version: state.versionNumber,
+              };
+            }
+          }
+        }
+
         const danglingBefore = new Set(await danglingRefs(args.page_id));
 
         const raw = await confluenceV2().put<unknown>(
@@ -313,7 +554,7 @@ export function registerPublishTools(server: FastMCP, opts: PublishOpts): void {
           version_after: state.versionNumber + 1,
           anchors_preserved: applied.preserved.map(summarizeAnchor),
           anchors_orphaned: applied.unmatched.map(summarizeAnchor),
-          diagrams: rendered.diagrams,
+          diagrams: diagramOutcomes.length > 0 ? diagramOutcomes : rendered.diagrams,
           unresolved_links: rendered.unresolvedLinks,
           verification:
             newlyDangling.length === 0
@@ -361,16 +602,7 @@ export function registerPublishTools(server: FastMCP, opts: PublishOpts): void {
       safeConfluence(async () => {
         ensureWritable(opts.readOnly);
 
-        // Existing attachments, with whatever hash a previous sync recorded.
-        const existing = await confluenceV2().get<
-          PagedResponse<{ title?: string; version?: { message?: string } }>
-        >(`/pages/${encodeURIComponent(args.page_id)}/attachments`, { limit: 250 });
-        const priorHash = new Map<string, string>();
-        for (const a of existing.results ?? []) {
-          const msg = a.version?.message ?? "";
-          const m = /sha256:([0-9a-f]{64})/.exec(msg);
-          if (a.title && m) priorHash.set(a.title, m[1]);
-        }
+        const priorHash = await attachmentHashes(args.page_id);
 
         const results: Array<Record<string, unknown>> = [];
         for (const file of args.files) {
@@ -383,19 +615,7 @@ export function registerPublishTools(server: FastMCP, opts: PublishOpts): void {
             continue;
           }
 
-          const form = new FormData();
-          const arr = buf.buffer.slice(
-            buf.byteOffset,
-            buf.byteOffset + buf.byteLength,
-          ) as ArrayBuffer;
-          form.append("file", new Blob([arr], { type: guessType(filename) }), filename);
-          form.append("minorEdit", "true");
-          form.append("comment", `sha256:${hash}`);
-
-          await confluenceV1().postMultipart<unknown>(
-            `/content/${encodeURIComponent(args.page_id)}/child/attachment`,
-            form,
-          );
+          await uploadAttachment(args.page_id, filename, buf, hash);
           results.push({ filename, uploaded: true, sha256: hash });
         }
 

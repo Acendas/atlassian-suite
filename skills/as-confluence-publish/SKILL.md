@@ -2,7 +2,7 @@
 name: as-confluence-publish
 description: Publish markdown docs to Confluence without losing comments.
 argument-hint: "<markdown-file-or-dir> <page-id-or-title> [--dry-run]"
-allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_publish_preflight, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_publish_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_markdown_to_storage, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_sync_attachments, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_inline_comments, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_restore_version, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, Read, Glob, Bash
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_publish_preflight, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_publish_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_markdown_to_storage, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_render_mermaid, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_sync_attachments, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_inline_comments, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_restore_version, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, Read, Glob, Bash
 ---
 
 # Publish docs to Confluence
@@ -34,7 +34,13 @@ The publish tools carry markers across the rewrite, refuse to write when they ca
    - `asset_map`: image path → attachment filename.
    - `diagram_prefix`: mermaid diagrams are expected at `<prefix>-<n>.svg`, zero-indexed (e.g. `ch-04-the-catalog-0.svg`).
 
-4. **Render the diagrams yourself.** These tools do **not** render mermaid — that would mean a headless browser inside the MCP server. Use the repo's own toolchain, then `confluence_sync_attachments` to upload. It hashes contents and skips unchanged files, so re-running a sync doesn't churn every diagram's version. `confluence_markdown_to_storage` lists `diagrams[]` with the exact filenames expected — run it first to learn what to render.
+4. **Diagrams render automatically.** ` ```mermaid ` fences are rendered to SVG and attached under the exact filename the page body references — `confluence_publish_page` does it inline (`render_diagrams` defaults on). No manual step.
+
+   - **Requires a renderer on the machine.** A local mermaid CLI (`mmdc`, from `npm i -g @mermaid-js/mermaid-cli`) is used first; otherwise a Kroki-compatible endpoint named by `MERMAID_RENDER_URL`. The plugin does **not** bundle one — that would mean every install downloads Chromium — and it will **never** send diagram sources to a third-party service you haven't named. Diagram sources are internal architecture.
+   - **Check first** with `confluence_render_mermaid` and no `page_id`: a dry run reporting which backend is available and what filenames it would produce. Do this once at the start of a batch, not per page.
+   - **Publish refuses** if a document has diagrams and no renderer is reachable, or if a diagram fails to render — shipping a page with broken images is worse than not shipping. Override deliberately with `accept_diagram_failure: true`.
+   - **Re-renders are skipped** when a diagram's source is unchanged (hash stored in the attachment's version comment). Chromium startup dominates publish time, so this is the difference between seconds and minutes on a re-sync.
+   - **Already have rendered SVGs?** Set `render_diagrams: false` and supply `asset_map` + `confluence_sync_attachments` instead. Both workflows are supported.
 
 5. **Preflight every page** — `confluence_publish_preflight(page_id, markdown, ...)`. Read-only. **Render the result in chat before asking anything**: per-anchor survive/at-risk verdicts with the anchored text and commenter-visible context, attachments about to lose their reference, page links about to break, and `missing_assets`. A summary count is not enough — the user needs the actual anchored phrases to judge whether losing one matters.
 

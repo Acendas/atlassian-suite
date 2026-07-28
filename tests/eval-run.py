@@ -694,6 +694,7 @@ QMETRY_WRITE_TEST = PROJECT_ROOT / "server" / "src" / "qmetry" / "_write.test.ts
 ANCHORS_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_anchors.test.ts"
 MARKDOWN_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_markdown.test.ts"
 PUBLISH_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_publish.test.ts"
+MERMAID_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_mermaid.test.ts"
 
 
 def _run_tsx_unit_test(result, check_id, test_path):
@@ -747,6 +748,10 @@ def check_publish_unit_tests(result):
     _run_tsx_unit_test(result, "confluence:anchor_tests", ANCHORS_TEST)
     _run_tsx_unit_test(result, "confluence:markdown_tests", MARKDOWN_TEST)
     _run_tsx_unit_test(result, "confluence:publish_tests", PUBLISH_TEST)
+    # The mermaid suite skips its live-render cases when no CLI is installed,
+    # so it stays green on a machine without the renderer this plugin
+    # deliberately does not bundle.
+    _run_tsx_unit_test(result, "confluence:mermaid_tests", MERMAID_TEST)
 
 
 # ─── Check 6: No unscoped MCP tool names ───

@@ -368,6 +368,105 @@ test("pre-existing dangling comments are not blamed on this publish", async () =
   eq(out.verification.newly_dangling, [], "delta, not absolute count");
 });
 
+// ─── mermaid rendering ───
+
+/** Run `fn` with no mermaid backend reachable, then restore the environment. */
+async function withNoRenderer(fn: () => Promise<void>) {
+  const saved = { cli: process.env.MERMAID_CLI_PATH, url: process.env.MERMAID_RENDER_URL };
+  process.env.MERMAID_CLI_PATH = "/nonexistent/definitely-not-mmdc";
+  delete process.env.MERMAID_RENDER_URL;
+  try {
+    await fn();
+  } finally {
+    if (saved.cli) process.env.MERMAID_CLI_PATH = saved.cli;
+    else delete process.env.MERMAID_CLI_PATH;
+    if (saved.url) process.env.MERMAID_RENDER_URL = saved.url;
+  }
+}
+
+test("render_mermaid dry run reports filenames and writes nothing", async () => {
+  reset("<p>old</p>");
+  const out = await call("confluence_render_mermaid", {
+    markdown: "```mermaid\ngraph TD; A-->B;\n```\n",
+    diagram_prefix: "ch-04-the-catalog",
+  });
+  eq(out.dry_run, true, "no page_id means dry run");
+  eq(out.diagrams[0].filename, "ch-04-the-catalog-0.svg", "names match what publish references");
+  eq(writes().length, 0, "dry run must not upload");
+});
+
+test("publish REFUSES a document with diagrams when no renderer exists", async () => {
+  await withNoRenderer(async () => {
+    reset("<p>old</p>");
+    const out = await call("confluence_publish_page", {
+      page_id: "123",
+      markdown: "```mermaid\ngraph TD; A-->B;\n```\n",
+      diagram_prefix: "ch-04",
+    });
+    eq(out.published, false, "must not publish a page whose diagrams cannot be produced");
+    eq(out.refused, "no_mermaid_renderer", "machine-readable reason");
+    assert(String(out.message).includes("mermaid-cli"), "message should say how to fix it");
+    eq(writes().length, 0, "and no PUT");
+  });
+});
+
+test("accept_diagram_failure lets a no-renderer publish through", async () => {
+  await withNoRenderer(async () => {
+    reset("<p>old</p>");
+    const out = await call("confluence_publish_page", {
+      page_id: "123",
+      markdown: "```mermaid\ngraph TD; A-->B;\n```\n",
+      diagram_prefix: "ch-04",
+      accept_diagram_failure: true,
+    });
+    eq(out.published, true, "explicit override publishes");
+    eq(writes().length, 1, "one PUT");
+  });
+});
+
+test("render_diagrams:false publishes without needing a renderer at all", async () => {
+  await withNoRenderer(async () => {
+    reset("<p>old</p>");
+    const out = await call("confluence_publish_page", {
+      page_id: "123",
+      markdown: "```mermaid\ngraph TD; A-->B;\n```\n",
+      diagram_prefix: "ch-04",
+      render_diagrams: false,
+    });
+    eq(out.published, true, "pre-rendered-asset workflow stays available");
+    const put = calls.find((c) => c.method === "PUT");
+    assert(
+      String(put?.body?.body?.value).includes('ri:filename="ch-04-0.svg"'),
+      "body still references the diagram attachment",
+    );
+  });
+});
+
+test("a document with no diagrams never consults a renderer", async () => {
+  await withNoRenderer(async () => {
+    reset("<p>old</p>");
+    const out = await call("confluence_publish_page", { page_id: "123", markdown: "just prose\n" });
+    eq(out.published, true, "no diagrams means the missing renderer is irrelevant");
+  });
+});
+
+test("the rendered body references the diagram the renderer will attach", async () => {
+  reset("<p>old</p>");
+  await call("confluence_publish_page", {
+    page_id: "123",
+    markdown: "```mermaid\ngraph TD; A-->B;\n```\n",
+    diagram_prefix: "ch-04-the-catalog",
+    render_diagrams: false,
+  });
+  const put = calls.find((c) => c.method === "PUT");
+  assert(
+    String(put?.body?.body?.value).includes(
+      '<ac:image ac:alt="Diagram 1"><ri:attachment ri:filename="ch-04-the-catalog-0.svg" /></ac:image>',
+    ),
+    "storage must point at exactly the filename the render step produces",
+  );
+});
+
 // ─── read-only mode ───
 
 test("publish and sync_attachments respect read-only mode", async () => {

@@ -59,12 +59,6 @@
     "pattern": "[Pp]reflight"
   },
   {
-    "name": "states_mermaid_is_not_rendered_here",
-    "_comment": "Load-bearing boundary: rendering mermaid would mean shipping a headless browser in the MCP server.",
-    "type": "contains",
-    "pattern": "do(?:es)?\\s+\\*\\*not\\*\\*\\s+render|not render mermaid|NOT.*render"
-  },
-  {
     "name": "documents_zero_indexed_diagram_naming",
     "type": "contains",
     "pattern": "zero-indexed|<n>\\.svg|-0\\.svg"
@@ -83,5 +77,43 @@
     "name": "stops_batch_on_first_failure",
     "type": "contains",
     "pattern": "[Ss]top the run on the first failed verification|one, verify, then continue"
+  },
+  {
+    "name": "allows_render_mermaid",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_render_mermaid"
+  },
+  {
+    "name": "states_diagrams_render_automatically",
+    "type": "contains",
+    "pattern": "render(ed)? automatically|rendered to SVG"
+  },
+  {
+    "name": "names_the_local_cli_backend",
+    "_comment": "The renderer is detected, not bundled \u2014 users need to know what to install.",
+    "type": "contains",
+    "pattern": "mmdc|mermaid-cli"
+  },
+  {
+    "name": "names_the_self_hosted_endpoint_env",
+    "type": "contains",
+    "pattern": "MERMAID_RENDER_URL"
+  },
+  {
+    "name": "states_no_third_party_by_default",
+    "_comment": "Diagram sources are internal architecture; silently POSTing them off-box is a disclosure, not a fallback.",
+    "type": "contains",
+    "pattern": "never.*third-party|third-party service you haven't named"
+  },
+  {
+    "name": "states_publish_refuses_on_render_failure",
+    "type": "contains",
+    "pattern": "[Pp]ublish refuses|accept_diagram_failure"
+  },
+  {
+    "name": "documents_pre_rendered_escape_hatch",
+    "type": "contains",
+    "pattern": "render_diagrams: false"
   }
 ]
