@@ -2,7 +2,7 @@
 name: as-confluence-copy
 description: Copy a Confluence page or page tree.
 argument-hint: "<source-page-id> <destination-parent-page-id> [mode: page|hierarchy] [new-title]"
-allowed-tools: mcp__acendas-atlassian__confluence_copy_page, mcp__acendas-atlassian__confluence_copy_page_hierarchy_start, mcp__acendas-atlassian__confluence_copy_page_hierarchy_status, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_copy_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_copy_page_hierarchy_start, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_copy_page_hierarchy_status, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title
 ---
 
 # Copy a Confluence Page (or Whole Subtree)

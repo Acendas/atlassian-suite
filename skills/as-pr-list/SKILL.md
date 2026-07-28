@@ -2,7 +2,7 @@
 name: as-pr-list
 description: List Bitbucket pull requests with smart filters.
 argument-hint: "[repo-slug] [filter: open|mine|review|stale|merged]"
-allowed-tools: mcp__acendas-atlassian__list_pull_requests, mcp__acendas-atlassian__list_repositories, mcp__acendas-atlassian__get_pull_request
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests, mcp__plugin_atlassian-suite_acendas-atlassian__list_repositories, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request
 ---
 
 # List Pull Requests
@@ -21,9 +21,9 @@ Show Bitbucket PRs with smart filters.
 
 ## Steps
 
-1. **Resolve scope.** If no repo, call `mcp__acendas-atlassian__list_repositories` and use the 5 most recently-updated repos.
+1. **Resolve scope.** If no repo, call `mcp__plugin_atlassian-suite_acendas-atlassian__list_repositories` and use the 5 most recently-updated repos.
 
-2. **Fetch PRs** for each repo via `mcp__acendas-atlassian__list_pull_requests` with the appropriate state.
+2. **Fetch PRs** for each repo via `mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests` with the appropriate state.
 
 3. **Apply filter** client-side for `mine` / `review` / `stale`.
 

@@ -2,7 +2,7 @@
 name: as-sprint-retro
 description: Generate a Jira sprint retrospective brief.
 argument-hint: "[board-id-or-name] [sprint-id-or-name]"
-allowed-tools: mcp__acendas-atlassian__jira_get_agile_boards, mcp__acendas-atlassian__jira_get_sprints_from_board, mcp__acendas-atlassian__jira_get_sprint_issues, mcp__acendas-atlassian__jira_search, mcp__acendas-atlassian__jira_batch_get_changelogs
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprints_from_board, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprint_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__jira_batch_get_changelogs
 ---
 
 # Sprint Retrospective Brief
@@ -17,7 +17,7 @@ Build a data-driven retro starter pack.
 
 1. **Resolve board + sprint.** Same as sprint-status skill, but filter sprints by `state=closed` if `$2` is empty and pick the most recent one.
 
-2. **Pull all sprint issues** via `mcp__acendas-atlassian__jira_get_sprint_issues`. Pull changelogs via `mcp__acendas-atlassian__jira_batch_get_changelogs` for cycle-time analysis.
+2. **Pull all sprint issues** via `mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprint_issues`. Pull changelogs via `mcp__plugin_atlassian-suite_acendas-atlassian__jira_batch_get_changelogs` for cycle-time analysis.
 
 3. **Compute the four sections:**
 

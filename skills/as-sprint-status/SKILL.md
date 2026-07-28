@@ -2,7 +2,7 @@
 name: as-sprint-status
 description: Report current Jira sprint progress.
 argument-hint: "[board-id-or-name] [sprint-id-or-name]"
-allowed-tools: mcp__acendas-atlassian__jira_get_agile_boards, mcp__acendas-atlassian__jira_get_sprints_from_board, mcp__acendas-atlassian__jira_get_sprint_issues, mcp__acendas-atlassian__jira_search
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprints_from_board, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprint_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search
 ---
 
 # Sprint Status Report
@@ -17,14 +17,14 @@ Produce a one-screen sprint health report.
 
 1. **Resolve the board.**
    - If `$1` is numeric → use as board ID.
-   - If `$1` is a string → call `mcp__acendas-atlassian__jira_get_agile_boards` and fuzzy-match.
+   - If `$1` is a string → call `mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards` and fuzzy-match.
    - If empty → list available boards and ask the user to pick.
 
-2. **Resolve the sprint.** Call `mcp__acendas-atlassian__jira_get_sprints_from_board` filtered by `state=active` (or by name match if `$2` is provided). If multiple active sprints exist, ask the user.
+2. **Resolve the sprint.** Call `mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprints_from_board` filtered by `state=active` (or by name match if `$2` is provided). If multiple active sprints exist, ask the user.
 
-3. **Pull sprint issues.** Call `mcp__acendas-atlassian__jira_get_sprint_issues` for the sprint. Group by status category: `Done`, `In Progress`, `To Do`, plus a separate `Blocked` group if any issue has the `flagged` field set.
+3. **Pull sprint issues.** Call `mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprint_issues` for the sprint. Group by status category: `Done`, `In Progress`, `To Do`, plus a separate `Blocked` group if any issue has the `flagged` field set.
 
-4. **Compute deltas.** Compare current scope vs initial commitment (look for issues added after sprint start using `created > sprintStartDate` heuristic via `mcp__acendas-atlassian__jira_search`). Count story points if the field is populated.
+4. **Compute deltas.** Compare current scope vs initial commitment (look for issues added after sprint start using `created > sprintStartDate` heuristic via `mcp__plugin_atlassian-suite_acendas-atlassian__jira_search`). Count story points if the field is populated.
 
 5. **Render the report** in this exact shape:
 

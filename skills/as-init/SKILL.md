@@ -2,7 +2,7 @@
 name: as-init
 description: Initialize Atlassian credentials via browser wizard.
 argument-hint: ""
-allowed-tools: Bash, mcp__acendas-atlassian__clear_credentials
+allowed-tools: Bash, mcp__plugin_atlassian-suite_acendas-atlassian__clear_credentials
 ---
 
 # Initialize the Atlassian Suite — Browser Wizard Handoff
@@ -14,7 +14,7 @@ Drive credential setup by handing off to a local browser wizard. The wizard runs
 ## Iron rules
 
 1. **Never** ask the user to paste an API token, URL, or email into the Claude Code chat. The wizard is the only collection mechanism.
-2. **Never** call `mcp__acendas-atlassian__configure_credentials` from this skill — the wizard's `/save` endpoint does the persistence directly via the same atomic-write logic.
+2. **Never** call `mcp__plugin_atlassian-suite_acendas-atlassian__configure_credentials` from this skill — the wizard's `/save` endpoint does the persistence directly via the same atomic-write logic.
 3. **Always** check state via `auth.mjs status` first (MCP-agnostic — works on first install before the MCP server is registered).
 4. **Always** finish with `auth.mjs verify all` to surface the per-scope pass/fail summary in the chat.
 5. If the wizard's TTY refuses (e.g. `!` runs in a non-interactive context that can't fork the browser), tell the user to run the same command directly in their own terminal and wait for them to confirm.
@@ -31,7 +31,7 @@ node "${CLAUDE_PLUGIN_ROOT}/server/scripts/auth.mjs" status
 
 Parse which of `jira` / `confluence` / `bitbucket` / `qmetry` already have entries. Report a one-line summary to the user (e.g. "Jira + Confluence configured, Bitbucket and QMetry not set"). QMetry is optional — only mention it if the user asked about test management or if it is already configured.
 
-If the user said "remove credentials" / "clear credentials" / "log out of atlassian", call `mcp__acendas-atlassian__clear_credentials` with `confirm: true` and stop.
+If the user said "remove credentials" / "clear credentials" / "log out of atlassian", call `mcp__plugin_atlassian-suite_acendas-atlassian__clear_credentials` with `confirm: true` and stop.
 
 ### 2. Launch the browser wizard directly
 
@@ -69,7 +69,7 @@ Surface the full output. Pass = every required scope `OK` for every product they
 
 Then tell the user, exactly:
 
-> Restart Claude Code (or reload the MCP server) for `mcp__acendas-atlassian__*` tools to pick up the new credentials. Until restart, those tools will use the prior credentials (or be unavailable on a fresh install).
+> Restart Claude Code (or reload the MCP server) for `mcp__plugin_atlassian-suite_acendas-atlassian__*` tools to pick up the new credentials. Until restart, those tools will use the prior credentials (or be unavailable on a fresh install).
 
 ### 5. If a required scope is MISSING
 

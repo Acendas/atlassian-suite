@@ -2,7 +2,7 @@
 name: as-commit-show
 description: Show a Bitbucket commit's diff and CI status.
 argument-hint: "<repo-slug> <commit-sha>"
-allowed-tools: mcp__acendas-atlassian__get_commit, mcp__acendas-atlassian__get_commit_diffstat, mcp__acendas-atlassian__get_commit_diff, mcp__acendas-atlassian__list_commit_statuses, mcp__acendas-atlassian__list_commit_comments
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_commit, mcp__plugin_atlassian-suite_acendas-atlassian__get_commit_diffstat, mcp__plugin_atlassian-suite_acendas-atlassian__get_commit_diff, mcp__plugin_atlassian-suite_acendas-atlassian__list_commit_statuses, mcp__plugin_atlassian-suite_acendas-atlassian__list_commit_comments
 ---
 
 # Show a Bitbucket Commit

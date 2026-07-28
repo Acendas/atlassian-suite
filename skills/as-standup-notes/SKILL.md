@@ -2,7 +2,7 @@
 name: as-standup-notes
 description: Generate a daily standup brief from Jira and PRs.
 argument-hint: "[user-account-id-or-email]"
-allowed-tools: mcp__acendas-atlassian__jira_get_user_profile, mcp__acendas-atlassian__jira_search, mcp__acendas-atlassian__list_pull_requests, mcp__acendas-atlassian__get_pull_request
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_user_profile, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request
 ---
 
 # Daily Standup Notes
@@ -15,13 +15,13 @@ Generate a "yesterday / today / blockers" brief.
 
 ## Steps
 
-1. **Resolve the user.** If `$1` is empty, use JQL `currentUser()`. Otherwise call `mcp__acendas-atlassian__jira_get_user_profile` to get the accountId.
+1. **Resolve the user.** If `$1` is empty, use JQL `currentUser()`. Otherwise call `mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_user_profile` to get the accountId.
 
 2. **Fetch yesterday's activity in parallel:**
    - JQL: `assignee = {user} AND status changed during (-1d, now())` — issues moved by the user.
    - JQL: `assignee = {user} AND updated >= -1d` — any touched issues.
-   - Bitbucket: `mcp__acendas-atlassian__list_pull_requests` filtered by author = the user, state = `MERGED`, updated within last 24h.
-   - Bitbucket: `mcp__acendas-atlassian__list_pull_requests` filtered by author = the user, state = `OPEN`.
+   - Bitbucket: `mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests` filtered by author = the user, state = `MERGED`, updated within last 24h.
+   - Bitbucket: `mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests` filtered by author = the user, state = `OPEN`.
 
 3. **Fetch today's plan:**
    - JQL: `assignee = {user} AND status = "In Progress"` — currently active work.

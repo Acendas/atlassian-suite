@@ -2,7 +2,7 @@
 name: as-confluence-labels
 description: Manage labels on a Confluence page.
 argument-hint: "<page-id-or-title> <action: list|add|remove> [label-names...]"
-allowed-tools: mcp__acendas-atlassian__confluence_get_labels, mcp__acendas-atlassian__confluence_add_label, mcp__acendas-atlassian__confluence_remove_label, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_labels, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_add_label, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_remove_label, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title
 ---
 
 # Confluence Page Labels

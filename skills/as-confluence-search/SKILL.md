@@ -2,7 +2,7 @@
 name: as-confluence-search
 description: Search Confluence via natural-language to CQL.
 argument-hint: "<natural-language-query-or-cql> [space-key]"
-allowed-tools: mcp__acendas-atlassian__confluence_search, mcp__acendas-atlassian__getConfluenceSpaces
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, mcp__plugin_atlassian-suite_acendas-atlassian__getConfluenceSpaces
 ---
 
 # Confluence Search Helper
@@ -25,7 +25,7 @@ Translate intent → CQL, run the search, summarize.
 
 3. **Apply space filter** if `$2` provided: `AND space = "{$2}"`.
 
-4. **Run** via `mcp__acendas-atlassian__confluence_search` (limit 25). Render:
+4. **Run** via `mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search` (limit 25). Render:
    ```
    {space}/{title}  ({lastModified} by {creator})
    {url}

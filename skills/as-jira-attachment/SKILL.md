@@ -2,7 +2,7 @@
 name: as-jira-attachment
 description: Manage attachments on a Jira issue.
 argument-hint: "<issue-key> [action: list|download|upload|delete] [attachment-id-or-save-path-or-file-path]"
-allowed-tools: mcp__acendas-atlassian__jira_list_issue_attachments, mcp__acendas-atlassian__jira_get_attachment, mcp__acendas-atlassian__jira_download_attachment, mcp__acendas-atlassian__jira_add_attachment, mcp__acendas-atlassian__jira_delete_attachment, mcp__acendas-atlassian__jira_get_issue
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_list_issue_attachments, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_attachment, mcp__plugin_atlassian-suite_acendas-atlassian__jira_download_attachment, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_attachment, mcp__plugin_atlassian-suite_acendas-atlassian__jira_delete_attachment, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue
 ---
 
 # Jira Issue Attachments

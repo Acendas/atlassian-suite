@@ -1,7 +1,7 @@
 ---
 name: pr-review-patterns
 description: PR conventions/patterns scanner. Single responsibility — finds violations of project rules, naming conventions, anti-patterns, duplication, dead code, magic numbers. Reads project rules from .claude/rules/ if present. Spawned by code-review-orchestrator. Read-only. Confidence ≥ 80.
-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_file_contents, Read, Grep, Glob
+tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_file_contents, Read, Grep, Glob
 model: sonnet
 color: orange
 ---

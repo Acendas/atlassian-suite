@@ -1,7 +1,7 @@
 ---
 name: pr-review-tests
 description: PR test quality scanner. Single responsibility — finds missing critical-path coverage, weak assertions, missing edge cases, brittle tests, missing error-path tests. Cross-references test files with implementation. Spawned by code-review-orchestrator. Read-only. Confidence ≥ 80.
-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_file_contents, Read, Grep, Glob
+tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_file_contents, Read, Grep, Glob
 model: sonnet
 color: yellow
 ---

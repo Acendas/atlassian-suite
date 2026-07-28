@@ -1,7 +1,7 @@
 ---
 name: pr-review-bugs
 description: PR logic-bug scanner. Single responsibility — finds correctness errors only (off-by-one, null/undefined handling, race conditions, resource leaks, wrong operators, type confusion). Spawned by code-review-orchestrator with a target PR + file list. Read-only. Returns structured findings with confidence ≥ 80.
-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_pull_request_diff, mcp__acendas-atlassian__get_pull_request_diffstat, mcp__acendas-atlassian__get_file_contents, Read, Grep, Glob
+tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_diff, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_diffstat, mcp__plugin_atlassian-suite_acendas-atlassian__get_file_contents, Read, Grep, Glob
 model: sonnet
 color: red
 ---

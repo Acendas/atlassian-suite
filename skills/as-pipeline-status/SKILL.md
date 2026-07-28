@@ -2,7 +2,7 @@
 name: as-pipeline-status
 description: Show Bitbucket Pipelines run status.
 argument-hint: "<repo-slug> [filter: latest|failed|inprogress]"
-allowed-tools: mcp__acendas-atlassian__list_pipelines, mcp__acendas-atlassian__get_pipeline, mcp__acendas-atlassian__list_pipeline_steps, mcp__acendas-atlassian__get_pipeline_step_log
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__list_pipelines, mcp__plugin_atlassian-suite_acendas-atlassian__get_pipeline, mcp__plugin_atlassian-suite_acendas-atlassian__list_pipeline_steps, mcp__plugin_atlassian-suite_acendas-atlassian__get_pipeline_step_log
 ---
 
 # Bitbucket Pipeline Status
@@ -14,7 +14,7 @@ allowed-tools: mcp__acendas-atlassian__list_pipelines, mcp__acendas-atlassian__g
 
 ## Steps
 
-1. Call `mcp__acendas-atlassian__list_pipelines` with `sort=-created_on`, `pagelen=20`.
+1. Call `mcp__plugin_atlassian-suite_acendas-atlassian__list_pipelines` with `sort=-created_on`, `pagelen=20`.
 2. Filter:
    - `latest` → first 10
    - `failed` → `state.result.name = "FAILED"`

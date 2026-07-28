@@ -2,7 +2,7 @@
 name: as-jira-sprint
 description: Manage a Jira Scrum sprint lifecycle.
 argument-hint: "<board-id-or-name> <action: list|create|start|close|add|remove> [args...]"
-allowed-tools: mcp__acendas-atlassian__jira_get_agile_boards, mcp__acendas-atlassian__jira_get_sprints_from_board, mcp__acendas-atlassian__jira_create_sprint, mcp__acendas-atlassian__jira_update_sprint, mcp__acendas-atlassian__jira_add_issues_to_sprint, mcp__acendas-atlassian__jira_get_sprint_issues
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprints_from_board, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_update_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_issues_to_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprint_issues
 ---
 
 # Jira Sprint Operations
@@ -17,7 +17,7 @@ Run sprint lifecycle actions on a Scrum board.
 
 ## Steps
 
-1. **Resolve board** (numeric ID or fuzzy match via `mcp__acendas-atlassian__jira_get_agile_boards`).
+1. **Resolve board** (numeric ID or fuzzy match via `mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards`).
 
 2. **Branch on action:**
 

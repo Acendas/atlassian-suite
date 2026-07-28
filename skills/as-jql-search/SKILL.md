@@ -2,7 +2,7 @@
 name: as-jql-search
 description: Search Jira via natural-language to JQL.
 argument-hint: "<natural-language-query-or-jql>"
-allowed-tools: mcp__acendas-atlassian__jira_search, mcp__acendas-atlassian__jira_search_fields
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search_fields
 ---
 
 # JQL Search Helper
@@ -25,7 +25,7 @@ Translate a natural-language query into JQL, run it, summarize results.
 
 3. **Show the JQL** to the user before running. If they object, refine.
 
-4. **Run** via `mcp__acendas-atlassian__jira_search` (limit 50, expand only `summary,status,assignee,priority,issuetype`).
+4. **Run** via `mcp__plugin_atlassian-suite_acendas-atlassian__jira_search` (limit 50, expand only `summary,status,assignee,priority,issuetype`).
 
 5. **Render** as a compact table:
    ```
@@ -36,5 +36,5 @@ Translate a natural-language query into JQL, run it, summarize results.
 
 ## Notes
 
-- For unknown custom fields, call `mcp__acendas-atlassian__jira_search_fields` to discover the cf id.
+- For unknown custom fields, call `mcp__plugin_atlassian-suite_acendas-atlassian__jira_search_fields` to discover the cf id.
 - Cap at 50 results; warn the user if `total` > 50.

@@ -2,7 +2,7 @@
 name: as-confluence-tree
 description: Browse a Confluence space's page tree.
 argument-hint: "<space-key-or-page-id> [depth]"
-allowed-tools: mcp__acendas-atlassian__confluence_get_space_page_tree, mcp__acendas-atlassian__confluence_get_page_children, mcp__acendas-atlassian__getConfluenceSpaces, mcp__acendas-atlassian__confluence_get_space
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_space_page_tree, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_children, mcp__plugin_atlassian-suite_acendas-atlassian__getConfluenceSpaces, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_space
 ---
 
 # Browse a Confluence Space Tree

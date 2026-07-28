@@ -2,7 +2,7 @@
 name: as-confluence-likes
 description: List users who liked a Confluence page.
 argument-hint: "<page-id-or-title>"
-allowed-tools: mcp__acendas-atlassian__confluence_get_page_likes, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title, mcp__acendas-atlassian__confluence_get_user
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_likes, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_user
 ---
 
 # List Who Liked a Confluence Page

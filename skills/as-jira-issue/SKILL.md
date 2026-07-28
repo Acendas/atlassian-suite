@@ -2,7 +2,7 @@
 name: as-jira-issue
 description: View or act on a Jira issue.
 argument-hint: "<issue-key> [action: show|comment|transition|worklog]"
-allowed-tools: mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__jira_get_transitions, mcp__acendas-atlassian__jira_transition_issue, mcp__acendas-atlassian__jira_add_comment, mcp__acendas-atlassian__jira_add_worklog
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_transitions, mcp__plugin_atlassian-suite_acendas-atlassian__jira_transition_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_comment, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_worklog
 ---
 
 # View / Work on a Jira Issue

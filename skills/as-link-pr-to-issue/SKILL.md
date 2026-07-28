@@ -2,7 +2,7 @@
 name: as-link-pr-to-issue
 description: Bidirectionally link a PR to a Jira issue.
 argument-hint: "<pr-url-or-id> [issue-key]"
-allowed-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__update_pull_request, mcp__acendas-atlassian__add_pull_request_comment, mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__jira_create_remote_issue_link, mcp__acendas-atlassian__jira_add_comment
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__update_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__add_pull_request_comment, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_remote_issue_link, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_comment
 ---
 
 # Link a Bitbucket PR to a Jira Issue
@@ -16,23 +16,23 @@ Create a bidirectional link between a pull request and a Jira issue.
 
 ## Steps
 
-1. **Resolve the PR.** Parse `$1` into `(workspace, repo_slug, pr_id)`. Call `mcp__acendas-atlassian__get_pull_request` to fetch title, source branch, description, author, and current state.
+1. **Resolve the PR.** Parse `$1` into `(workspace, repo_slug, pr_id)`. Call `mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request` to fetch title, source branch, description, author, and current state.
 
 2. **Resolve the Jira issue.**
-   - If `$2` is provided, call `mcp__acendas-atlassian__jira_get_issue` to validate.
+   - If `$2` is provided, call `mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue` to validate.
    - Otherwise, parse the PR source branch name (e.g. `feature/PROJ-456-something`) and PR title for an issue key matching `[A-Z][A-Z0-9]+-\d+`.
    - If multiple candidates appear, ask the user which one is correct.
    - If none are found, ask the user for the issue key.
 
-3. **Update the Jira side.** Add a remote link via `mcp__acendas-atlassian__jira_create_remote_issue_link` with:
+3. **Update the Jira side.** Add a remote link via `mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_remote_issue_link` with:
    - `url` = PR HTML URL
    - `title` = `[<repo>] PR #<id>: <PR title>`
    - `icon_url` = Bitbucket favicon (or omit)
    - `relationship` = `"implements"` or `"fixes"` based on user intent (default: `implements`).
 
-   Optionally add a comment via `mcp__acendas-atlassian__jira_add_comment` summarizing the PR (1 line: title + author + source→destination branches).
+   Optionally add a comment via `mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_comment` summarizing the PR (1 line: title + author + source→destination branches).
 
-4. **Update the PR side.** If the PR description does not already contain the issue key, call `mcp__acendas-atlassian__update_pull_request` to prepend `Jira: <ISSUE-KEY>` to the description. If the PR is read-only or update fails, fall back to posting a comment via `mcp__acendas-atlassian__add_pull_request_comment` containing the issue link.
+4. **Update the PR side.** If the PR description does not already contain the issue key, call `mcp__plugin_atlassian-suite_acendas-atlassian__update_pull_request` to prepend `Jira: <ISSUE-KEY>` to the description. If the PR is read-only or update fails, fall back to posting a comment via `mcp__plugin_atlassian-suite_acendas-atlassian__add_pull_request_comment` containing the issue link.
 
 5. **Report.** Summarize what changed in 2 short lines: which Jira link was created, which PR field was updated.
 

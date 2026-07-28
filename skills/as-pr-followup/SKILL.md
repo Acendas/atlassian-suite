@@ -2,7 +2,7 @@
 name: as-pr-followup
 description: Convert PR review follow-ups into Jira issues.
 argument-hint: "[pr-id-or-url] [project-key]"
-allowed-tools: mcp__acendas-atlassian__jira_create_issue, mcp__acendas-atlassian__jira_batch_create_issues, mcp__acendas-atlassian__jira_create_remote_issue_link, mcp__acendas-atlassian__jira_get_all_projects, mcp__acendas-atlassian__getJiraProjectIssueTypesMetadata, mcp__acendas-atlassian__get_pull_request, AskUserQuestion
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_batch_create_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_remote_issue_link, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_all_projects, mcp__plugin_atlassian-suite_acendas-atlassian__getJiraProjectIssueTypesMetadata, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, AskUserQuestion
 ---
 
 # PR Review Follow-up to Jira

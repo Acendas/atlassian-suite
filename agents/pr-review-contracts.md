@@ -1,7 +1,7 @@
 ---
 name: pr-review-contracts
 description: PR API contract & backward compatibility scanner. Single responsibility — finds breaking changes to public interfaces, request/response shape drift, schema breaks, deprecation gaps, and consumer impact. Spawned by code-review-orchestrator. Read-only. Confidence ≥ 80.
-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_pull_request_diff, mcp__acendas-atlassian__get_file_contents, Read, Grep, Glob
+tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_diff, mcp__plugin_atlassian-suite_acendas-atlassian__get_file_contents, Read, Grep, Glob
 model: sonnet
 color: orange
 ---

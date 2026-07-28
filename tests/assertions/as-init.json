@@ -103,7 +103,7 @@
     "type": "frontmatter_not_contains",
     "_comment": "The wizard's /save endpoint persists directly via auth.mjs atomic-write. Allowing the MCP configure tool here would create a parallel write path.",
     "field": "allowed-tools",
-    "value": "mcp__acendas-atlassian__configure_credentials"
+    "value": "mcp__plugin_atlassian-suite_acendas-atlassian__configure_credentials"
   },
   {
     "name": "auth_script_exists",

@@ -2,7 +2,7 @@
 name: as-create-issue
 description: Create a Jira issue from current context.
 argument-hint: "[project-key] [summary]"
-allowed-tools: mcp__acendas-atlassian__jira_get_all_projects, mcp__acendas-atlassian__jira_create_issue, mcp__acendas-atlassian__jira_batch_create_issues, mcp__acendas-atlassian__jira_get_user_profile, mcp__acendas-atlassian__getJiraProjectIssueTypesMetadata
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_all_projects, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_batch_create_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_user_profile, mcp__plugin_atlassian-suite_acendas-atlassian__getJiraProjectIssueTypesMetadata
 ---
 
 # Create a Jira Issue
@@ -19,7 +19,7 @@ If both omitted, derive from the current conversation. If the conversation lacks
 ## Steps
 
 1. **Resolve the project.**
-   - If `$1` is provided, validate via `mcp__acendas-atlassian__jira_get_all_projects` (cached).
+   - If `$1` is provided, validate via `mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_all_projects` (cached).
    - Else: ask the user, offering the 5 most recently-used projects from prior session memory if available.
 
 2. **Pick the issue type.** Defaults by signal:
@@ -27,7 +27,7 @@ If both omitted, derive from the current conversation. If the conversation lacks
    - Question or how-to → `Task`
    - Otherwise → `Story` (or `Task` if Story not available).
 
-   Validate the chosen type exists in the project via `mcp__acendas-atlassian__getJiraProjectIssueTypesMetadata`. If not, fall back to `Task`.
+   Validate the chosen type exists in the project via `mcp__plugin_atlassian-suite_acendas-atlassian__getJiraProjectIssueTypesMetadata`. If not, fall back to `Task`.
 
 3. **Compose the summary.** If `$2` is provided, use it. Else generate a one-line summary from the conversation context. Cap at 120 chars.
 
@@ -44,10 +44,10 @@ If both omitted, derive from the current conversation. If the conversation lacks
 
 6. **Confirm before creating.** Show the user the assembled payload (project, type, summary, description preview, fields) in a single block. Wait for explicit yes.
 
-7. **Create.** Call `mcp__acendas-atlassian__jira_create_issue`. Report the new key and URL.
+7. **Create.** Call `mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_issue`. Report the new key and URL.
 
 ## Notes
 
 - Read-only mode (`READ_ONLY_MODE=true`) blocks creation — detect and tell the user instead of failing silently.
 - Never fabricate reproduction steps. If a Bug doesn't have clear repro from context, ask the user.
-- For multi-issue creation (epics with sub-tasks), use `mcp__acendas-atlassian__jira_batch_create_issues` after confirming the full set with the user.
+- For multi-issue creation (epics with sub-tasks), use `mcp__plugin_atlassian-suite_acendas-atlassian__jira_batch_create_issues` after confirming the full set with the user.

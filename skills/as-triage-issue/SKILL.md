@@ -2,7 +2,7 @@
 name: as-triage-issue
 description: Triage a Jira issue with related context.
 argument-hint: "<issue-key>"
-allowed-tools: mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__jira_get_transitions, mcp__acendas-atlassian__jira_transition_issue, mcp__acendas-atlassian__jira_update_issue, mcp__acendas-atlassian__jira_search, mcp__acendas-atlassian__confluence_search, mcp__acendas-atlassian__list_pull_requests
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_transitions, mcp__plugin_atlassian-suite_acendas-atlassian__jira_transition_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_update_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests
 ---
 
 # Triage a Jira Issue
@@ -15,13 +15,13 @@ Enrich a Jira issue with related context and propose a triage action.
 
 ## Steps
 
-1. **Load the issue.** Call `mcp__acendas-atlassian__jira_get_issue`. Capture summary, description, current status, type, priority, labels, components, assignee.
+1. **Load the issue.** Call `mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue`. Capture summary, description, current status, type, priority, labels, components, assignee.
 
 2. **Find related context in parallel:**
-   - **Similar issues:** `mcp__acendas-atlassian__jira_search` with JQL `project = {project} AND text ~ "{key-terms-from-summary}" AND key != {issue-key}` (limit 5). Key terms = top 3 nouns from summary.
-   - **Confluence docs:** `mcp__acendas-atlassian__confluence_search` with CQL `text ~ "{key-terms}"` (limit 5).
-   - **Related PRs:** `mcp__acendas-atlassian__list_pull_requests` searching by query `{issue-key}` if the API supports it; otherwise list recent PRs and grep their titles/descriptions for `{issue-key}`.
-   - **Available transitions:** `mcp__acendas-atlassian__jira_get_transitions`.
+   - **Similar issues:** `mcp__plugin_atlassian-suite_acendas-atlassian__jira_search` with JQL `project = {project} AND text ~ "{key-terms-from-summary}" AND key != {issue-key}` (limit 5). Key terms = top 3 nouns from summary.
+   - **Confluence docs:** `mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search` with CQL `text ~ "{key-terms}"` (limit 5).
+   - **Related PRs:** `mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests` searching by query `{issue-key}` if the API supports it; otherwise list recent PRs and grep their titles/descriptions for `{issue-key}`.
+   - **Available transitions:** `mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_transitions`.
 
 3. **Analyze:**
    - **Duplicates?** If a similar issue has near-identical summary AND is open, flag it.

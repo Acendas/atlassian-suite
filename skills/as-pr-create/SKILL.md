@@ -2,7 +2,7 @@
 name: as-pr-create
 description: Create a Bitbucket pull request.
 argument-hint: "<repo-slug> <source-branch> [destination-branch] [title]"
-allowed-tools: Bash, mcp__acendas-atlassian__create_pull_request, mcp__acendas-atlassian__get_default_reviewers, mcp__acendas-atlassian__list_branches, mcp__acendas-atlassian__jira_get_issue
+allowed-tools: Bash, mcp__plugin_atlassian-suite_acendas-atlassian__create_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_default_reviewers, mcp__plugin_atlassian-suite_acendas-atlassian__list_branches, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue
 ---
 
 # Create a Pull Request
@@ -18,10 +18,10 @@ Open a Bitbucket PR with sensible defaults.
 
 ## Steps
 
-1. **Validate branches** via `mcp__acendas-atlassian__list_branches`. If source is missing, report and stop.
+1. **Validate branches** via `mcp__plugin_atlassian-suite_acendas-atlassian__list_branches`. If source is missing, report and stop.
 
 2. **Derive title** if not provided:
-   - If branch contains a Jira key (e.g. `feature/PROJ-123-foo-bar`), pull the issue summary via `mcp__acendas-atlassian__jira_get_issue` and use `[PROJ-123] {summary}`.
+   - If branch contains a Jira key (e.g. `feature/PROJ-123-foo-bar`), pull the issue summary via `mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue` and use `[PROJ-123] {summary}`.
    - Else use the latest commit subject via `git log -1 --pretty=%s` (Bash).
 
 3. **Compose description.**
@@ -31,7 +31,7 @@ Open a Bitbucket PR with sensible defaults.
 
 4. **Confirm the payload** with the user before creating (title, description preview, dest branch).
 
-5. **Create** via `mcp__acendas-atlassian__create_pull_request` with `use_default_reviewers=true`. Report the new PR URL.
+5. **Create** via `mcp__plugin_atlassian-suite_acendas-atlassian__create_pull_request` with `use_default_reviewers=true`. Report the new PR URL.
 
 ## Notes
 

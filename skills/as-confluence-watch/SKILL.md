@@ -2,7 +2,7 @@
 name: as-confluence-watch
 description: Watch or unwatch a Confluence page or space.
 argument-hint: "<page-id-or-space-key> [action: watch|unwatch] [scope: page|space]"
-allowed-tools: mcp__acendas-atlassian__confluence_watch_page, mcp__acendas-atlassian__confluence_unwatch_page, mcp__acendas-atlassian__confluence_watch_space, mcp__acendas-atlassian__confluence_unwatch_space, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_watch_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_unwatch_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_watch_space, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_unwatch_space, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title
 ---
 
 # Watch / Unwatch a Confluence Page or Space

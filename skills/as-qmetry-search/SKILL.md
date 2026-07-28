@@ -2,7 +2,7 @@
 name: as-qmetry-search
 description: Search QMetry test cases in a project.
 argument-hint: "<project-id|jira-key> [search text]"
-allowed-tools: mcp__acendas-atlassian__get_credentials_status, mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__qmetry_list_projects, mcp__acendas-atlassian__qmetry_search_test_cases
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_credentials_status, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_list_projects, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_search_test_cases
 ---
 
 # Search QMetry Test Cases

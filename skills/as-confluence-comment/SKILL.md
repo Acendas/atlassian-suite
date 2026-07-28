@@ -2,7 +2,7 @@
 name: as-confluence-comment
 description: Add a footer comment on a Confluence page.
 argument-hint: "<page-id-or-title> [parent-comment-id]"
-allowed-tools: mcp__acendas-atlassian__confluence_add_comment, mcp__acendas-atlassian__confluence_reply_to_comment, mcp__acendas-atlassian__confluence_get_comments, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title, mcp__acendas-atlassian__confluence_search
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_add_comment, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_reply_to_comment, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_comments, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search
 ---
 
 # Comment on a Confluence Page (footer)

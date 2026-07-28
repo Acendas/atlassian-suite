@@ -119,6 +119,31 @@ The `atlassian.*` shared fallback only activates when per-product fields are uns
 
 4. Restart Claude Code. The MCP server starts automatically on first use and reads credentials at startup.
 
+## Cutting down permission prompts (optional)
+
+Every skill already declares the tools it needs, so `/atlassian-suite:*` commands run without prompting. Calls Claude makes on its own still go through the permission system, which can prompt on each one — or block outright in `dontAsk` mode.
+
+To pre-approve, add rules to `.claude/settings.json`. Tools from this plugin are named `mcp__plugin_atlassian-suite_acendas-atlassian__<tool>`, and an allow rule may use a glob after that prefix:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_*",
+      "mcp__plugin_atlassian-suite_acendas-atlassian__jira_search",
+      "mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_*",
+      "mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search",
+      "mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request*",
+      "mcp__plugin_atlassian-suite_acendas-atlassian__list_*"
+    ]
+  }
+}
+```
+
+Those are all read-only. Allowing the whole server (`mcp__plugin_atlassian-suite_acendas-atlassian__*`) also pre-approves writes and deletes — page deletion, PR merges, credential changes — so prefer listing the reads.
+
+The `plugin_atlassian-suite_` segment is required: Claude Code scopes a plugin's bundled MCP server by plugin name, and a rule written as `mcp__acendas-atlassian__…` matches nothing and silently grants nothing.
+
 ## Credential resolution order
 
 For every value (URL, username, token, filter):

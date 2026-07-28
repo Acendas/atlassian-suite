@@ -1,7 +1,7 @@
 ---
 name: pr-review-observability
 description: PR observability scanner. Single responsibility — finds gaps in logs, metrics, traces, and error visibility that will make production debugging hard. Spawned by code-review-orchestrator. Read-only. Confidence ≥ 80.
-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_file_contents, Read, Grep, Glob
+tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_file_contents, Read, Grep, Glob
 model: sonnet
 color: green
 ---

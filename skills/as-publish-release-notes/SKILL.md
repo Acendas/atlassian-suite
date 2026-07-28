@@ -2,7 +2,7 @@
 name: as-publish-release-notes
 description: Publish release notes to Confluence.
 argument-hint: "<space-key> [parent-page-id-or-title] [page-title]"
-allowed-tools: mcp__acendas-atlassian__confluence_create_page, mcp__acendas-atlassian__confluence_update_page, mcp__acendas-atlassian__confluence_search, mcp__acendas-atlassian__getConfluenceSpaces
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_create_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_update_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, mcp__plugin_atlassian-suite_acendas-atlassian__getConfluenceSpaces
 ---
 
 # Publish Release Notes to Confluence
@@ -21,17 +21,17 @@ The user should have just generated release notes content (via `/atlassian-suite
 
 ## Steps
 
-1. **Validate the space.** If `$1` is missing or unknown, call `mcp__acendas-atlassian__getConfluenceSpaces` and ask the user to pick.
+1. **Validate the space.** If `$1` is missing or unknown, call `mcp__plugin_atlassian-suite_acendas-atlassian__getConfluenceSpaces` and ask the user to pick.
 
 2. **Resolve parent page.**
    - If `$2` is numeric → use as page ID.
-   - If `$2` is a string → call `mcp__acendas-atlassian__confluence_search` with CQL `space = "{key}" AND title = "{$2}"`.
+   - If `$2` is a string → call `mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search` with CQL `space = "{key}" AND title = "{$2}"`.
    - If empty → no parent (top-level in space).
 
 3. **Determine title.** Default `Release Notes — {today YYYY-MM-DD}`. If the user provided a release version (e.g. `v1.4.0`), use `Release Notes — {version} — {today}`.
 
 4. **Check for existing page.** Search by exact title in the space. If found, ASK the user whether to:
-   - Update the existing page (call `mcp__acendas-atlassian__confluence_update_page`)
+   - Update the existing page (call `mcp__plugin_atlassian-suite_acendas-atlassian__confluence_update_page`)
    - Create a new dated page alongside it
    - Cancel
 

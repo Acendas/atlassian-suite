@@ -2,7 +2,7 @@
 name: as-confluence-properties
 description: Manage structured properties on a Confluence page.
 argument-hint: "<page-id-or-title> <action: list|get|set|delete> [key] [value]"
-allowed-tools: mcp__acendas-atlassian__confluence_get_page_properties, mcp__acendas-atlassian__confluence_get_page_property, mcp__acendas-atlassian__confluence_set_page_property, mcp__acendas-atlassian__confluence_delete_page_property, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_properties, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_property, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_set_page_property, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_delete_page_property, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title
 ---
 
 # Confluence Page Properties

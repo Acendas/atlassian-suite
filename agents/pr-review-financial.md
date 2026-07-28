@@ -1,7 +1,7 @@
 ---
 name: pr-review-financial
 description: PR financial-app scanner. Single responsibility — finds money/ledger/auth/audit/idempotency/reconciliation risks specific to financial systems. Spawned conditionally by code-review-orchestrator when the diff touches payment/billing/ledger/wallet code OR the project marks itself as financial. Read-only. Confidence ≥ 80.
-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_file_contents, Read, Grep, Glob
+tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_file_contents, Read, Grep, Glob
 model: sonnet
 color: red
 ---

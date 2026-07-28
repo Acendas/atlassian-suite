@@ -316,13 +316,37 @@ def check_skill_assertions(result, skill_filter=None):
 #
 # Every MCP tool named in a skill's allowed-tools must actually be
 # registered somewhere in server/src/**.ts. And every tool a skill body
-# calls (matching the `mcp__acendas-atlassian__<name>` form) must also
-# exist. Catches the "renamed a tool, forgot a skill" regression.
+# calls (matching the scoped `mcp__plugin_<plugin>_<server>__<name>` form)
+# must also exist. Catches the "renamed a tool, forgot a skill" regression.
 
-TOOL_FRONTMATTER_PREFIX = "mcp__acendas-atlassian__"
+
+def mcp_tool_prefix():
+    """The tool-name prefix Claude Code assigns this plugin's bundled MCP
+    server: `mcp__plugin_<plugin-name>_<server-name>__`.
+
+    Derived from the manifests rather than hardcoded, because a literal here
+    is exactly what rotted silently before: every skill and agent shipped the
+    unscoped `mcp__<server>__` form, which names no real tool, so every
+    allowed-tools entry was inert and every call — including read-only ones —
+    fell through to the permission classifier.
+    """
+    plugin = json.loads(
+        (PROJECT_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+    )["name"]
+    server = next(
+        iter(
+            json.loads(
+                (PROJECT_ROOT / ".mcp.json").read_text(encoding="utf-8")
+            )["mcpServers"]
+        )
+    )
+    return f"mcp__plugin_{plugin}_{server}__"
+
+
+TOOL_FRONTMATTER_PREFIX = mcp_tool_prefix()
 TOOL_REG_RE = re.compile(r'name:\s*"([a-zA-Z_][a-zA-Z0-9_]*)"')
 TOOL_BODY_REF_RE = re.compile(
-    r"mcp__acendas-atlassian__([a-zA-Z_][a-zA-Z0-9_]*)"
+    re.escape(TOOL_FRONTMATTER_PREFIX) + r"([a-zA-Z_][a-zA-Z0-9_]*)"
 )
 
 
@@ -712,6 +736,51 @@ def check_qmetry_write_tests(result):
     _run_tsx_unit_test(result, "qmetry:write_tests", QMETRY_WRITE_TEST)
 
 
+# ─── Check 6: No unscoped MCP tool names ───
+#
+# Claude Code scopes a plugin's bundled MCP server, so its tools are named
+# `mcp__plugin_<plugin>_<server>__<tool>`. The bare `mcp__<server>__<tool>`
+# form names nothing. It is inert rather than loud: an allowed-tools entry
+# that matches no tool grants nothing and raises no error, so every call —
+# including read-only ones — silently falls through to the permission
+# classifier and gets blocked or prompts. A customer hit exactly this.
+#
+# Fails on the unscoped form anywhere in skills/ or agents/.
+
+def check_no_unscoped_mcp_names(result):
+    server = next(
+        iter(
+            json.loads(
+                (PROJECT_ROOT / ".mcp.json").read_text(encoding="utf-8")
+            )["mcpServers"]
+        )
+    )
+    # Match `mcp__<server>__` only when NOT preceded by the `plugin_` infix.
+    unscoped = re.compile(r"(?<!plugin_)mcp__" + re.escape(server) + r"__")
+
+    offenders = []
+    for sub in ("skills", "agents"):
+        base = PROJECT_ROOT / sub
+        if not base.exists():
+            continue
+        for path in sorted(base.rglob("*.md")):
+            hits = len(unscoped.findall(path.read_text(encoding="utf-8")))
+            if hits:
+                offenders.append((path.relative_to(PROJECT_ROOT), hits))
+
+    if offenders:
+        detail = "\n".join(f"{p}: {n} occurrence(s)" for p, n in offenders)
+        result.fail(
+            "mcp_names:scoped",
+            f"unscoped `mcp__{server}__` names found — these match no real "
+            f"tool, so allowed-tools grants nothing and calls hit the "
+            f"permission classifier. Use "
+            f"{TOOL_FRONTMATTER_PREFIX}<tool>:\n{detail}",
+        )
+    else:
+        result.ok("mcp_names:scoped")
+
+
 # ─── Report ───
 
 def print_report(result, verbose=False):
@@ -791,6 +860,7 @@ def main():
     check_tool_arg_validation(result, skill_filter)
     if skill_filter is None:
         check_scope_list(result)
+        check_no_unscoped_mcp_names(result)
         check_storage_unit_tests(result)
         check_qmetry_write_tests(result)
 

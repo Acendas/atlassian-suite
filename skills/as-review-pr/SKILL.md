@@ -2,7 +2,7 @@
 name: as-review-pr
 description: Run the multi-scanner PR review pipeline.
 argument-hint: "<pr-url-or-id> [--high] [--quick]"
-allowed-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_pull_request_diff, mcp__acendas-atlassian__get_pull_request_diffstat, mcp__acendas-atlassian__get_pull_request_commits, mcp__acendas-atlassian__get_pull_request_comments, mcp__acendas-atlassian__get_pull_request_activity, mcp__acendas-atlassian__get_file_contents, mcp__acendas-atlassian__add_inline_comment, mcp__acendas-atlassian__add_pull_request_comment, mcp__acendas-atlassian__jira_get_issue, Agent
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_diff, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_diffstat, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_commits, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_comments, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_activity, mcp__plugin_atlassian-suite_acendas-atlassian__get_file_contents, mcp__plugin_atlassian-suite_acendas-atlassian__add_inline_comment, mcp__plugin_atlassian-suite_acendas-atlassian__add_pull_request_comment, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, Agent
 ---
 
 # Review PR with Multi-Scanner Pipeline

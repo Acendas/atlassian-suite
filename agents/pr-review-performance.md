@@ -1,7 +1,7 @@
 ---
 name: pr-review-performance
 description: PR performance & scalability scanner. Single responsibility — finds hot-path regressions, unnecessary allocations, complexity blowups, async/sync mistakes, resource leaks, scalability issues. Spawned by code-review-orchestrator. Read-only. Confidence ≥ 80.
-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_file_contents, Read, Grep, Glob
+tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_file_contents, Read, Grep, Glob
 model: sonnet
 color: yellow
 ---

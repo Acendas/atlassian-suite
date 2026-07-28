@@ -2,7 +2,7 @@
 name: as-release-notes
 description: Generate release notes from PRs and Jira issues.
 argument-hint: "<repo-slug> <since-ref-or-date> [until-ref-or-date]"
-allowed-tools: mcp__acendas-atlassian__list_pull_requests, mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_pull_request_commits, mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__jira_search
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_commits, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search
 ---
 
 # Generate Release Notes
@@ -19,13 +19,13 @@ Produce release notes from merged PRs + linked Jira issues.
 
 1. **Resolve the range.** If `$2` is `last-release`, ask the user for the previous release tag/date. Otherwise treat `$2` and `$3` as dates if they parse, else as git refs.
 
-2. **Fetch merged PRs.** Call `mcp__acendas-atlassian__list_pull_requests` with `state=MERGED`, then filter client-side to PRs whose `merged_on` falls in the range.
+2. **Fetch merged PRs.** Call `mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests` with `state=MERGED`, then filter client-side to PRs whose `merged_on` falls in the range.
 
 3. **Extract Jira keys per PR.** For each PR:
-   - Scan PR title, description, source branch, and commit messages (`mcp__acendas-atlassian__get_pull_request_commits`) for `[A-Z][A-Z0-9]+-\d+`.
+   - Scan PR title, description, source branch, and commit messages (`mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_commits`) for `[A-Z][A-Z0-9]+-\d+`.
    - De-duplicate keys per PR.
 
-4. **Fetch issues.** Call `mcp__acendas-atlassian__jira_get_issue` for each unique issue key (parallelize, cap at 50). Capture: summary, issuetype (Bug/Story/Task/Epic), labels, fixVersion.
+4. **Fetch issues.** Call `mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue` for each unique issue key (parallelize, cap at 50). Capture: summary, issuetype (Bug/Story/Task/Epic), labels, fixVersion.
 
 5. **Group by category:**
 

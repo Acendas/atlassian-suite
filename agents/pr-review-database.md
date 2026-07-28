@@ -1,7 +1,7 @@
 ---
 name: pr-review-database
 description: PR database scanner. Single responsibility — finds problematic queries, migrations, indexing issues, locking risks, and data-consistency problems. Spawned by code-review-orchestrator on diffs touching db/migration/query files. Read-only. Confidence ≥ 80.
-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_file_contents, Read, Grep, Glob
+tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_file_contents, Read, Grep, Glob
 model: sonnet
 color: blue
 ---

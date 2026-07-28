@@ -1,7 +1,7 @@
 ---
 name: pr-investigator
 description: Deep-dive investigator for a single high-stakes PR review finding. Receives ONE finding from a scanner and confirms or refutes it with evidence — reads call sites, traces data flow, checks tests, examines git blame on the destination branch. Returns a verdict (CONFIRMED / REFUTED / NEEDS-USER) with evidence. Spawned by code-review-orchestrator after Wave 1 scanners.
-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_pull_request_diff, mcp__acendas-atlassian__get_pull_request_commits, mcp__acendas-atlassian__get_pull_request_activity, mcp__acendas-atlassian__get_file_contents, mcp__acendas-atlassian__list_branches, mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__jira_search, Read, Grep, Glob
+tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_diff, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_commits, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_activity, mcp__plugin_atlassian-suite_acendas-atlassian__get_file_contents, mcp__plugin_atlassian-suite_acendas-atlassian__list_branches, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, Read, Grep, Glob
 model: opus
 color: purple
 ---

@@ -1,7 +1,7 @@
 ---
 name: pr-review-spec
 description: PR spec compliance scanner. Single responsibility — maps acceptance criteria from the linked Jira issue(s) to the PR's code, flags missing implementations and over-building (functionality beyond spec). Spawned by code-review-orchestrator. Read-only. Confidence ≥ 80.
-tools: mcp__acendas-atlassian__get_pull_request, mcp__acendas-atlassian__get_pull_request_diff, mcp__acendas-atlassian__get_file_contents, mcp__acendas-atlassian__jira_get_issue, mcp__acendas-atlassian__jira_search, Read, Grep, Glob
+tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_diff, mcp__plugin_atlassian-suite_acendas-atlassian__get_file_contents, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, Read, Grep, Glob
 model: sonnet
 color: cyan
 ---

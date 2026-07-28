@@ -2,7 +2,7 @@
 name: as-jira-link
 description: Create or remove typed Jira issue links.
 argument-hint: "<inward-key> <link-type> <outward-key>"
-allowed-tools: mcp__acendas-atlassian__jira_create_issue_link, mcp__acendas-atlassian__jira_remove_issue_link, mcp__acendas-atlassian__jira_get_link_types, mcp__acendas-atlassian__jira_link_to_epic
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_issue_link, mcp__plugin_atlassian-suite_acendas-atlassian__jira_remove_issue_link, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_link_types, mcp__plugin_atlassian-suite_acendas-atlassian__jira_link_to_epic
 ---
 
 # Link Jira Issues

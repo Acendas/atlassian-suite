@@ -2,7 +2,7 @@
 name: as-confluence-version
 description: List, diff, or restore Confluence page versions.
 argument-hint: "<page-id-or-title> <action: list|diff|restore> [version-number] [second-version-number]"
-allowed-tools: mcp__acendas-atlassian__confluence_get_page_history, mcp__acendas-atlassian__confluence_get_page_diff, mcp__acendas-atlassian__confluence_restore_version, mcp__acendas-atlassian__confluence_get_page, mcp__acendas-atlassian__confluence_get_page_by_title
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_history, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_diff, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_restore_version, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title
 ---
 
 # Confluence Page Versions

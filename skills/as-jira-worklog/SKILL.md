@@ -2,7 +2,7 @@
 name: as-jira-worklog
 description: Log time on a Jira issue.
 argument-hint: "<issue-key> [time-spent] [comment]"
-allowed-tools: mcp__acendas-atlassian__jira_add_worklog, mcp__acendas-atlassian__jira_get_worklog
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_worklog, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_worklog
 ---
 
 # Jira Worklog
