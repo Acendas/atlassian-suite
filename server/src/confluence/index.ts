@@ -8,6 +8,7 @@ import type { FastMCP } from "fastmcp";
 import { confluenceIsConfigured } from "../common/confluenceClient.js";
 import { registerPageTools } from "./pages.js";
 import { registerEditTools } from "./edits.js";
+import { registerPublishTools } from "./publish.js";
 import { registerCommentTools } from "./comments.js";
 import { registerInlineCommentTools } from "./inlineComments.js";
 import { registerSpaceTools } from "./spaces.js";
@@ -32,6 +33,7 @@ export function registerConfluenceTools(server: FastMCP, opts: RegisterOptions):
   }
   registerPageTools(server, opts);
   registerEditTools(server, opts);
+  registerPublishTools(server, opts);
   registerCommentTools(server, opts);
   registerInlineCommentTools(server, opts);
   registerSpaceTools(server);

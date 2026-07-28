@@ -1,0 +1,87 @@
+[
+  {
+    "name": "allows_preflight",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_publish_preflight"
+  },
+  {
+    "name": "allows_publish_page",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_publish_page"
+  },
+  {
+    "name": "allows_markdown_to_storage",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_markdown_to_storage"
+  },
+  {
+    "name": "allows_sync_attachments",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_sync_attachments"
+  },
+  {
+    "name": "allows_restore_version_for_rollback",
+    "_comment": "Verification can report damage after the write; without the rollback tool the skill can detect a regression it cannot undo.",
+    "type": "frontmatter_contains",
+    "field": "allowed-tools",
+    "value": "confluence_restore_version"
+  },
+  {
+    "name": "does_not_allow_update_page",
+    "_comment": "update_page is the destructive full-body replace this skill exists to avoid. Granting it would let the model fall back to the exact call that orphans inline comments.",
+    "type": "frontmatter_not_contains",
+    "field": "allowed-tools",
+    "value": "confluence_update_page"
+  },
+  {
+    "name": "warns_against_body_markdown_adf_path",
+    "_comment": "body_markdown renders via ADF, which drops macro bodies and breaks image refs.",
+    "type": "contains",
+    "pattern": "body_markdown"
+  },
+  {
+    "name": "explains_dangling_comment_mechanism",
+    "type": "contains",
+    "pattern": "dangling"
+  },
+  {
+    "name": "names_the_inline_comment_marker",
+    "type": "contains",
+    "pattern": "ac:inline-comment-marker"
+  },
+  {
+    "name": "requires_preflight_before_publish",
+    "type": "contains",
+    "pattern": "[Pp]reflight"
+  },
+  {
+    "name": "states_mermaid_is_not_rendered_here",
+    "_comment": "Load-bearing boundary: rendering mermaid would mean shipping a headless browser in the MCP server.",
+    "type": "contains",
+    "pattern": "do(?:es)?\\s+\\*\\*not\\*\\*\\s+render|not render mermaid|NOT.*render"
+  },
+  {
+    "name": "documents_zero_indexed_diagram_naming",
+    "type": "contains",
+    "pattern": "zero-indexed|<n>\\.svg|-0\\.svg"
+  },
+  {
+    "name": "requires_rendering_at_risk_anchors_before_asking",
+    "type": "contains",
+    "pattern": "[Rr]ender the result in chat|render.*before asking|before asking anything"
+  },
+  {
+    "name": "handles_failed_verification",
+    "type": "contains",
+    "pattern": "verification\\.ok|restore_version"
+  },
+  {
+    "name": "stops_batch_on_first_failure",
+    "type": "contains",
+    "pattern": "[Ss]top the run on the first failed verification|one, verify, then continue"
+  }
+]

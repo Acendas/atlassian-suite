@@ -691,6 +691,9 @@ def check_scope_list(result):
 
 STORAGE_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_storage.test.ts"
 QMETRY_WRITE_TEST = PROJECT_ROOT / "server" / "src" / "qmetry" / "_write.test.ts"
+ANCHORS_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_anchors.test.ts"
+MARKDOWN_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_markdown.test.ts"
+PUBLISH_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_publish.test.ts"
 
 
 def _run_tsx_unit_test(result, check_id, test_path):
@@ -734,6 +737,16 @@ def check_qmetry_write_tests(result):
     # the body is wrong (silent no-op), so wire-shape assertions are the only
     # way to catch a regression without creating in live production.
     _run_tsx_unit_test(result, "qmetry:write_tests", QMETRY_WRITE_TEST)
+
+
+def check_publish_unit_tests(result):
+    # The publish surface rewrites whole pages that carry reviewer comments and
+    # attached diagrams. Its refusal paths ARE the feature — a build that
+    # silently orphans inline comments still passes every "did it publish?"
+    # check — so the anchor, renderer and wire-shape suites are all hard gates.
+    _run_tsx_unit_test(result, "confluence:anchor_tests", ANCHORS_TEST)
+    _run_tsx_unit_test(result, "confluence:markdown_tests", MARKDOWN_TEST)
+    _run_tsx_unit_test(result, "confluence:publish_tests", PUBLISH_TEST)
 
 
 # ─── Check 6: No unscoped MCP tool names ───
@@ -863,6 +876,7 @@ def main():
         check_no_unscoped_mcp_names(result)
         check_storage_unit_tests(result)
         check_qmetry_write_tests(result)
+        check_publish_unit_tests(result)
 
     sys.exit(print_report(result, verbose))
 
