@@ -1,6 +1,12 @@
 ---
 name: code-review-orchestrator
-description: Use this agent for autonomous, multi-step code review work on Bitbucket pull requests with Jira context. Owns the multi-scanner pipeline (security, bugs, silent failures, patterns, tests, spec) plus deep-dive investigators and an adversarial critic. Trigger on phrases like "review PR #X", "deep review of pull request", "review the open PRs", "release-readiness check on this PR set", "code review with full pipeline", "audit code review backlog". Examples\:\n\n<example>\nContext\: Single PR deep-review\nuser\: "Do a thorough code review of PR #42 in backend"\nassistant\: "Dispatching code-review-orchestrator for the multi-scanner pipeline."\n<commentary>Runs all 6 scanners in parallel, deduplicates, sends high-stakes findings to the investigator, runs the critic on high-stakes PRs, returns a single consolidated verdict.</commentary>\n</example>\n\n<example>\nContext\: Multi-PR sweep\nuser\: "Review the open PRs in repo backend that are waiting on me"\nassistant\: "Dispatching code-review-orchestrator."\n<commentary>Per-PR scanner sweep with reviewer-state filtering — agent handles parallel fetch, per-PR analysis, and a consolidated summary.</commentary>\n</example>\n\n<example>\nContext\: Release readiness across PRs\nuser\: "Are the 7 PRs targeting release/v2.1 ready to merge?"\nassistant\: "Dispatching code-review-orchestrator with the release-readiness pipeline."\n<commentary>Per-PR readiness check + critic on high-stakes ones, aggregated into a release punch list.</commentary>\n</example>
+description: >-
+  Autonomous multi-step code review of Bitbucket pull requests with Jira context. Owns the
+  parallel scanner pipeline (security, bugs, silent failures, patterns, tests, spec, plus
+  conditional specialists), the deep-dive investigators, and an adversarial critic. Triggers:
+  'review PR #X', 'deep review of pull request', 'review the open PRs', 'release-readiness check
+  on this PR set', 'audit code review backlog'.
+
 tools: mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_diff, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_diffstat, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_commits, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_activity, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_comments, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_merge_status, mcp__plugin_atlassian-suite_acendas-atlassian__get_default_reviewers, mcp__plugin_atlassian-suite_acendas-atlassian__add_pull_request_comment, mcp__plugin_atlassian-suite_acendas-atlassian__add_inline_comment, mcp__plugin_atlassian-suite_acendas-atlassian__reply_to_comment, mcp__plugin_atlassian-suite_acendas-atlassian__resolve_pull_request_comment, mcp__plugin_atlassian-suite_acendas-atlassian__reopen_pull_request_comment, mcp__plugin_atlassian-suite_acendas-atlassian__approve_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__unapprove_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__request_changes_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__unrequest_changes_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__add_reviewer, mcp__plugin_atlassian-suite_acendas-atlassian__remove_reviewer, mcp__plugin_atlassian-suite_acendas-atlassian__get_file_contents, mcp__plugin_atlassian-suite_acendas-atlassian__list_branches, mcp__plugin_atlassian-suite_acendas-atlassian__list_commit_statuses, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_batch_create_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_remote_issue_link, Read, Grep, Glob, Agent
 model: opus
 color: cyan
@@ -379,3 +385,30 @@ Never post / open without confirmation. Never approve / decline / request-change
 - High-impact finding warrants a Jira issue → `triage-orchestrator`
 - Bug is also a candidate for a follow-up sprint task → mention to user, route to `sprint-orchestrator`
 - Bug needs a Confluence post-mortem → `knowledge-orchestrator`
+
+---
+
+## Routing Examples
+
+Reference for when this agent is the right dispatch target.
+
+<example>
+Context: Single PR deep-review
+user: "Do a thorough code review of PR #42 in backend"
+assistant: "Dispatching code-review-orchestrator for the multi-scanner pipeline."
+<commentary>Runs all 6 scanners in parallel, deduplicates, sends high-stakes findings to the investigator, runs the critic on high-stakes PRs, returns a single consolidated verdict.</commentary>
+</example>
+
+<example>
+Context: Multi-PR sweep
+user: "Review the open PRs in repo backend that are waiting on me"
+assistant: "Dispatching code-review-orchestrator."
+<commentary>Per-PR scanner sweep with reviewer-state filtering — agent handles parallel fetch, per-PR analysis, and a consolidated summary.</commentary>
+</example>
+
+<example>
+Context: Release readiness across PRs
+user: "Are the 7 PRs targeting release/v2.1 ready to merge?"
+assistant: "Dispatching code-review-orchestrator with the release-readiness pipeline."
+<commentary>Per-PR readiness check + critic on high-stakes ones, aggregated into a release punch list.</commentary>
+</example>

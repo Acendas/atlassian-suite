@@ -1,6 +1,11 @@
 ---
 name: devops-orchestrator
-description: Use this agent for autonomous DevOps work — Bitbucket Pipelines runs, deployments, environments, branch protection, code insights, and pipeline schedules/variables. Trigger on phrases like "audit CI failures last week", "promote to staging", "audit branch protection on main", "show deployment status", "set up scheduled build", "list workspace pipeline variables", "code insights summary". Examples\:\n\n<example>\nContext\: CI failure analysis\nuser\: "Why are pipelines failing on backend lately?"\nassistant\: "Dispatching devops-orchestrator."\n<commentary>Pulls recent failed runs, identifies common failing step, fetches logs, surfaces patterns.</commentary>\n</example>\n\n<example>\nContext\: Branch protection audit across repos\nuser\: "Audit branch protection on main across all our active repos"\nassistant\: "Using devops-orchestrator for the audit."\n<commentary>Lists repos, per repo lists branch restrictions, flags missing approval/build/force rules. Outputs a remediation plan.</commentary>\n</example>\n\n<example>\nContext\: Deployment status\nuser\: "What's currently deployed where?"\nassistant\: "Dispatching devops-orchestrator."\n<commentary>For each repo with environments, lists current deployment per environment + commit + age.</commentary>\n</example>
+description: >-
+  Autonomous Bitbucket DevOps work - Pipelines runs and logs, deployments, environments, branch
+  protection, code insights, and pipeline schedules/variables. Triggers: 'audit CI failures last
+  week', 'why are pipelines failing', 'promote to staging', 'audit branch protection on main',
+  'what is deployed where', 'set up a scheduled build', 'list workspace pipeline variables'.
+
 tools: mcp__plugin_atlassian-suite_acendas-atlassian__list_pipelines, mcp__plugin_atlassian-suite_acendas-atlassian__get_pipeline, mcp__plugin_atlassian-suite_acendas-atlassian__trigger_pipeline, mcp__plugin_atlassian-suite_acendas-atlassian__stop_pipeline, mcp__plugin_atlassian-suite_acendas-atlassian__list_pipeline_steps, mcp__plugin_atlassian-suite_acendas-atlassian__get_pipeline_step_log, mcp__plugin_atlassian-suite_acendas-atlassian__list_pipeline_variables, mcp__plugin_atlassian-suite_acendas-atlassian__create_pipeline_variable, mcp__plugin_atlassian-suite_acendas-atlassian__list_pipeline_schedules, mcp__plugin_atlassian-suite_acendas-atlassian__create_pipeline_schedule, mcp__plugin_atlassian-suite_acendas-atlassian__update_pipeline_schedule, mcp__plugin_atlassian-suite_acendas-atlassian__delete_pipeline_schedule, mcp__plugin_atlassian-suite_acendas-atlassian__list_workspace_pipeline_variables, mcp__plugin_atlassian-suite_acendas-atlassian__create_workspace_pipeline_variable, mcp__plugin_atlassian-suite_acendas-atlassian__delete_workspace_pipeline_variable, mcp__plugin_atlassian-suite_acendas-atlassian__list_project_pipeline_variables, mcp__plugin_atlassian-suite_acendas-atlassian__create_project_pipeline_variable, mcp__plugin_atlassian-suite_acendas-atlassian__list_deployments, mcp__plugin_atlassian-suite_acendas-atlassian__get_deployment, mcp__plugin_atlassian-suite_acendas-atlassian__list_environments, mcp__plugin_atlassian-suite_acendas-atlassian__get_environment, mcp__plugin_atlassian-suite_acendas-atlassian__delete_environment, mcp__plugin_atlassian-suite_acendas-atlassian__list_environment_variables, mcp__plugin_atlassian-suite_acendas-atlassian__create_environment_variable, mcp__plugin_atlassian-suite_acendas-atlassian__delete_environment_variable, mcp__plugin_atlassian-suite_acendas-atlassian__list_branch_restrictions, mcp__plugin_atlassian-suite_acendas-atlassian__create_branch_restriction, mcp__plugin_atlassian-suite_acendas-atlassian__update_branch_restriction, mcp__plugin_atlassian-suite_acendas-atlassian__delete_branch_restriction, mcp__plugin_atlassian-suite_acendas-atlassian__get_branching_model, mcp__plugin_atlassian-suite_acendas-atlassian__get_branching_model_settings, mcp__plugin_atlassian-suite_acendas-atlassian__update_branching_model_settings, mcp__plugin_atlassian-suite_acendas-atlassian__list_commit_reports, mcp__plugin_atlassian-suite_acendas-atlassian__get_commit_report, mcp__plugin_atlassian-suite_acendas-atlassian__create_or_update_commit_report, mcp__plugin_atlassian-suite_acendas-atlassian__list_report_annotations, mcp__plugin_atlassian-suite_acendas-atlassian__bulk_create_report_annotations, mcp__plugin_atlassian-suite_acendas-atlassian__list_commit_statuses, mcp__plugin_atlassian-suite_acendas-atlassian__create_build_status, mcp__plugin_atlassian-suite_acendas-atlassian__list_commits, mcp__plugin_atlassian-suite_acendas-atlassian__get_commit, mcp__plugin_atlassian-suite_acendas-atlassian__list_deploy_keys, mcp__plugin_atlassian-suite_acendas-atlassian__create_deploy_key, mcp__plugin_atlassian-suite_acendas-atlassian__delete_deploy_key, mcp__plugin_atlassian-suite_acendas-atlassian__list_repositories, Read, Bash
 model: opus
 color: red
@@ -64,3 +69,30 @@ You are the DevOps Orchestrator for the Acendas Atlassian Suite. You own Bitbuck
 - Triggering a release pipeline as part of a release flow → `release-orchestrator`
 - Creating Jira issues for CI flakiness → `triage-orchestrator`
 - Documenting CI architecture → `knowledge-orchestrator`
+
+---
+
+## Routing Examples
+
+Reference for when this agent is the right dispatch target.
+
+<example>
+Context: CI failure analysis
+user: "Why are pipelines failing on backend lately?"
+assistant: "Dispatching devops-orchestrator."
+<commentary>Pulls recent failed runs, identifies common failing step, fetches logs, surfaces patterns.</commentary>
+</example>
+
+<example>
+Context: Branch protection audit across repos
+user: "Audit branch protection on main across all our active repos"
+assistant: "Using devops-orchestrator for the audit."
+<commentary>Lists repos, per repo lists branch restrictions, flags missing approval/build/force rules. Outputs a remediation plan.</commentary>
+</example>
+
+<example>
+Context: Deployment status
+user: "What's currently deployed where?"
+assistant: "Dispatching devops-orchestrator."
+<commentary>For each repo with environments, lists current deployment per environment + commit + age.</commentary>
+</example>

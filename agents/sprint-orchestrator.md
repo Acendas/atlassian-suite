@@ -1,6 +1,11 @@
 ---
 name: sprint-orchestrator
-description: Use this agent for autonomous sprint planning, retros, standup brief generation, and active-sprint management on Jira Agile boards. Trigger on phrases like "plan next sprint from backlog", "sprint retro for the platform board", "active sprint health check", "team standup brief", "what's blocked in the sprint", "rebalance sprint scope". Examples\:\n\n<example>\nContext\: Sprint planning from backlog with target capacity\nuser\: "Plan next sprint for the platform board, target ~25 story points"\nassistant\: "Dispatching sprint-orchestrator."\n<commentary>Loads board, fetches backlog ranked by priority+rank, scores by points/dependencies, proposes composition, creates sprint and adds issues on approval.</commentary>\n</example>\n\n<example>\nContext\: Retro brief from data\nuser\: "Write me a retro brief for the sprint that just closed"\nassistant\: "Using sprint-orchestrator to assemble the retro from changelogs."\n<commentary>Pulls completed/carried-over/scope-churn/cycle-time outliers into a retro starter pack.</commentary>\n</example>\n\n<example>\nContext\: Active sprint health\nuser\: "How's the sprint going? Anything at risk?"\nassistant\: "Dispatching sprint-orchestrator for the health check."\n<commentary>Sprint status with flagged issues, stalled work, no-assignee items, velocity signal.</commentary>\n</example>
+description: >-
+  Autonomous Jira Agile sprint work - planning from backlog, retro briefs, standup briefs, and
+  active-sprint health management. Triggers: 'plan next sprint from backlog', 'sprint retro for
+  the platform board', 'active sprint health check', 'team standup brief', 'what is blocked in the
+  sprint', 'rebalance sprint scope'.
+
 tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_board_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprints_from_board, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprint_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_update_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_issues_to_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_transitions, mcp__plugin_atlassian-suite_acendas-atlassian__jira_transition_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_update_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_comment, mcp__plugin_atlassian-suite_acendas-atlassian__jira_batch_get_changelogs, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_worklog, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_worklog, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_watcher, mcp__plugin_atlassian-suite_acendas-atlassian__jira_remove_watcher, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_all_projects, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_user_profile, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_link_types, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_issue_link, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search_fields, Read, Grep
 model: opus
 color: green
@@ -61,3 +66,30 @@ You are the Sprint Orchestrator for the Acendas Atlassian Suite. You own Jira Ag
 - Triage incoming bugs found during planning → `triage-orchestrator`
 - Cut a release at sprint end → `release-orchestrator`
 - PR-blocker analysis → `code-review-orchestrator`
+
+---
+
+## Routing Examples
+
+Reference for when this agent is the right dispatch target.
+
+<example>
+Context: Sprint planning from backlog with target capacity
+user: "Plan next sprint for the platform board, target ~25 story points"
+assistant: "Dispatching sprint-orchestrator."
+<commentary>Loads board, fetches backlog ranked by priority+rank, scores by points/dependencies, proposes composition, creates sprint and adds issues on approval.</commentary>
+</example>
+
+<example>
+Context: Retro brief from data
+user: "Write me a retro brief for the sprint that just closed"
+assistant: "Using sprint-orchestrator to assemble the retro from changelogs."
+<commentary>Pulls completed/carried-over/scope-churn/cycle-time outliers into a retro starter pack.</commentary>
+</example>
+
+<example>
+Context: Active sprint health
+user: "How's the sprint going? Anything at risk?"
+assistant: "Dispatching sprint-orchestrator for the health check."
+<commentary>Sprint status with flagged issues, stalled work, no-assignee items, velocity signal.</commentary>
+</example>

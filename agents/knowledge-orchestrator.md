@@ -1,6 +1,11 @@
 ---
 name: knowledge-orchestrator
-description: Use this agent for autonomous Confluence knowledge-base work — reading, writing, editing, restructuring pages and spaces. Trigger on phrases like "edit confluence page X", "audit our runbook tree", "restructure docs in space ENG", "create a multi-page docs hierarchy", "diff confluence page versions", "publish this content to confluence", "weekly docs digest", "find and update stale pages". Examples\:\n\n<example>\nContext\: Multi-page editing\nuser\: "Update the API onboarding pages in ENG to reflect the new auth flow"\nassistant\: "Dispatching knowledge-orchestrator."\n<commentary>Walks the page tree, finds candidate pages mentioning auth, proposes diff, edits each on confirmation.</commentary>\n</example>\n\n<example>\nContext\: Page hierarchy audit\nuser\: "Audit our runbook tree — flag pages not updated in 90+ days"\nassistant\: "Using knowledge-orchestrator."\n<commentary>Walks space tree, fetches version metadata, surfaces stale pages with last-editor and age.</commentary>\n</example>\n\n<example>\nContext\: Single-PR review\nuser\: "Review PR #42"\nassistant\: "Use code-review-orchestrator instead — that's a code review task."\n<commentary>Routes correctly.</commentary>\n</example>
+description: >-
+  Autonomous Confluence knowledge-base work - reading, writing, editing, and restructuring pages
+  and spaces. Triggers: 'edit confluence page X', 'audit our runbook tree', 'restructure docs in
+  space ENG', 'create a multi-page docs hierarchy', 'diff confluence page versions', 'publish this
+  content to confluence', 'find and update stale pages'.
+
 tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_children, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_history, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_diff, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_space_page_tree, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_create_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_update_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_delete_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_move_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_append_to_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_prepend_to_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_insert_after_heading, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_replace_section, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_remove_section, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_replace_text, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_publish_preflight, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_publish_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_markdown_to_storage, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_sync_attachments, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_restore_version, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_inline_comments, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_comments, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_add_comment, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_reply_to_comment, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_labels, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_add_label, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_attachments, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_upload_attachment, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_delete_attachment, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_render_image_macro, mcp__plugin_atlassian-suite_acendas-atlassian__getConfluenceSpaces, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search_user, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__list_repositories, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, Read, Write, Grep, Glob
 model: opus
 color: purple
@@ -117,3 +122,30 @@ Why: inline comments bind to marker elements in the page BODY. A full-body repub
 - Source content is release notes from PRs+issues → `release-orchestrator` first to prepare, then back here to publish
 - Source content is a sprint retro → `sprint-orchestrator` first, then back here
 - Need to also create Jira issues from action items found in docs → `triage-orchestrator`
+
+---
+
+## Routing Examples
+
+Reference for when this agent is the right dispatch target.
+
+<example>
+Context: Multi-page editing
+user: "Update the API onboarding pages in ENG to reflect the new auth flow"
+assistant: "Dispatching knowledge-orchestrator."
+<commentary>Walks the page tree, finds candidate pages mentioning auth, proposes diff, edits each on confirmation.</commentary>
+</example>
+
+<example>
+Context: Page hierarchy audit
+user: "Audit our runbook tree — flag pages not updated in 90+ days"
+assistant: "Using knowledge-orchestrator."
+<commentary>Walks space tree, fetches version metadata, surfaces stale pages with last-editor and age.</commentary>
+</example>
+
+<example>
+Context: Single-PR review
+user: "Review PR #42"
+assistant: "Use code-review-orchestrator instead — that's a code review task."
+<commentary>Routes correctly.</commentary>
+</example>

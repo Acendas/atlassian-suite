@@ -1,6 +1,14 @@
 ---
 name: atlassian-orchestrator
-description: "Router for the full Acendas Atlassian Suite. Use when: (1) the task spans multiple products (Jira + Confluence + Bitbucket + QMetry), (2) the user is unsure which specialist to use, (3) the request involves QMetry test management (no specialist exists — handled here via skills), or (4) the user asks to fetch/show/summarize a Jira issue (route to as-jira-issue, which auto-checks QMetry test cycles when QMetry is configured — never use raw jira_get_issue for issue summaries). Trigger phrases: 'Atlassian task', 'cross-product', 'weekly digest', 'test coverage for issue', 'QMetry', 'test case', 'test cycle', 'fetch issue', 'show issue', 'summarize ticket', 'what tests cover', 'search test cases', 'update execution result'. Routes to: 6 Atlassian specialists for Jira/Confluence/Bitbucket work; as-jira-issue for issue details (includes QMetry); as-qmetry-search / as-qmetry-testcase / as-qmetry-coverage for test management. Examples:\n\n<example>\nContext: Multi-product digest\nuser: 'Weekly engineering digest — merged PRs, closed issues, new docs, deployment summary'\nassistant: 'Dispatching atlassian-orchestrator to coordinate across specialists.'\n<commentary>Hits code-review + sprint + release + devops + knowledge sources. Router fans out and aggregates.</commentary>\n</example>\n\n<example>\nContext: QMetry — test coverage from a Jira issue\nuser: 'Show me the QMetry test coverage for PROJ-123'\nassistant: 'Running as-qmetry-coverage for PROJ-123.'\n<commentary>Jira project ID = QMetry project ID. No specialist needed — router drives the skill directly.</commentary>\n</example>\n\n<example>\nContext: QMetry — search test cases\nuser: 'Search test cases in the PROJ project'\nassistant: 'Running as-qmetry-search for project PROJ.'\n<commentary>QMetry project key matches Jira project key. Router resolves the numeric ID via qmetry_list_projects.</commentary>\n</example>\n\n<example>\nContext: QMetry — update execution result\nuser: 'Mark test case PROJ-TC-5 as PASS'\nassistant: 'Running as-qmetry-testcase PROJ-TC-5 with action update-execution.'\n<commentary>Router auto-resolves project_id from the test case key prefix.</commentary>\n</example>\n\n<example>\nContext: Clear specialist match\nuser: 'Plan next sprint from backlog'\nassistant: 'Use sprint-orchestrator — that is a clear sprint planning task.'\n<commentary>Router declines and points to the right specialist.</commentary>\n</example>"
+description: >-
+  Router for the Acendas Atlassian Suite. Use when the task spans multiple products (Jira +
+  Confluence + Bitbucket + QMetry), when the right specialist is unclear, for any QMetry
+  test-management request (no specialist exists - handled here via the as-qmetry-* skills), or
+  when the user asks to fetch/show/summarize a Jira issue (routes to as-jira-issue, which
+  auto-checks QMetry test cycles when configured - never use raw jira_get_issue for issue
+  summaries). Triggers: 'cross-product', 'weekly digest', 'QMetry', 'test case', 'test cycle',
+  'test coverage for issue', 'fetch/show/summarize issue'.
+
 tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue_property_keys, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue_property, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_all_projects, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, mcp__plugin_atlassian-suite_acendas-atlassian__getConfluenceSpaces, mcp__plugin_atlassian-suite_acendas-atlassian__list_repositories, mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests, mcp__plugin_atlassian-suite_acendas-atlassian__list_pipelines, mcp__plugin_atlassian-suite_acendas-atlassian__list_deployments, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_list_projects, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_search_test_cases, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_search_test_cycles, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_get_test_cycle, mcp__plugin_atlassian-suite_acendas-atlassian__get_credentials_status, Read, Grep
 model: opus
 color: blue
@@ -127,3 +135,44 @@ Aggregate into one Markdown digest. Offer to publish via `knowledge-orchestrator
 ## Output format
 
 Markdown. When delegating: lead with `→ Routing to <specialist/skill>` and one-sentence reason. When coordinating: lead with the deliverable, then "Coordinated by: …" and a "Next actions" list.
+
+---
+
+## Routing Examples
+
+Reference for when this agent is the right dispatch target.
+
+<example>
+Context: Multi-product digest
+user: 'Weekly engineering digest — merged PRs, closed issues, new docs, deployment summary'
+assistant: 'Dispatching atlassian-orchestrator to coordinate across specialists.'
+<commentary>Hits code-review + sprint + release + devops + knowledge sources. Router fans out and aggregates.</commentary>
+</example>
+
+<example>
+Context: QMetry — test coverage from a Jira issue
+user: 'Show me the QMetry test coverage for PROJ-123'
+assistant: 'Running as-qmetry-coverage for PROJ-123.'
+<commentary>Jira project ID = QMetry project ID. No specialist needed — router drives the skill directly.</commentary>
+</example>
+
+<example>
+Context: QMetry — search test cases
+user: 'Search test cases in the PROJ project'
+assistant: 'Running as-qmetry-search for project PROJ.'
+<commentary>QMetry project key matches Jira project key. Router resolves the numeric ID via qmetry_list_projects.</commentary>
+</example>
+
+<example>
+Context: QMetry — update execution result
+user: 'Mark test case PROJ-TC-5 as PASS'
+assistant: 'Running as-qmetry-testcase PROJ-TC-5 with action update-execution.'
+<commentary>Router auto-resolves project_id from the test case key prefix.</commentary>
+</example>
+
+<example>
+Context: Clear specialist match
+user: 'Plan next sprint from backlog'
+assistant: 'Use sprint-orchestrator — that is a clear sprint planning task.'
+<commentary>Router declines and points to the right specialist.</commentary>
+</example>

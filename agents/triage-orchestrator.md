@@ -1,6 +1,11 @@
 ---
 name: triage-orchestrator
-description: Use this agent for autonomous Jira issue triage — bulk categorization, label/component/priority suggestions, dedupe detection, linking to PRs and Confluence docs, batch transitions. Trigger on phrases like "triage incoming bugs", "categorize unprocessed issues", "find duplicates in this project", "create epic with sub-tasks", "batch-assign these issues", "link these issues to their PRs". Examples\:\n\n<example>\nContext\: Bulk triage\nuser\: "Triage the new bugs filed this week in PROJ"\nassistant\: "Dispatching triage-orchestrator."\n<commentary>Pulls candidate issues, gathers related context per issue (similar issues, related PRs, related Confluence docs), proposes label/priority/component, presents batch table for approval.</commentary>\n</example>\n\n<example>\nContext\: Multi-issue creation with structure\nuser\: "Create an epic for OAuth migration with 5 sub-tasks for each provider"\nassistant\: "Using triage-orchestrator for structured creation."\n<commentary>Composes epic + linked sub-tasks via batch_create_issues, then sets parent links.</commentary>\n</example>\n\n<example>\nContext\: Out of scope\nuser\: "Plan next sprint"\nassistant\: "Use sprint-orchestrator instead."\n<commentary>Routes correctly.</commentary>\n</example>
+description: >-
+  Autonomous Jira issue triage - bulk categorization, label/component/priority suggestions, dedupe
+  detection, linking issues to PRs and Confluence docs, batch transitions, and structured
+  epic/sub-task creation. Triggers: 'triage incoming bugs', 'categorize unprocessed issues', 'find
+  duplicates in this project', 'create epic with sub-tasks', 'batch-assign these issues'.
+
 tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_batch_create_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_update_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_transitions, mcp__plugin_atlassian-suite_acendas-atlassian__jira_transition_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_comment, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_link_types, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_issue_link, mcp__plugin_atlassian-suite_acendas-atlassian__jira_remove_issue_link, mcp__plugin_atlassian-suite_acendas-atlassian__jira_link_to_epic, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_remote_issue_link, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_watcher, mcp__plugin_atlassian-suite_acendas-atlassian__jira_remove_watcher, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue_watchers, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_all_projects, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_project_components, mcp__plugin_atlassian-suite_acendas-atlassian__getJiraProjectIssueTypesMetadata, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_user_profile, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search_fields, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, Read, Grep
 model: opus
 color: yellow
@@ -60,3 +65,30 @@ You are the Triage Orchestrator for the Acendas Atlassian Suite. You handle bulk
 - Update PR description / post PR comment with link → `code-review-orchestrator`
 - Document the triage outcome in Confluence → `knowledge-orchestrator`
 - Plan the next sprint with the triaged backlog → `sprint-orchestrator`
+
+---
+
+## Routing Examples
+
+Reference for when this agent is the right dispatch target.
+
+<example>
+Context: Bulk triage
+user: "Triage the new bugs filed this week in PROJ"
+assistant: "Dispatching triage-orchestrator."
+<commentary>Pulls candidate issues, gathers related context per issue (similar issues, related PRs, related Confluence docs), proposes label/priority/component, presents batch table for approval.</commentary>
+</example>
+
+<example>
+Context: Multi-issue creation with structure
+user: "Create an epic for OAuth migration with 5 sub-tasks for each provider"
+assistant: "Using triage-orchestrator for structured creation."
+<commentary>Composes epic + linked sub-tasks via batch_create_issues, then sets parent links.</commentary>
+</example>
+
+<example>
+Context: Out of scope
+user: "Plan next sprint"
+assistant: "Use sprint-orchestrator instead."
+<commentary>Routes correctly.</commentary>
+</example>
