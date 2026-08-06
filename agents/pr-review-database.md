@@ -40,7 +40,7 @@ Hard 32k-token cap. **Target ~6k tokens.** Set `TRUNCATED: true` if approaching 
 1. Read orchestrator's prompt — PR identifier, file scope (db/migration/query files prioritized), diff range.
 2. For each file: `get_file_contents` at PR head.
 3. Grep for: `CREATE TABLE`, `ALTER TABLE`, `DROP COLUMN`, `ADD COLUMN`, `CREATE INDEX`, `SELECT *`, `for ... in ... .find`, `BEGIN`, `COMMIT`, `transaction`, `migration`, `ALTER`, `WITH`, ORM hooks (`@Migration`, `Schema`, `Model.create`).
-4. For each finding, also check related code paths in the diff for the failure scenario.
+4. For each finding, also check related code paths in the changed files for the failure scenario.
 5. Confidence ≥ 80 only.
 
 ## Confidence scoring

@@ -57,7 +57,7 @@ Hard 32k-token cap. **Target ~5k tokens.** Set `TRUNCATED: true` if approaching 
 
 1. Read orchestrator's prompt — PR identifier, file scope (focus: config, env, package.json/poetry/Cargo, migrations, deploy scripts), diff range.
 2. For each file: `get_file_contents` at PR head + destination SHA where useful.
-3. Look at `package.json`, `pyproject.toml`, `Cargo.toml`, `Gemfile` for dep changes. Compare to `*.lock` files in the diff.
+3. Look at `package.json`, `pyproject.toml`, `Cargo.toml`, `Gemfile` for dep changes. Compare to the `*.lock` files in the changed-file scope.
 4. Look at config files (`*.json`, `*.yaml`, `*.env*`, `config/*.ts`) for default changes.
 5. Grep for `process.env.`, `os.environ.`, `os.getenv`, feature-flag SDK calls.
 6. Confidence ≥ 80 only.

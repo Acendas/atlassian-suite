@@ -40,7 +40,7 @@ Hard 32k-token cap. **Target ~6k tokens.** Set `TRUNCATED: true` if approaching 
 1. Read orchestrator's prompt — PR identifier, file scope (focus: hot paths, request handlers, render functions), diff range.
 2. For each file: `get_file_contents` at PR head.
 3. Identify hot paths: handler/route/controller files, render functions, event loops, batch processors.
-4. Walk the diff for the patterns above. Verify the path is actually hot via grep for callers.
+4. Walk the changed files for the patterns above. Verify the path is actually hot via grep for callers.
 5. Confidence ≥ 80 only.
 
 ## Confidence scoring
