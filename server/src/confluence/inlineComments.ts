@@ -8,6 +8,7 @@
 import { z } from "zod";
 import type { FastMCP } from "fastmcp";
 import { confluenceV2 } from "../common/confluenceClient.js";
+import { adfParam } from "../common/adf.js";
 import {
   safeConfluence,
   ensureWritable,
@@ -88,7 +89,7 @@ export function registerInlineCommentTools(
         .default(1)
         .describe("Which occurrence (1-based) when the text appears multiple times"),
       body_markdown: z.string().optional(),
-      body_adf: z.any().optional(),
+      body_adf: adfParam.optional().describe("Pre-built ADF document"),
       body_storage: z.string().optional(),
       body_wiki: z.string().optional(),
     }),
@@ -129,7 +130,7 @@ export function registerInlineCommentTools(
     parameters: z.object({
       parent_comment_id: z.string(),
       body_markdown: z.string().optional(),
-      body_adf: z.any().optional(),
+      body_adf: adfParam.optional().describe("Pre-built ADF document"),
       body_storage: z.string().optional(),
       body_wiki: z.string().optional(),
     }),

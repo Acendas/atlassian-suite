@@ -25,7 +25,7 @@ import {
   extractNextCursor,
   type PagedResponse,
 } from "./_helpers.js";
-import { adfToMarkdown } from "../common/adf.js";
+import { adfToMarkdown, adfParam } from "../common/adf.js";
 
 export interface PageOpts {
   readOnly: boolean;
@@ -335,7 +335,7 @@ export function registerPageTools(server: FastMCP, opts: PageOpts): void {
       title: z.string(),
       parent_id: z.string().optional(),
       status: z.enum(["current", "draft"]).default("current"),
-      body_adf: z.any().optional(),
+      body_adf: adfParam.optional().describe("Pre-built ADF document"),
       body_storage: z.string().optional(),
       body_wiki: z.string().optional(),
       body_markdown: z.string().optional(),
@@ -386,7 +386,7 @@ export function registerPageTools(server: FastMCP, opts: PageOpts): void {
         .positive()
         .describe("New version number = current + 1 (fetch current via confluence_get_page)"),
       status: z.enum(["current", "draft"]).default("current"),
-      body_adf: z.any().optional(),
+      body_adf: adfParam.optional().describe("Pre-built ADF document"),
       body_storage: z.string().optional(),
       body_wiki: z.string().optional(),
       body_markdown: z.string().optional(),

@@ -161896,7 +161896,49 @@ function markdownToAdf(markdown) {
   if (!markdown || markdown.trim().length === 0) return EMPTY_DOC;
   const pmNode = markdownTransformer.parse(markdown);
   const adf = jsonTransformer.encode(pmNode);
-  return reconcileHeadingLevels(adf, markdown);
+  return applyMentions(reconcileHeadingLevels(adf, markdown));
+}
+var MENTION_RE = /\[~accountid:([^\]|]+?)(?:\|([^\]]*))?\]/g;
+function isCodeText(node) {
+  const marks = node.marks;
+  return Array.isArray(marks) && marks.some((m) => m?.type === "code");
+}
+function splitMentions(node) {
+  const text2 = node.text;
+  if (typeof text2 !== "string" || !text2.includes("[~accountid:")) return [node];
+  if (isCodeText(node)) return [node];
+  const out = [];
+  let last = 0;
+  let m;
+  MENTION_RE.lastIndex = 0;
+  while ((m = MENTION_RE.exec(text2)) !== null) {
+    const id = m[1].trim();
+    if (!id) continue;
+    if (m.index > last) out.push({ ...node, text: text2.slice(last, m.index) });
+    const attrs = { id };
+    const display = m[2]?.trim();
+    if (display) attrs.text = display.startsWith("@") ? display : `@${display}`;
+    out.push({ type: "mention", attrs });
+    last = m.index + m[0].length;
+  }
+  if (out.length === 0) return [node];
+  if (last < text2.length) out.push({ ...node, text: text2.slice(last) });
+  return out;
+}
+function applyMentions(node) {
+  if (!node || typeof node !== "object") return node;
+  const n = node;
+  if (n.type === "codeBlock") return node;
+  if (Array.isArray(n.content)) {
+    const next = [];
+    for (const child of n.content) {
+      const c = child;
+      if (c && typeof c === "object" && c.type === "text") next.push(...splitMentions(c));
+      else next.push(applyMentions(child));
+    }
+    n.content = next;
+  }
+  return node;
 }
 function reconcileHeadingLevels(adf, markdown) {
   if (!adf?.content || !Array.isArray(adf.content)) return adf;
@@ -161931,11 +161973,33 @@ function adfToMarkdown(adf) {
     return "";
   }
 }
-function assertValidAdf(value, context) {
-  if (!value || typeof value !== "object") {
-    throw new Error(`${context}: expected ADF object, got ${typeof value}`);
+function coerceAdf(value) {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{")) return value;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
   }
-  const doc = value;
+}
+var adfParam = external_exports4.preprocess(
+  coerceAdf,
+  external_exports4.object({
+    type: external_exports4.literal("doc"),
+    version: external_exports4.number(),
+    content: external_exports4.array(external_exports4.any())
+  }).passthrough()
+);
+function assertValidAdf(value, context) {
+  const candidate = coerceAdf(value);
+  if (!candidate || typeof candidate !== "object") {
+    throw new Error(
+      `${context}: expected ADF object, got ${typeof candidate}. Pass a JSON object like {"type":"doc","version":1,"content":[\u2026]}, or use the Markdown body field instead (mentions are supported there as [~accountid:<id>]).`
+    );
+  }
+  const value_ = candidate;
+  const doc = value_;
   if (doc.type !== "doc") {
     throw new Error(`${context}: ADF root must have type:"doc", got "${doc.type}"`);
   }
@@ -162199,7 +162263,7 @@ function registerIssueTools(server2, opts) {
       issue_key: external_exports4.string(),
       summary: external_exports4.string().optional(),
       description: external_exports4.string().optional().describe("Markdown \u2014 converted to ADF"),
-      description_adf: external_exports4.any().optional().describe("Pre-built ADF JSON (preferred for complex content)"),
+      description_adf: adfParam.optional().describe("Pre-built ADF document (preferred for complex content)"),
       priority: external_exports4.string().optional(),
       labels: external_exports4.array(external_exports4.string()).optional(),
       assignee_account_id: external_exports4.string().optional(),
@@ -162278,11 +162342,11 @@ function registerIssueTools(server2, opts) {
   });
   server2.addTool({
     name: "jira_add_comment",
-    description: "Add a comment to an issue. Provide body via Markdown (auto-converted to ADF) OR body_adf (pre-built ADF, preferred for charts/panels/mentions).",
+    description: 'Add a comment to an issue. Provide body via Markdown (auto-converted to ADF) OR body_adf (pre-built ADF, preferred for charts/panels/media). To @-mention someone in Markdown, write [~accountid:<accountId>] (optionally [~accountid:<accountId>|Display Name]) \u2014 resolve the accountId with jira_get_user_profile. Plain text like "@Name" does NOT notify anyone.',
     parameters: external_exports4.object({
       issue_key: external_exports4.string(),
-      body: external_exports4.string().optional().describe("Markdown comment body"),
-      body_adf: external_exports4.any().optional().describe("Pre-built ADF JSON object"),
+      body: external_exports4.string().optional().describe("Markdown comment body. Mention a user with [~accountid:<accountId>]."),
+      body_adf: adfParam.optional().describe("Pre-built ADF document (preferred for panels/charts/media)"),
       parent_id: external_exports4.string().optional().describe("If set, posts as a threaded reply")
     }),
     execute: async (args) => safeJira(() => {
@@ -162301,12 +162365,12 @@ function registerIssueTools(server2, opts) {
   });
   server2.addTool({
     name: "jira_edit_comment",
-    description: "Edit an existing comment. Body is Markdown by default; use body_adf for ADF.",
+    description: "Edit an existing comment. Body is Markdown by default; use body_adf for ADF. Markdown supports @-mentions as [~accountid:<accountId>].",
     parameters: external_exports4.object({
       issue_key: external_exports4.string(),
       comment_id: external_exports4.string(),
       body: external_exports4.string().optional(),
-      body_adf: external_exports4.any().optional()
+      body_adf: adfParam.optional().describe("Pre-built ADF document")
     }),
     execute: async (args) => safeJira(() => {
       ensureWritable2(opts.readOnly);
@@ -162345,7 +162409,7 @@ function registerIssueTools(server2, opts) {
       issue_key: external_exports4.string(),
       time_spent: external_exports4.string().describe("e.g. '2h 30m', '1d', '45m'"),
       comment: external_exports4.string().optional().describe("Markdown comment"),
-      comment_adf: external_exports4.any().optional().describe("Pre-built ADF JSON for the comment"),
+      comment_adf: adfParam.optional().describe("Pre-built ADF document for the comment"),
       started: external_exports4.string().optional().describe("ISO 8601 timestamp; default now")
     }),
     execute: async (args) => safeJira(() => {
@@ -163478,7 +163542,7 @@ function registerPageTools(server2, opts) {
       title: external_exports4.string(),
       parent_id: external_exports4.string().optional(),
       status: external_exports4.enum(["current", "draft"]).default("current"),
-      body_adf: external_exports4.any().optional(),
+      body_adf: adfParam.optional().describe("Pre-built ADF document"),
       body_storage: external_exports4.string().optional(),
       body_wiki: external_exports4.string().optional(),
       body_markdown: external_exports4.string().optional()
@@ -163510,7 +163574,7 @@ function registerPageTools(server2, opts) {
       title: external_exports4.string(),
       version_number: external_exports4.number().int().positive().describe("New version number = current + 1 (fetch current via confluence_get_page)"),
       status: external_exports4.enum(["current", "draft"]).default("current"),
-      body_adf: external_exports4.any().optional(),
+      body_adf: adfParam.optional().describe("Pre-built ADF document"),
       body_storage: external_exports4.string().optional(),
       body_wiki: external_exports4.string().optional(),
       body_markdown: external_exports4.string().optional(),
@@ -170113,7 +170177,7 @@ function registerCommentTools2(server2, opts) {
     parameters: external_exports4.object({
       page_id: external_exports4.string(),
       body_markdown: external_exports4.string().optional(),
-      body_adf: external_exports4.any().optional(),
+      body_adf: adfParam.optional().describe("Pre-built ADF document"),
       body_storage: external_exports4.string().optional(),
       body_wiki: external_exports4.string().optional()
     }),
@@ -170138,7 +170202,7 @@ function registerCommentTools2(server2, opts) {
     parameters: external_exports4.object({
       parent_comment_id: external_exports4.string(),
       body_markdown: external_exports4.string().optional(),
-      body_adf: external_exports4.any().optional(),
+      body_adf: adfParam.optional().describe("Pre-built ADF document"),
       body_storage: external_exports4.string().optional(),
       body_wiki: external_exports4.string().optional()
     }),
@@ -170198,7 +170262,7 @@ function registerInlineCommentTools(server2, opts) {
       selection_text: external_exports4.string().describe("Exact text in the page to anchor the comment to"),
       selection_match_count: external_exports4.number().int().min(1).default(1).describe("Which occurrence (1-based) when the text appears multiple times"),
       body_markdown: external_exports4.string().optional(),
-      body_adf: external_exports4.any().optional(),
+      body_adf: adfParam.optional().describe("Pre-built ADF document"),
       body_storage: external_exports4.string().optional(),
       body_wiki: external_exports4.string().optional()
     }),
@@ -170227,7 +170291,7 @@ function registerInlineCommentTools(server2, opts) {
     parameters: external_exports4.object({
       parent_comment_id: external_exports4.string(),
       body_markdown: external_exports4.string().optional(),
-      body_adf: external_exports4.any().optional(),
+      body_adf: adfParam.optional().describe("Pre-built ADF document"),
       body_storage: external_exports4.string().optional(),
       body_wiki: external_exports4.string().optional()
     }),

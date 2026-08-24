@@ -3,7 +3,7 @@
 import { z } from "zod";
 import type { FastMCP } from "fastmcp";
 import { jiraClient } from "../common/jiraClient.js";
-import { markdownToAdf, resolveAdfBody } from "../common/adf.js";
+import { markdownToAdf, resolveAdfBody, adfParam } from "../common/adf.js";
 import { safeJira, ensureWritable } from "./_helpers.js";
 import { loadQMetryConfig } from "../common/config.js";
 import { qmetryClient } from "../common/qmetryClient.js";
@@ -196,7 +196,9 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
       issue_key: z.string(),
       summary: z.string().optional(),
       description: z.string().optional().describe("Markdown — converted to ADF"),
-      description_adf: z.any().optional().describe("Pre-built ADF JSON (preferred for complex content)"),
+      description_adf: adfParam
+        .optional()
+        .describe("Pre-built ADF document (preferred for complex content)"),
       priority: z.string().optional(),
       labels: z.array(z.string()).optional(),
       assignee_account_id: z.string().optional(),
@@ -298,11 +300,18 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
   server.addTool({
     name: "jira_add_comment",
     description:
-      "Add a comment to an issue. Provide body via Markdown (auto-converted to ADF) OR body_adf (pre-built ADF, preferred for charts/panels/mentions).",
+      "Add a comment to an issue. Provide body via Markdown (auto-converted to ADF) OR body_adf (pre-built ADF, preferred for charts/panels/media). " +
+      "To @-mention someone in Markdown, write [~accountid:<accountId>] (optionally [~accountid:<accountId>|Display Name]) — resolve the accountId with jira_get_user_profile. " +
+      "Plain text like \"@Name\" does NOT notify anyone.",
     parameters: z.object({
       issue_key: z.string(),
-      body: z.string().optional().describe("Markdown comment body"),
-      body_adf: z.any().optional().describe("Pre-built ADF JSON object"),
+      body: z
+        .string()
+        .optional()
+        .describe("Markdown comment body. Mention a user with [~accountid:<accountId>]."),
+      body_adf: adfParam
+        .optional()
+        .describe("Pre-built ADF document (preferred for panels/charts/media)"),
       parent_id: z.string().optional().describe("If set, posts as a threaded reply"),
     }),
     execute: async (args: {
@@ -328,12 +337,14 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
 
   server.addTool({
     name: "jira_edit_comment",
-    description: "Edit an existing comment. Body is Markdown by default; use body_adf for ADF.",
+    description:
+      "Edit an existing comment. Body is Markdown by default; use body_adf for ADF. " +
+      "Markdown supports @-mentions as [~accountid:<accountId>].",
     parameters: z.object({
       issue_key: z.string(),
       comment_id: z.string(),
       body: z.string().optional(),
-      body_adf: z.any().optional(),
+      body_adf: adfParam.optional().describe("Pre-built ADF document"),
     }),
     execute: async (args: {
       issue_key: string;
@@ -384,7 +395,7 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
       issue_key: z.string(),
       time_spent: z.string().describe("e.g. '2h 30m', '1d', '45m'"),
       comment: z.string().optional().describe("Markdown comment"),
-      comment_adf: z.any().optional().describe("Pre-built ADF JSON for the comment"),
+      comment_adf: adfParam.optional().describe("Pre-built ADF document for the comment"),
       started: z.string().optional().describe("ISO 8601 timestamp; default now"),
     }),
     execute: async (args: {

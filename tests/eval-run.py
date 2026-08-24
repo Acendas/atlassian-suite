@@ -695,6 +695,7 @@ ANCHORS_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_anchors.test.t
 MARKDOWN_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_markdown.test.ts"
 PUBLISH_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_publish.test.ts"
 MERMAID_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_mermaid.test.ts"
+ADF_TEST = PROJECT_ROOT / "server" / "src" / "common" / "adf.test.ts"
 
 
 def _run_tsx_unit_test(result, check_id, test_path):
@@ -738,6 +739,15 @@ def check_qmetry_write_tests(result):
     # the body is wrong (silent no-op), so wire-shape assertions are the only
     # way to catch a regression without creating in live production.
     _run_tsx_unit_test(result, "qmetry:write_tests", QMETRY_WRITE_TEST)
+
+
+def check_adf_unit_tests(result):
+    # Mentions are the load-bearing case here. A customer tried to tag a
+    # colleague on a Jira comment and got plain text twice: Markdown
+    # `[~accountid:…]` passed through literally, and `body_adf` was rejected as
+    # a string. Both failures post a perfectly successful-looking comment that
+    # notifies nobody, so only assertions on the node shape catch a regression.
+    _run_tsx_unit_test(result, "jira:adf_tests", ADF_TEST)
 
 
 def check_publish_unit_tests(result):
@@ -881,6 +891,7 @@ def main():
         check_no_unscoped_mcp_names(result)
         check_storage_unit_tests(result)
         check_qmetry_write_tests(result)
+        check_adf_unit_tests(result)
         check_publish_unit_tests(result)
 
     sys.exit(print_report(result, verbose))

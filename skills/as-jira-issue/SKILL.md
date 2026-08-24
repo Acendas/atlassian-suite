@@ -60,3 +60,24 @@ If `qmetry` is null, omit the section entirely.
 - `worklog` → ask for time spent (`30m`, `2h`) and optional comment, call `jira_add_worklog`.
 
 Confirm before any write.
+
+## Mentioning someone in a comment
+
+Writing `@Name` in a comment body produces plain text and notifies nobody. To
+actually tag someone:
+
+1. Resolve their account id — `jira_get_user_profile` with `query: "Eldon Wong"`
+   (a display name or email) returns `accountId`.
+2. Put `[~accountid:<accountId>]` in the Markdown `body`. Add a fallback name
+   with `[~accountid:<accountId>|Eldon Wong]` if you want one.
+
+```
+[~accountid:557058:f58131cb-b67d-43c7-b30d-6b58d40bd077] this needs a decision
+```
+
+The server converts that to a real ADF mention node, which is what sends the
+"you were mentioned" notification. Adding a watcher (`jira_add_watcher`) is a
+different thing — it subscribes them to the issue but sends no mention ping.
+
+If you also need panels, charts, or media, pass a full ADF document via
+`body_adf` instead; a `mention` node there works the same way.
