@@ -72,6 +72,61 @@ export function registerProjectTools(server: FastMCP, opts: ProjectOpts): void {
   });
 
   server.addTool({
+    name: "jira_update_version",
+    description:
+      "Update a version (release): rename, change dates, mark released/unreleased, or archive.",
+    parameters: z.object({
+      version_id: z.string().describe("Version id from jira_get_project_versions"),
+      name: z.string().optional(),
+      description: z.string().optional(),
+      start_date: z.string().optional().describe("YYYY-MM-DD"),
+      release_date: z.string().optional().describe("YYYY-MM-DD"),
+      released: z.boolean().optional(),
+      archived: z.boolean().optional(),
+      move_unfixed_issues_to_version_id: z
+        .string()
+        .optional()
+        .describe("When releasing: move this version's unresolved issues to that version id"),
+    }),
+    execute: async (args: {
+      version_id: string;
+      name?: string;
+      description?: string;
+      start_date?: string;
+      release_date?: string;
+      released?: boolean;
+      archived?: boolean;
+      move_unfixed_issues_to_version_id?: string;
+    }) =>
+      safeJira(async () => {
+        ensureWritable(opts.readOnly);
+        // Jira wants the target version's `self` URL here, not its id. Read it
+        // back from Jira rather than building one, so the host (site vs API
+        // gateway) always matches what Jira itself issued.
+        let moveUnfixedIssuesTo: string | undefined;
+        if (args.move_unfixed_issues_to_version_id) {
+          const target = (await jiraClient().projectVersions.getVersion({
+            id: args.move_unfixed_issues_to_version_id,
+          } as never)) as { self?: string };
+          if (!target?.self) {
+            throw new Error(`Version ${args.move_unfixed_issues_to_version_id} not found (no self URL).`);
+          }
+          moveUnfixedIssuesTo = target.self;
+        }
+        return jiraClient().projectVersions.updateVersion({
+          id: args.version_id,
+          name: args.name,
+          description: args.description,
+          startDate: args.start_date,
+          releaseDate: args.release_date,
+          released: args.released,
+          archived: args.archived,
+          moveUnfixedIssuesTo,
+        } as never);
+      }),
+  });
+
+  server.addTool({
     name: "jira_batch_create_versions",
     description: "Create multiple versions on a project (sequential calls).",
     parameters: z.object({

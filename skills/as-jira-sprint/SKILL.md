@@ -2,7 +2,7 @@
 name: as-jira-sprint
 description: Manage a Jira Scrum sprint lifecycle.
 argument-hint: "<board-id-or-name> <action: list|create|start|close|add|remove> [args...]"
-allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprints_from_board, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_update_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_issues_to_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprint_issues
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprints_from_board, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_update_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_issues_to_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprint_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_move_issues_to_backlog
 ---
 
 # Jira Sprint Operations
@@ -31,6 +31,8 @@ Run sprint lifecycle actions on a Scrum board.
 
    - `add` → require sprint id + issue keys (comma-separated). `jira_add_issues_to_sprint`.
 
-   - `remove` → use `jira_add_issues_to_sprint` against the backlog sprint (sprint id 0 or the project's backlog), since Jira's API removes issues by re-assigning. If the API rejects this, explain the workaround (move via another sprint).
+   - `add` accepts an optional position: `before <KEY>` / `after <KEY>` maps to `rank_before_issue` / `rank_after_issue`. At most 50 keys per call.
+
+   - `remove` → require issue keys. `jira_move_issues_to_backlog` (at most 50 per call). To reorder the backlog afterwards, use `/atlassian-suite:as-jira-backlog`.
 
 3. **Confirm before any write.** Sprint state changes are visible to the whole team — surface the impact before acting.

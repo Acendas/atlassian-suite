@@ -696,6 +696,7 @@ MARKDOWN_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_markdown.test
 PUBLISH_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_publish.test.ts"
 MERMAID_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_mermaid.test.ts"
 ADF_TEST = PROJECT_ROOT / "server" / "src" / "common" / "adf.test.ts"
+BACKLOG_TEST = PROJECT_ROOT / "server" / "src" / "jira" / "_backlog.test.ts"
 
 
 def _run_tsx_unit_test(result, check_id, test_path):
@@ -748,6 +749,15 @@ def check_adf_unit_tests(result):
     # a string. Both failures post a perfectly successful-looking comment that
     # notifies nobody, so only assertions on the node shape catch a regression.
     _run_tsx_unit_test(result, "jira:adf_tests", ADF_TEST)
+
+
+def check_jira_backlog_tests(result):
+    # A LeSS PO could not order their backlog: no rank tool existed, and every
+    # neighbouring gap failed silently — search "page 2" returned page 1, a 207
+    # partial rank looks like success, replacing labels wiped existing ones,
+    # and ORDER BY inside the projects-filter parentheses is invalid JQL. Only
+    # assertions on the serialized request catch these.
+    _run_tsx_unit_test(result, "jira:backlog_tests", BACKLOG_TEST)
 
 
 def check_publish_unit_tests(result):
@@ -892,6 +902,7 @@ def main():
         check_storage_unit_tests(result)
         check_qmetry_write_tests(result)
         check_adf_unit_tests(result)
+        check_jira_backlog_tests(result)
         check_publish_unit_tests(result)
 
     sys.exit(print_report(result, verbose))

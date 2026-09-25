@@ -1,0 +1,11 @@
+[
+  { "name": "allows_rank_tool", "type": "frontmatter_contains", "field": "allowed-tools", "value": "jira_rank_issues" },
+  { "name": "allows_backlog_listing", "type": "frontmatter_contains", "field": "allowed-tools", "value": "jira_get_backlog_issues" },
+  { "name": "allows_move_to_backlog", "type": "frontmatter_contains", "field": "allowed-tools", "value": "jira_move_issues_to_backlog" },
+  { "name": "does_not_fake_order_via_update", "type": "frontmatter_not_contains", "field": "allowed-tools", "value": "jira_update_issue",
+    "_comment": "Rank is not an editable field; editing Priority instead silently leaves the order unchanged" },
+  { "name": "reports_partial_rank_failures", "type": "contains", "pattern": "failed" },
+  { "name": "batches_at_fifty", "type": "contains", "pattern": "50" },
+  { "name": "pages_the_backlog", "type": "contains", "pattern": "start_at" },
+  { "name": "confirms_before_write", "type": "contains", "pattern": "Confirm before any write" }
+]

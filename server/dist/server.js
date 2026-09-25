@@ -161832,36 +161832,113 @@ function ensureWritable2(readOnly2) {
   if (readOnly2) throw new Error("READ_ONLY_MODE is enabled \u2014 write operations are blocked.");
 }
 
+// src/jira/_backlog.ts
+var AGILE_BULK_MAX = 50;
+function scopeJql(jql, projects) {
+  if (!projects || projects.length === 0) return jql;
+  const scope = `project in (${projects.map((p) => `"${p}"`).join(",")})`;
+  const matches = [...jql.matchAll(/\border\s+by\b/gi)];
+  const m = matches.at(-1);
+  const where = (m ? jql.slice(0, m.index) : jql).trim();
+  const orderBy = m ? " " + jql.slice(m.index).trim() : "";
+  return (where ? `${scope} AND (${where})` : scope) + orderBy;
+}
+function assertRankRequest(issues, before, after, anchorOptional = false) {
+  if (issues.length === 0) throw new Error("issue_keys must contain at least one issue.");
+  if (issues.length > AGILE_BULK_MAX) {
+    throw new Error(
+      `Jira ranks at most ${AGILE_BULK_MAX} issues per call; got ${issues.length}. Split into batches, anchoring each batch after the last issue of the previous one.`
+    );
+  }
+  if (before && after) throw new Error("Pass rank_before_issue OR rank_after_issue, not both.");
+  if (!before && !after && !anchorOptional) {
+    throw new Error("Pass rank_before_issue or rank_after_issue \u2014 the issue to rank relative to.");
+  }
+  const anchor = (before ?? after)?.toUpperCase();
+  if (anchor && issues.some((k) => k.toUpperCase() === anchor)) {
+    throw new Error(`Anchor ${anchor} is also in issue_keys; an issue cannot be ranked relative to itself.`);
+  }
+}
+function summarizeRank(issues, response, anchor) {
+  const entries = response?.entries;
+  if (!Array.isArray(entries)) return { ok: true, ranked: [...issues], failed: [], anchor };
+  const failed = [];
+  const failedKeys = /* @__PURE__ */ new Set();
+  for (const e of entries) {
+    const status = typeof e.status === "number" ? e.status : void 0;
+    const errors = Array.isArray(e.errors) ? e.errors.map(String) : [];
+    if (status !== void 0 && status >= 300 || errors.length > 0) {
+      const issue3 = String(e.issueKey ?? e.issueId ?? "unknown");
+      failed.push({ issue: issue3, status, errors });
+      failedKeys.add(issue3.toUpperCase());
+      if (e.issueId !== void 0) failedKeys.add(String(e.issueId));
+    }
+  }
+  const ranked = issues.filter((k) => !failedKeys.has(k.toUpperCase()));
+  return { ok: failed.length === 0, ranked, failed, anchor };
+}
+function buildIssueEditOps(args) {
+  const fields = {};
+  const update = {};
+  const incremental = (field, replace2, add2, remove, wrap) => {
+    const hasOps = (add2?.length ?? 0) > 0 || (remove?.length ?? 0) > 0;
+    if (replace2 !== void 0 && hasOps) {
+      throw new Error(
+        `Pass either ${field} (replaces the whole list) or add_${field}/remove_${field} (incremental), not both.`
+      );
+    }
+    if (replace2 !== void 0) fields[field] = replace2.map(wrap);
+    if (hasOps) {
+      update[field] = [
+        ...(add2 ?? []).map((v) => ({ add: wrap(v) })),
+        ...(remove ?? []).map((v) => ({ remove: wrap(v) }))
+      ];
+    }
+  };
+  incremental("labels", args.labels, args.add_labels, args.remove_labels, (v) => v);
+  incremental("components", args.components, args.add_components, args.remove_components, (name) => ({ name }));
+  if (args.parent_key !== void 0) fields.parent = { key: args.parent_key };
+  return { fields, update };
+}
+var BACKLOG_FIELDS = [
+  "summary",
+  "status",
+  "assignee",
+  "priority",
+  "issuetype",
+  "parent",
+  "fixVersions",
+  "labels",
+  "updated"
+];
+function estimationFieldId(boardConfig) {
+  const id = boardConfig?.estimation?.field?.fieldId;
+  return typeof id === "string" && id.length > 0 ? id : void 0;
+}
+
 // src/jira/search.ts
 function registerSearchTools2(server2) {
   server2.addTool({
     name: "jira_search",
-    description: "Search Jira issues using JQL. Honors JIRA_PROJECTS_FILTER if set (auto-prepends `project in (...)`).",
+    description: "Search Jira issues using JQL. Honors JIRA_PROJECTS_FILTER if set (auto-prepends `project in (...)`, keeping any ORDER BY last). Pages by token: pass the result's `nextPageToken` back as next_page_token until `isLast` is true \u2014 a single call never returns more than max_results issues.",
     parameters: external_exports4.object({
       jql: external_exports4.string().describe("Jira Query Language expression"),
-      fields: external_exports4.array(external_exports4.string()).optional().describe("Fields to return; default summary,status,assignee,priority,issuetype,updated"),
+      fields: external_exports4.array(external_exports4.string()).optional().describe(
+        "Fields to return; default summary,status,assignee,priority,issuetype,parent,fixVersions,labels,updated. Story points are a site-specific custom field \u2014 get its id from jira_get_board_configuration."
+      ),
       max_results: external_exports4.number().int().min(1).max(100).default(25),
-      start_at: external_exports4.number().int().min(0).default(0),
+      next_page_token: external_exports4.string().optional().describe("`nextPageToken` from the previous page's result; omit for the first page"),
       expand: external_exports4.array(external_exports4.string()).optional()
     }),
-    execute: async (args) => safeJira(() => {
-      const filter2 = jiraProjectsFilter();
-      const finalJql = filter2 && filter2.length > 0 ? `project in (${filter2.map((p) => `"${p}"`).join(",")}) AND (${args.jql})` : args.jql;
-      return jiraClient().issueSearch.searchForIssuesUsingJqlEnhancedSearch({
-        jql: finalJql,
+    execute: async (args) => safeJira(
+      () => jiraClient().issueSearch.searchForIssuesUsingJqlEnhancedSearch({
+        jql: scopeJql(args.jql, jiraProjectsFilter()),
         maxResults: args.max_results,
-        nextPageToken: void 0,
-        fields: args.fields ?? [
-          "summary",
-          "status",
-          "assignee",
-          "priority",
-          "issuetype",
-          "updated"
-        ],
+        nextPageToken: args.next_page_token,
+        fields: args.fields ?? BACKLOG_FIELDS,
         expand: args.expand?.join(",")
-      });
-    })
+      })
+    )
   });
   server2.addTool({
     name: "jira_search_fields",
@@ -162204,7 +162281,7 @@ function registerIssueTools(server2, opts) {
     summary: external_exports4.string(),
     issue_type: external_exports4.string().describe("e.g. Bug, Story, Task"),
     description: external_exports4.string().optional().describe("Markdown \u2014 converted to ADF"),
-    description_adf: external_exports4.any().optional().describe("Pre-built ADF JSON for description (preferred for charts/panels/mentions)"),
+    description_adf: adfParam.optional().describe("Pre-built ADF document for description (preferred for charts/panels/mentions)"),
     priority: external_exports4.string().optional(),
     labels: external_exports4.array(external_exports4.string()).optional(),
     assignee_account_id: external_exports4.string().optional(),
@@ -162258,21 +162335,27 @@ function registerIssueTools(server2, opts) {
   });
   server2.addTool({
     name: "jira_update_issue",
-    description: "Update fields on an existing Jira issue.",
+    description: "Update fields on an existing Jira issue. `labels`/`components` replace the whole list; use add_*/remove_* to change single values. Backlog order is not a field \u2014 use jira_rank_issues.",
     parameters: external_exports4.object({
       issue_key: external_exports4.string(),
       summary: external_exports4.string().optional(),
       description: external_exports4.string().optional().describe("Markdown \u2014 converted to ADF"),
       description_adf: adfParam.optional().describe("Pre-built ADF document (preferred for complex content)"),
       priority: external_exports4.string().optional(),
-      labels: external_exports4.array(external_exports4.string()).optional(),
+      labels: external_exports4.array(external_exports4.string()).optional().describe("Replaces ALL labels on the issue"),
+      add_labels: external_exports4.array(external_exports4.string()).optional().describe("Labels to add, keeping existing ones"),
+      remove_labels: external_exports4.array(external_exports4.string()).optional().describe("Labels to remove, keeping the rest"),
+      components: external_exports4.array(external_exports4.string()).optional().describe("Component names; replaces ALL components"),
+      add_components: external_exports4.array(external_exports4.string()).optional().describe("Component names to add"),
+      remove_components: external_exports4.array(external_exports4.string()).optional().describe("Component names to remove"),
+      parent_key: external_exports4.string().optional().describe("New parent (epic, or parent of a sub-task)"),
       assignee_account_id: external_exports4.string().optional(),
-      fix_versions: external_exports4.array(external_exports4.string()).optional(),
-      custom_fields: external_exports4.record(external_exports4.string(), external_exports4.any()).optional()
+      fix_versions: external_exports4.array(external_exports4.string()).optional().describe("Version names; replaces ALL fixVersions"),
+      custom_fields: external_exports4.record(external_exports4.string(), external_exports4.any()).optional().describe("Object of customfield_XXXXX \u2192 value (e.g. story points)")
     }),
-    execute: async (args) => safeJira(() => {
+    execute: async (args) => safeJira(async () => {
       ensureWritable2(opts.readOnly);
-      const fields = {};
+      const { fields, update } = buildIssueEditOps(args);
       if (args.summary !== void 0) fields.summary = args.summary;
       if (args.description_adf !== void 0) {
         fields.description = resolveAdfBody({
@@ -162283,16 +162366,17 @@ function registerIssueTools(server2, opts) {
         fields.description = markdownToAdf(args.description);
       }
       if (args.priority !== void 0) fields.priority = { name: args.priority };
-      if (args.labels !== void 0) fields.labels = args.labels;
       if (args.assignee_account_id !== void 0)
         fields.assignee = { accountId: args.assignee_account_id };
       if (args.fix_versions !== void 0)
         fields.fixVersions = args.fix_versions.map((name) => ({ name }));
       if (args.custom_fields) Object.assign(fields, args.custom_fields);
-      return jiraClient().issues.editIssue({
+      await jiraClient().issues.editIssue({
         issueIdOrKey: args.issue_key,
-        fields
+        fields,
+        ...Object.keys(update).length > 0 ? { update } : {}
       });
+      return { updated: true, issue_key: args.issue_key };
     })
   });
   server2.addTool({
@@ -162682,6 +162766,43 @@ function registerProjectTools2(server2, opts) {
     })
   });
   server2.addTool({
+    name: "jira_update_version",
+    description: "Update a version (release): rename, change dates, mark released/unreleased, or archive.",
+    parameters: external_exports4.object({
+      version_id: external_exports4.string().describe("Version id from jira_get_project_versions"),
+      name: external_exports4.string().optional(),
+      description: external_exports4.string().optional(),
+      start_date: external_exports4.string().optional().describe("YYYY-MM-DD"),
+      release_date: external_exports4.string().optional().describe("YYYY-MM-DD"),
+      released: external_exports4.boolean().optional(),
+      archived: external_exports4.boolean().optional(),
+      move_unfixed_issues_to_version_id: external_exports4.string().optional().describe("When releasing: move this version's unresolved issues to that version id")
+    }),
+    execute: async (args) => safeJira(async () => {
+      ensureWritable2(opts.readOnly);
+      let moveUnfixedIssuesTo;
+      if (args.move_unfixed_issues_to_version_id) {
+        const target = await jiraClient().projectVersions.getVersion({
+          id: args.move_unfixed_issues_to_version_id
+        });
+        if (!target?.self) {
+          throw new Error(`Version ${args.move_unfixed_issues_to_version_id} not found (no self URL).`);
+        }
+        moveUnfixedIssuesTo = target.self;
+      }
+      return jiraClient().projectVersions.updateVersion({
+        id: args.version_id,
+        name: args.name,
+        description: args.description,
+        startDate: args.start_date,
+        releaseDate: args.release_date,
+        released: args.released,
+        archived: args.archived,
+        moveUnfixedIssuesTo
+      });
+    })
+  });
+  server2.addTool({
     name: "jira_batch_create_versions",
     description: "Create multiple versions on a project (sequential calls).",
     parameters: external_exports4.object({
@@ -162860,19 +162981,101 @@ function registerAgileTools(server2, opts) {
   });
   server2.addTool({
     name: "jira_add_issues_to_sprint",
-    description: "Move issues into a sprint (and rank them).",
+    description: "Move issues into a sprint, optionally ranking them before/after an anchor issue. Max 50 per call.",
     parameters: external_exports4.object({
       sprint_id: external_exports4.number().int().positive(),
-      issue_keys: external_exports4.array(external_exports4.string()).min(1),
+      issue_keys: external_exports4.array(external_exports4.string()).min(1).max(AGILE_BULK_MAX),
+      rank_before_issue: external_exports4.string().optional(),
       rank_after_issue: external_exports4.string().optional()
     }),
-    execute: async (args) => safeJira(() => {
+    execute: async (args) => safeJira(async () => {
       ensureWritable2(opts.readOnly);
-      return jiraAgileClient().sprint.moveIssuesToSprintAndRank({
+      assertRankRequest(args.issue_keys, args.rank_before_issue, args.rank_after_issue, true);
+      await jiraAgileClient().sprint.moveIssuesToSprintAndRank({
         sprintId: args.sprint_id,
         issues: args.issue_keys,
+        rankBeforeIssue: args.rank_before_issue,
         rankAfterIssue: args.rank_after_issue
       });
+      return { moved: args.issue_keys, sprint_id: args.sprint_id };
+    })
+  });
+  server2.addTool({
+    name: "jira_get_backlog_issues",
+    description: "List a board's backlog (issues in no active/future sprint) in rank order, top first. Adds the board's story-points field automatically and reports its id as estimation_field.",
+    parameters: external_exports4.object({
+      board_id: external_exports4.number().int().positive(),
+      jql: external_exports4.string().optional().describe("Extra filter within the backlog"),
+      fields: external_exports4.array(external_exports4.string()).optional(),
+      max_results: external_exports4.number().int().min(1).max(100).default(50),
+      start_at: external_exports4.number().int().min(0).default(0)
+    }),
+    execute: async (args) => safeJira(async () => {
+      const agile = jiraAgileClient();
+      let estimation_field;
+      try {
+        estimation_field = estimationFieldId(
+          await agile.board.getConfiguration({ boardId: args.board_id })
+        );
+      } catch {
+        estimation_field = void 0;
+      }
+      const fields = [...args.fields ?? BACKLOG_FIELDS];
+      if (estimation_field && !fields.includes(estimation_field)) fields.push(estimation_field);
+      const page = await agile.board.getIssuesForBacklog({
+        boardId: args.board_id,
+        jql: args.jql,
+        fields,
+        maxResults: args.max_results,
+        startAt: args.start_at
+      });
+      return { estimation_field: estimation_field ?? null, ...page };
+    })
+  });
+  server2.addTool({
+    name: "jira_rank_issues",
+    description: "Reorder the backlog: rank issues before or after an anchor issue. The listed issues keep their relative order. Max 50 per call. Reports per-issue failures; never trust a rank not in `ranked`.",
+    parameters: external_exports4.object({
+      issue_keys: external_exports4.array(external_exports4.string()).min(1).max(AGILE_BULK_MAX).describe("Issues to move, in desired order"),
+      rank_before_issue: external_exports4.string().optional().describe("Place the issues directly above this issue"),
+      rank_after_issue: external_exports4.string().optional().describe("Place the issues directly below this issue"),
+      rank_custom_field_id: external_exports4.number().int().positive().optional().describe("Rank field numeric id; omit to use the site's default Rank field")
+    }),
+    execute: async (args) => safeJira(async () => {
+      ensureWritable2(opts.readOnly);
+      assertRankRequest(args.issue_keys, args.rank_before_issue, args.rank_after_issue);
+      const response = await jiraAgileClient().issue.rankIssues({
+        issues: args.issue_keys,
+        rankBeforeIssue: args.rank_before_issue,
+        rankAfterIssue: args.rank_after_issue,
+        rankCustomFieldId: args.rank_custom_field_id
+      });
+      return summarizeRank(args.issue_keys, response, {
+        before: args.rank_before_issue,
+        after: args.rank_after_issue
+      });
+    })
+  });
+  server2.addTool({
+    name: "jira_move_issues_to_backlog",
+    description: "Remove issues from their sprint and put them back on the backlog. Max 50 per call.",
+    parameters: external_exports4.object({
+      issue_keys: external_exports4.array(external_exports4.string()).min(1).max(AGILE_BULK_MAX)
+    }),
+    execute: async (args) => safeJira(async () => {
+      ensureWritable2(opts.readOnly);
+      assertRankRequest(args.issue_keys, void 0, void 0, true);
+      await jiraAgileClient().backlog.moveIssuesToBacklog({ issues: args.issue_keys });
+      return { moved_to_backlog: args.issue_keys };
+    })
+  });
+  server2.addTool({
+    name: "jira_get_board_configuration",
+    description: "Get a board's configuration: filter, columns, ranking field and estimation (story points) field id.",
+    parameters: external_exports4.object({ board_id: external_exports4.number().int().positive() }),
+    execute: async (args) => safeJira(async () => {
+      const config4 = await jiraAgileClient().board.getConfiguration({ boardId: args.board_id });
+      return { estimation_field: estimationFieldId(config4) ?? null, ...config4 };
     })
   });
 }

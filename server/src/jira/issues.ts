@@ -5,6 +5,7 @@ import type { FastMCP } from "fastmcp";
 import { jiraClient } from "../common/jiraClient.js";
 import { markdownToAdf, resolveAdfBody, adfParam } from "../common/adf.js";
 import { safeJira, ensureWritable } from "./_helpers.js";
+import { buildIssueEditOps } from "./_backlog.js";
 import { loadQMetryConfig } from "../common/config.js";
 import { qmetryClient } from "../common/qmetryClient.js";
 
@@ -125,10 +126,9 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
     summary: z.string(),
     issue_type: z.string().describe("e.g. Bug, Story, Task"),
     description: z.string().optional().describe("Markdown — converted to ADF"),
-    description_adf: z
-      .any()
+    description_adf: adfParam
       .optional()
-      .describe("Pre-built ADF JSON for description (preferred for charts/panels/mentions)"),
+      .describe("Pre-built ADF document for description (preferred for charts/panels/mentions)"),
     priority: z.string().optional(),
     labels: z.array(z.string()).optional(),
     assignee_account_id: z.string().optional(),
@@ -191,7 +191,9 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
 
   server.addTool({
     name: "jira_update_issue",
-    description: "Update fields on an existing Jira issue.",
+    description:
+      "Update fields on an existing Jira issue. `labels`/`components` replace the whole list; use " +
+      "add_*/remove_* to change single values. Backlog order is not a field — use jira_rank_issues.",
     parameters: z.object({
       issue_key: z.string(),
       summary: z.string().optional(),
@@ -200,10 +202,19 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
         .optional()
         .describe("Pre-built ADF document (preferred for complex content)"),
       priority: z.string().optional(),
-      labels: z.array(z.string()).optional(),
+      labels: z.array(z.string()).optional().describe("Replaces ALL labels on the issue"),
+      add_labels: z.array(z.string()).optional().describe("Labels to add, keeping existing ones"),
+      remove_labels: z.array(z.string()).optional().describe("Labels to remove, keeping the rest"),
+      components: z.array(z.string()).optional().describe("Component names; replaces ALL components"),
+      add_components: z.array(z.string()).optional().describe("Component names to add"),
+      remove_components: z.array(z.string()).optional().describe("Component names to remove"),
+      parent_key: z.string().optional().describe("New parent (epic, or parent of a sub-task)"),
       assignee_account_id: z.string().optional(),
-      fix_versions: z.array(z.string()).optional(),
-      custom_fields: z.record(z.string(), z.any()).optional(),
+      fix_versions: z.array(z.string()).optional().describe("Version names; replaces ALL fixVersions"),
+      custom_fields: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe("Object of customfield_XXXXX → value (e.g. story points)"),
     }),
     execute: async (args: {
       issue_key: string;
@@ -212,13 +223,19 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
       description_adf?: unknown;
       priority?: string;
       labels?: string[];
+      add_labels?: string[];
+      remove_labels?: string[];
+      components?: string[];
+      add_components?: string[];
+      remove_components?: string[];
+      parent_key?: string;
       assignee_account_id?: string;
       fix_versions?: string[];
       custom_fields?: Record<string, unknown>;
     }) =>
-      safeJira(() => {
+      safeJira(async () => {
         ensureWritable(opts.readOnly);
-        const fields: Record<string, unknown> = {};
+        const { fields, update } = buildIssueEditOps(args);
         if (args.summary !== undefined) fields.summary = args.summary;
         if (args.description_adf !== undefined) {
           fields.description = resolveAdfBody({
@@ -229,16 +246,17 @@ export function registerIssueTools(server: FastMCP, opts: IssueOpts): void {
           fields.description = markdownToAdf(args.description);
         }
         if (args.priority !== undefined) fields.priority = { name: args.priority };
-        if (args.labels !== undefined) fields.labels = args.labels;
         if (args.assignee_account_id !== undefined)
           fields.assignee = { accountId: args.assignee_account_id };
         if (args.fix_versions !== undefined)
           fields.fixVersions = args.fix_versions.map((name) => ({ name }));
         if (args.custom_fields) Object.assign(fields, args.custom_fields);
-        return jiraClient().issues.editIssue({
+        await jiraClient().issues.editIssue({
           issueIdOrKey: args.issue_key,
           fields,
+          ...(Object.keys(update).length > 0 ? { update } : {}),
         } as never);
+        return { updated: true, issue_key: args.issue_key };
       }),
   });
 

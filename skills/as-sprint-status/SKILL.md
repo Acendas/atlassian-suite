@@ -2,7 +2,7 @@
 name: as-sprint-status
 description: Report current Jira sprint progress.
 argument-hint: "[board-id-or-name] [sprint-id-or-name]"
-allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprints_from_board, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprint_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search
+allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprints_from_board, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprint_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_board_configuration
 ---
 
 # Sprint Status Report
@@ -24,7 +24,7 @@ Produce a one-screen sprint health report.
 
 3. **Pull sprint issues.** Call `mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprint_issues` for the sprint. Group by status category: `Done`, `In Progress`, `To Do`, plus a separate `Blocked` group if any issue has the `flagged` field set.
 
-4. **Compute deltas.** Compare current scope vs initial commitment (look for issues added after sprint start using `created > sprintStartDate` heuristic via `mcp__plugin_atlassian-suite_acendas-atlassian__jira_search`). Count story points if the field is populated.
+4. **Compute deltas.** Compare current scope vs initial commitment (look for issues added after sprint start using `created > sprintStartDate` heuristic via `mcp__plugin_atlassian-suite_acendas-atlassian__jira_search`). Count story points using the board's estimation field — its id is `estimation_field` from `jira_get_board_configuration` (it differs per site, e.g. `customfield_10016`); request that field explicitly.
 
 5. **Render the report** in this exact shape:
 

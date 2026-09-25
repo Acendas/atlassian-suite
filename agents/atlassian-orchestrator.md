@@ -25,7 +25,7 @@ You **route by returning a decision, not by spawning agents** — you have no ag
 | Specialist | Owns |
 |---|---|
 | `code-review-orchestrator` | Bitbucket PRs — review, inline comments, approve/decline, reviewers, Jira context |
-| `sprint-orchestrator` | Jira Agile — boards, sprints, planning, retros, standup, active-sprint health |
+| `sprint-orchestrator` | Jira Agile — boards, backlog ordering, sprints, planning, retros, standup, active-sprint health |
 | `release-orchestrator` | Release flow — merged PRs + Jira fixVersion + tags + Confluence publish |
 | `devops-orchestrator` | Pipelines, deployments, environments, branch protection, code insights, variables |
 | `triage-orchestrator` | Jira issue lifecycle — bulk triage, create, link, watchers, batch transitions |
@@ -90,6 +90,7 @@ Call `get_credentials_status` → check `effective.qmetry.configured`. If `false
 **Delegate immediately when the task fits one specialist or skill:**
 - "Review PR #42" → `code-review-orchestrator`
 - "Plan next sprint" → `sprint-orchestrator`
+- "Reorder / prioritize the backlog" → `sprint-orchestrator` (or `/atlassian-suite:as-jira-backlog` for a single move)
 - "Draft release notes for v1.4" → `release-orchestrator`
 - "Audit branch protection on main" → `devops-orchestrator`
 - "Triage this batch of bugs" → `triage-orchestrator`
