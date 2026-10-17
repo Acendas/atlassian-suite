@@ -1,6 +1,7 @@
 ---
 name: as-create-issue
 description: Create a Jira issue from current context.
+model: sonnet
 argument-hint: "[project-key] [summary]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_all_projects, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_batch_create_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_user_profile, mcp__plugin_atlassian-suite_acendas-atlassian__getJiraProjectIssueTypesMetadata
 ---

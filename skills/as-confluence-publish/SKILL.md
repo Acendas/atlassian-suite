@@ -1,6 +1,7 @@
 ---
 name: as-confluence-publish
 description: Publish markdown docs to Confluence without losing comments.
+model: sonnet
 argument-hint: "<markdown-file-or-dir> <page-id-or-title> [--dry-run]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_publish_preflight, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_publish_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_markdown_to_storage, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_render_mermaid, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_sync_attachments, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_inline_comments, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_restore_version, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, Read, Glob, Bash
 ---

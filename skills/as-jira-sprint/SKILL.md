@@ -1,6 +1,8 @@
 ---
 name: as-jira-sprint
 description: Manage a Jira Scrum sprint lifecycle.
+model: haiku
+effort: low
 argument-hint: "<board-id-or-name> <action: list|create|start|close|add|remove> [args...]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprints_from_board, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_update_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_issues_to_sprint, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprint_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_move_issues_to_backlog
 ---

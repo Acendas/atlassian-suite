@@ -1,6 +1,8 @@
 ---
 name: as-pipeline-status
 description: Show Bitbucket Pipelines run status.
+model: haiku
+effort: low
 argument-hint: "<repo-slug> [filter: latest|failed|inprogress]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__list_pipelines, mcp__plugin_atlassian-suite_acendas-atlassian__get_pipeline, mcp__plugin_atlassian-suite_acendas-atlassian__list_pipeline_steps, mcp__plugin_atlassian-suite_acendas-atlassian__get_pipeline_step_log
 ---

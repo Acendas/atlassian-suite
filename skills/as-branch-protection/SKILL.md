@@ -1,6 +1,8 @@
 ---
 name: as-branch-protection
 description: List or manage Bitbucket branch protection rules.
+model: haiku
+effort: low
 argument-hint: "<repo-slug> [action: list|add|remove] [args...]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__list_branch_restrictions, mcp__plugin_atlassian-suite_acendas-atlassian__create_branch_restriction, mcp__plugin_atlassian-suite_acendas-atlassian__update_branch_restriction, mcp__plugin_atlassian-suite_acendas-atlassian__delete_branch_restriction, mcp__plugin_atlassian-suite_acendas-atlassian__get_branching_model_settings, mcp__plugin_atlassian-suite_acendas-atlassian__update_branching_model_settings
 ---

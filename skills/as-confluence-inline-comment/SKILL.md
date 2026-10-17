@@ -1,6 +1,8 @@
 ---
 name: as-confluence-inline-comment
 description: Add an inline comment on a Confluence page.
+model: haiku
+effort: low
 argument-hint: "<page-id-or-title> <action: list|add|reply|resolve> [selection-text-or-comment-id] [body]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_inline_comments, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_add_inline_comment, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_reply_to_inline_comment, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_resolve_inline_comment, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search
 ---

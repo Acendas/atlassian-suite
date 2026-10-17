@@ -1,6 +1,8 @@
 ---
 name: as-link-pr-to-issue
 description: Bidirectionally link a PR to a Jira issue.
+model: haiku
+effort: low
 argument-hint: "<pr-url-or-id> [issue-key]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__update_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__add_pull_request_comment, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_create_remote_issue_link, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_comment
 ---

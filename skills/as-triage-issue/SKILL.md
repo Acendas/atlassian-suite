@@ -1,6 +1,7 @@
 ---
 name: as-triage-issue
 description: Triage a Jira issue with related context.
+model: sonnet
 argument-hint: "<issue-key>"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_transitions, mcp__plugin_atlassian-suite_acendas-atlassian__jira_transition_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_update_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests
 ---

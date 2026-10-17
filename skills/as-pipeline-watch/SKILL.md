@@ -1,6 +1,8 @@
 ---
 name: as-pipeline-watch
 description: Watch a Bitbucket pipeline and report its outcome.
+model: haiku
+effort: low
 argument-hint: "[repo-slug] [build-number | branch]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__watch_pipeline, mcp__plugin_atlassian-suite_acendas-atlassian__get_pipeline, mcp__plugin_atlassian-suite_acendas-atlassian__list_pipeline_steps, mcp__plugin_atlassian-suite_acendas-atlassian__list_pipeline_step_test_cases, mcp__plugin_atlassian-suite_acendas-atlassian__get_pipeline_step_log, Monitor, ToolSearch, PushNotification, Bash(git remote get-url:*), Bash(git branch --show-current)
 ---

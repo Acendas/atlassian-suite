@@ -10,7 +10,8 @@ description: >-
   'test coverage for issue', 'fetch/show/summarize issue'.
 
 tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue_property_keys, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue_property, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_all_projects, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, mcp__plugin_atlassian-suite_acendas-atlassian__getConfluenceSpaces, mcp__plugin_atlassian-suite_acendas-atlassian__list_repositories, mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests, mcp__plugin_atlassian-suite_acendas-atlassian__list_pipelines, mcp__plugin_atlassian-suite_acendas-atlassian__list_deployments, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_list_projects, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_search_test_cases, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_search_test_cycles, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_get_test_cycle, mcp__plugin_atlassian-suite_acendas-atlassian__get_credentials_status, Read, Grep
-model: opus
+model: haiku
+effort: low
 color: blue
 ---
 
@@ -114,8 +115,10 @@ Call `get_credentials_status` → check `effective.qmetry.configured`. If `false
 
 **Weekly engineering digest:**
 1. PRs merged last 7d (`list_pull_requests`)
-2. Issues transitioned to Done last 7d (`jira_search`)
-3. Confluence pages updated last 7d (`confluence_search`)
+2. Issues transitioned to Done last 7d: `jira_search` with exactly `statusCategory = Done AND statusCategoryChangedDate >= -7d ORDER BY statusCategoryChangedDate DESC`
+3. Confluence pages updated last 7d: `confluence_search` with exactly `type = page AND lastmodified >= now("-7d") ORDER BY lastmodified DESC`
+
+Copy these two queries as written; don't compose your own. Both were run against a live site.
 4. Deployments last 7d (`list_deployments`)
 5. QMetry: recent test cycle execution summaries (`qmetry_search_test_cycles` per active project)
 

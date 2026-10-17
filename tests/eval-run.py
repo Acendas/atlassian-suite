@@ -580,6 +580,109 @@ def check_tool_arg_validation(result, skill_filter=None):
             result.ok(f"argcheck:{dirname}")
 
 
+# ─── Check 8: Model tiers ───
+#
+# Every skill and agent names its model, so cost and quality don't depend on
+# what the user's session happens to run. Three tiers:
+#
+#   haiku + low  No judgment. Parse args, call one to a few tools, render, or
+#                make a write the user named and confirmed. Mistakes fail
+#                loudly or are caught at the confirm step.
+#   sonnet       Judgment inside a written procedure: rules, a rubric, or tool
+#                guardrails, with the output checked by the user (proposal
+#                table, confirm) or by a later stage. Default for anything
+#                that writes prose or queries — NL → JQL/CQL gives plausible
+#                wrong results, so it is not Haiku work.
+#   opus         Open-ended judgment that is the last line of defence: nothing
+#                downstream re-checks it and a miss is silent. Today that is
+#                PR review only — the orchestrator's Phase 4 triage (decides
+#                what gets dropped), the investigator's verdict, the critic.
+#
+# Every skill and agent must be listed, so anything new has to choose.
+# A skill's `model:` applies only when it runs through the Skill tool in the
+# main session; an agent reading a skill file stays on the agent's model.
+
+HAIKU_LOW_SKILLS = {
+    "as-branch-protection", "as-code-search", "as-commit-show",
+    "as-confluence-attachment", "as-confluence-comment", "as-confluence-copy",
+    "as-confluence-inline-comment", "as-confluence-labels", "as-confluence-likes",
+    "as-confluence-properties", "as-confluence-tree", "as-confluence-version",
+    "as-confluence-watch", "as-deployments", "as-jira-attachment", "as-jira-issue",
+    "as-jira-link", "as-jira-sprint", "as-jira-worklog", "as-link-pr-to-issue",
+    "as-pipeline-status", "as-pipeline-trigger", "as-pipeline-watch", "as-pr-list",
+    "as-qmetry-coverage", "as-qmetry-search",
+    # Dispatcher only: code-review-orchestrator keeps its own `model: opus`.
+    "as-review-pr",
+}
+SONNET_SKILLS = {
+    # NL → query: a wrong query returns plausible results with no error.
+    "as-confluence-search", "as-jql-search",
+    # Authoring and synthesis.
+    "as-create-issue", "as-pr-create", "as-pr-followup", "as-pr-summary-to-jira",
+    "as-release-notes", "as-publish-release-notes", "as-sprint-retro",
+    "as-standup-notes", "as-sprint-status", "as-triage-issue",
+    # Writes with traps the tools only partly guard.
+    "as-confluence-edit", "as-confluence-page", "as-confluence-publish",
+    "as-qmetry-testcase", "as-jira-backlog",
+    # Credential setup: its rules keep tokens out of the transcript.
+    "as-init",
+}
+SKILL_TIERS = {
+    **{s: ("haiku", "low") for s in HAIKU_LOW_SKILLS},
+    **{s: ("sonnet", None) for s in SONNET_SKILLS},
+}
+PR_SCANNERS = (
+    "bugs", "contracts", "database", "financial", "observability", "patterns",
+    "performance", "rollout", "security", "silent-failures", "spec", "tests",
+)
+AGENT_TIERS = {
+    # Routes and reads. Its weekly-digest JQL/CQL are pinned literals in its
+    # body (asserted below) so Haiku copies them instead of composing them.
+    "atlassian-orchestrator": ("haiku", "low"),
+    # Procedural multi-step work with confirm gates and tool guardrails.
+    "devops-orchestrator": ("sonnet", None),
+    "knowledge-orchestrator": ("sonnet", None),
+    "release-orchestrator": ("sonnet", None),
+    "sprint-orchestrator": ("sonnet", None),
+    "triage-orchestrator": ("sonnet", None),
+    # Single-concern recall over ≤8 files; Opus triage filters downstream.
+    **{f"pr-review-{s}": ("sonnet", None) for s in PR_SCANNERS},
+    # Last line of defence in PR review.
+    "code-review-orchestrator": ("opus", None),
+    "pr-investigator": ("opus", None),
+    "pr-critic": ("opus", None),
+}
+ROUTER_PINNED_QUERIES = (
+    "statusCategory = Done AND statusCategoryChangedDate >= -7d",
+    'type = page AND lastmodified >= now("-7d")',
+)
+
+
+def _check_tier(result, check_id, fm, want):
+    got = ((fm or {}).get("model"), (fm or {}).get("effort"))
+    if want is None:
+        result.fail(check_id, "no tier — add it to SKILL_TIERS / AGENT_TIERS in tests/eval-run.py")
+    elif got == want:
+        result.ok(check_id)
+    else:
+        result.fail(check_id, f"expected model {want[0]!r}, effort {want[1]!r}; has {got[0]!r}, {got[1]!r}")
+
+
+def check_model_tiers(result):
+    for dirname, skill_file in list_skill_dirs():
+        fm, _ = parse_frontmatter(skill_file)
+        _check_tier(result, f"tier:{dirname}", fm, SKILL_TIERS.get(dirname))
+    for agent_file in sorted((PROJECT_ROOT / "agents").glob("*.md")):
+        fm, _ = parse_frontmatter(agent_file)
+        _check_tier(result, f"tier:agent:{agent_file.stem}", fm, AGENT_TIERS.get(agent_file.stem))
+    router = read_file(PROJECT_ROOT / "agents" / "atlassian-orchestrator.md")
+    for q in ROUTER_PINNED_QUERIES:
+        if q in router:
+            result.ok(f"tier:router_query:{q[:30]}")
+        else:
+            result.fail(f"tier:router_query:{q[:30]}", "Haiku router must copy this digest query, not compose one")
+
+
 # ─── Check 5: Scope list structural validation ───
 #
 # Every entry in SCOPES.confluence (and .jira, .bitbucket) must have
@@ -907,6 +1010,7 @@ def main():
     check_tool_arg_validation(result, skill_filter)
     if skill_filter is None:
         check_scope_list(result)
+        check_model_tiers(result)
         check_no_unscoped_mcp_names(result)
         check_storage_unit_tests(result)
         check_qmetry_write_tests(result)

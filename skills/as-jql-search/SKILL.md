@@ -1,6 +1,7 @@
 ---
 name: as-jql-search
 description: Search Jira via natural-language to JQL.
+model: sonnet
 argument-hint: "<natural-language-query-or-jql>"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search_fields
 ---

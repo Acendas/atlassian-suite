@@ -1,6 +1,8 @@
 ---
 name: as-deployments
 description: Inspect Bitbucket deployments and environments.
+model: haiku
+effort: low
 argument-hint: "<repo-slug> [action: list|environments|variables] [environment-uuid]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__list_deployments, mcp__plugin_atlassian-suite_acendas-atlassian__get_deployment, mcp__plugin_atlassian-suite_acendas-atlassian__list_environments, mcp__plugin_atlassian-suite_acendas-atlassian__get_environment, mcp__plugin_atlassian-suite_acendas-atlassian__list_environment_variables
 ---

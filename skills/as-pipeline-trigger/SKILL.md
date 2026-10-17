@@ -1,6 +1,8 @@
 ---
 name: as-pipeline-trigger
 description: Trigger a Bitbucket Pipelines build.
+model: haiku
+effort: low
 argument-hint: "<repo-slug> <branch-or-commit> [pattern]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__trigger_pipeline, mcp__plugin_atlassian-suite_acendas-atlassian__list_branches, mcp__plugin_atlassian-suite_acendas-atlassian__list_pipeline_variables, mcp__plugin_atlassian-suite_acendas-atlassian__get_pipeline
 ---

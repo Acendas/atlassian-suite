@@ -1,6 +1,8 @@
 ---
 name: as-code-search
 description: Search code across the Bitbucket workspace.
+model: haiku
+effort: low
 argument-hint: "<query> [repo-slug] [lang]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__search_code
 ---

@@ -1,6 +1,7 @@
 ---
 name: as-qmetry-testcase
 description: View or update a QMetry test case.
+model: sonnet
 argument-hint: "<test-case-key> [project-id|jira-key] [action: show|update-execution]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_credentials_status, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_user_profile, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_list_projects, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_get_test_case, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_get_test_case_requirements, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_search_test_cycles, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_search_executions, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_get_execution, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_update_execution, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_list_execution_attachments, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_upload_execution_attachment
 ---

@@ -1,6 +1,7 @@
 ---
 name: as-confluence-search
 description: Search Confluence via natural-language to CQL.
+model: sonnet
 argument-hint: "<natural-language-query-or-cql> [space-key]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, mcp__plugin_atlassian-suite_acendas-atlassian__getConfluenceSpaces
 ---

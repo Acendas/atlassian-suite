@@ -1,6 +1,7 @@
 ---
 name: as-release-notes
 description: Generate release notes from PRs and Jira issues.
+model: sonnet
 argument-hint: "<repo-slug> <since-ref-or-date> [until-ref-or-date]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_commits, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search
 ---

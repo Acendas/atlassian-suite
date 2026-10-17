@@ -1,6 +1,8 @@
 ---
 name: as-review-pr
 description: Run the multi-scanner PR review pipeline.
+model: haiku
+effort: low
 argument-hint: "<pr-url-or-id> [--high] [--quick]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_diff, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_diffstat, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_commits, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_comments, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_activity, mcp__plugin_atlassian-suite_acendas-atlassian__get_file_contents, mcp__plugin_atlassian-suite_acendas-atlassian__add_inline_comment, mcp__plugin_atlassian-suite_acendas-atlassian__add_pull_request_comment, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, Agent
 ---

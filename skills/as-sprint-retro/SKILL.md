@@ -1,6 +1,7 @@
 ---
 name: as-sprint-retro
 description: Generate a Jira sprint retrospective brief.
+model: sonnet
 argument-hint: "[board-id-or-name] [sprint-id-or-name]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprints_from_board, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_sprint_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__jira_batch_get_changelogs
 ---

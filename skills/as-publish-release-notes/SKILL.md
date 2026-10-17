@@ -1,6 +1,7 @@
 ---
 name: as-publish-release-notes
 description: Publish release notes to Confluence.
+model: sonnet
 argument-hint: "<space-key> [parent-page-id-or-title] [page-title]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_create_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_update_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, mcp__plugin_atlassian-suite_acendas-atlassian__getConfluenceSpaces
 ---

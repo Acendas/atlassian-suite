@@ -1,6 +1,8 @@
 ---
 name: as-commit-show
 description: Show a Bitbucket commit's diff and CI status.
+model: haiku
+effort: low
 argument-hint: "<repo-slug> <commit-sha>"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_commit, mcp__plugin_atlassian-suite_acendas-atlassian__get_commit_diffstat, mcp__plugin_atlassian-suite_acendas-atlassian__get_commit_diff, mcp__plugin_atlassian-suite_acendas-atlassian__list_commit_statuses, mcp__plugin_atlassian-suite_acendas-atlassian__list_commit_comments
 ---

@@ -1,6 +1,8 @@
 ---
 name: as-qmetry-coverage
 description: Show QMetry test coverage for a Jira issue.
+model: haiku
+effort: low
 argument-hint: "<jira-issue-key>"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_credentials_status, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue_property_keys, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue_property, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_search_test_cycles, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_get_test_cycle, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_get_test_cycle_test_cases, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_search_requirements, mcp__plugin_atlassian-suite_acendas-atlassian__qmetry_search_test_cases
 ---

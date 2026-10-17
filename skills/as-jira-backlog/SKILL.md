@@ -1,6 +1,7 @@
 ---
 name: as-jira-backlog
 description: View and reorder a Jira board's backlog.
+model: sonnet
 argument-hint: "<board-id-or-name> [action: show|move|top|bottom|to-backlog] [args...]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_agile_boards, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_backlog_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_board_configuration, mcp__plugin_atlassian-suite_acendas-atlassian__jira_rank_issues, mcp__plugin_atlassian-suite_acendas-atlassian__jira_move_issues_to_backlog
 ---

@@ -1,6 +1,8 @@
 ---
 name: as-confluence-likes
 description: List users who liked a Confluence page.
+model: haiku
+effort: low
 argument-hint: "<page-id-or-title>"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_likes, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_user
 ---

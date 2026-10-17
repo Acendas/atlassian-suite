@@ -1,6 +1,8 @@
 ---
 name: as-pr-list
 description: List Bitbucket pull requests with smart filters.
+model: haiku
+effort: low
 argument-hint: "[repo-slug] [filter: open|mine|review|stale|merged]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests, mcp__plugin_atlassian-suite_acendas-atlassian__list_repositories, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request
 ---

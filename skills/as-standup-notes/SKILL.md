@@ -1,6 +1,7 @@
 ---
 name: as-standup-notes
 description: Generate a daily standup brief from Jira and PRs.
+model: sonnet
 argument-hint: "[user-account-id-or-email]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_user_profile, mcp__plugin_atlassian-suite_acendas-atlassian__jira_search, mcp__plugin_atlassian-suite_acendas-atlassian__list_pull_requests, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request
 ---

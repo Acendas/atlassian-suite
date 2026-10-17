@@ -1,6 +1,7 @@
 ---
 name: as-pr-summary-to-jira
 description: Post PR summary as a Jira comment.
+model: sonnet
 argument-hint: "<pr-url-or-id> [issue-key]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_diffstat, mcp__plugin_atlassian-suite_acendas-atlassian__get_pull_request_activity, mcp__plugin_atlassian-suite_acendas-atlassian__jira_add_comment, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue
 ---

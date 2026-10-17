@@ -1,6 +1,7 @@
 ---
 name: as-confluence-page
 description: Read or rewrite a Confluence page.
+model: sonnet
 argument-hint: "<page-id-or-title-or-url> [action: read|rewrite|create-child] [body-file-or-text]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_update_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_create_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_comments, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, mcp__plugin_atlassian-suite_acendas-atlassian__getConfluenceSpaces, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_space, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_diff
 ---

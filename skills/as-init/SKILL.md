@@ -1,6 +1,7 @@
 ---
 name: as-init
 description: Initialize Atlassian credentials via browser wizard.
+model: sonnet
 argument-hint: ""
 allowed-tools: Bash, mcp__plugin_atlassian-suite_acendas-atlassian__clear_credentials
 ---

@@ -1,6 +1,7 @@
 ---
 name: as-confluence-edit
 description: Surgically edit a section of a Confluence page.
+model: sonnet
 argument-hint: "<page-id-or-title> <op: append|prepend|replace-section|insert-after|replace-text|remove-section> [args...]"
 allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__confluence_append_to_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_prepend_to_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_replace_section, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_insert_after_heading, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_replace_text, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_remove_section, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_get_page_by_title, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_search, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_upload_attachment, mcp__plugin_atlassian-suite_acendas-atlassian__confluence_render_image_macro
 ---

@@ -1,6 +1,7 @@
 ---
 name: as-pr-create
 description: Create a Bitbucket pull request.
+model: sonnet
 argument-hint: "<repo-slug> <source-branch> [destination-branch] [title]"
 allowed-tools: Bash, mcp__plugin_atlassian-suite_acendas-atlassian__create_pull_request, mcp__plugin_atlassian-suite_acendas-atlassian__get_default_reviewers, mcp__plugin_atlassian-suite_acendas-atlassian__list_branches, mcp__plugin_atlassian-suite_acendas-atlassian__jira_get_issue
 ---
