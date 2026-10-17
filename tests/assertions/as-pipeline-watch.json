@@ -1,0 +1,16 @@
+[
+  { "name": "allows_watch_tool", "type": "frontmatter_contains", "field": "allowed-tools", "value": "watch_pipeline" },
+  { "name": "allows_monitor", "type": "frontmatter_contains", "field": "allowed-tools", "value": "Monitor" },
+  { "name": "loads_monitor_when_deferred", "type": "contains", "pattern": "select:Monitor" },
+  { "name": "uses_command_verbatim", "type": "contains", "pattern": "monitor_command.{0,20}exactly as returned" },
+  { "name": "re_arms_on_expiry", "type": "contains", "pattern": "re-arm" },
+  { "name": "falls_back_without_monitor", "type": "contains", "pattern": "run_in_background" },
+  { "name": "handles_every_final_line", "type": "contains", "pattern": "DONE PAUSED[\\s\\S]*WATCH_ERROR[\\s\\S]*WATCH_TIMEOUT",
+    "_comment": "A watch that only recognizes success stays silent through a failed or unreadable run" },
+  { "name": "get_pipeline_is_authority", "type": "contains", "pattern": "get_pipeline`. That call is the authority" },
+  { "name": "drills_into_failed_tests", "type": "contains", "pattern": "list_pipeline_step_test_cases\\(status: \"FAILED\"\\)" },
+  { "name": "notifies_when_away", "type": "frontmatter_contains", "field": "allowed-tools", "value": "PushNotification" },
+  { "name": "never_triggers", "type": "frontmatter_not_contains", "field": "allowed-tools", "value": "trigger_pipeline" },
+  { "name": "never_stops", "type": "frontmatter_not_contains", "field": "allowed-tools", "value": "stop_pipeline" },
+  { "name": "watches_from_main_session", "type": "contains", "pattern": "main session" }
+]

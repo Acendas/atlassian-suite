@@ -25,6 +25,7 @@ allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__list_pipelines, mc
    ```
 4. If a single failed run is highlighted, offer to drill in: list steps via `list_pipeline_steps` and fetch failing step logs via `get_pipeline_step_log`.
 5. Cap at 30 rows.
+6. If a run is still in progress, offer `/atlassian-suite:as-pipeline-watch <repo> <build_number>` to be told when it ends.
 
 ## Notes
 

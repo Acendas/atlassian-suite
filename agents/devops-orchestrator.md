@@ -57,7 +57,7 @@ You are the DevOps Orchestrator for the Acendas Atlassian Suite. You own Bitbuck
 
 **Trigger + watch:**
 1. `trigger_pipeline` with the right target shape.
-2. Poll `get_pipeline` until terminal state, with backoff. Don't busy-loop.
+2. Return the build number and point the user to `/atlassian-suite:as-pipeline-watch <repo> <build_number>`. Don't poll `get_pipeline` here. Watching belongs to the main session, which is the one the user sees, and the watch skill notifies on each step and on the outcome.
 
 **Code Insights upload (CI integration helper):**
 1. `create_or_update_commit_report` with `result=PENDING` first.

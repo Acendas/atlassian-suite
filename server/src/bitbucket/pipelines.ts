@@ -3,8 +3,31 @@
 import { z } from "zod";
 import type { FastMCP } from "fastmcp";
 import type { BitbucketContext } from "./index.js";
+import { resolve as resolvePath } from "node:path";
 import { safeExecute, workspaceOf, ensureWritable } from "./_helpers.js";
 import { BitbucketHttpError } from "../common/http.js";
+import {
+  buildWatchCommand,
+  classifyPipeline,
+  describeTarget,
+  doneLine,
+  pipelineUrl,
+  progressLine,
+  DEFAULT_INTERVAL_SECONDS,
+  DEFAULT_MAX_MINUTES,
+  MIN_INTERVAL_SECONDS,
+  type Pipeline,
+  type PipelineStep,
+} from "./_pipelineWatch.js";
+
+/** Env vars that can feed loadBitbucketConfig. Names only — values never leave the server. */
+const CREDENTIAL_ENV_VARS = [
+  "BITBUCKET_WORKSPACE",
+  "BITBUCKET_USERNAME",
+  "BITBUCKET_API_TOKEN",
+  "ATLASSIAN_USERNAME",
+  "ATLASSIAN_API_TOKEN",
+];
 
 export function registerPipelineTools(server: FastMCP, ctx: BitbucketContext): void {
   const repoBase = (workspace: string | undefined, repo: string): string =>
@@ -49,6 +72,100 @@ export function registerPipelineTools(server: FastMCP, ctx: BitbucketContext): v
           `${repoBase(args.workspace, args.repo_slug)}/pipelines/${encodeURIComponent(args.pipeline_uuid)}`,
         ),
       ),
+  });
+
+  // watch_pipeline does not poll. An MCP call can't outlive its turn, and a
+  // model polling get_pipeline in a loop burns turns. It resolves the run and
+  // hands back a follower command for Claude Code's Monitor, which turns each
+  // line the follower prints into a notification (see _pipelineWatch.ts).
+  server.addTool({
+    name: "watch_pipeline",
+    description:
+      "Resolve a pipeline run and return a Monitor command that streams its step results and ends with one DONE / WATCH_ERROR / WATCH_TIMEOUT line. Pass a build number or {uuid}, or a branch to watch its latest run (branch and PR pipelines, by source branch). Read-only.",
+    parameters: z.object({
+      repo_slug: z.string(),
+      pipeline: z.string().optional().describe("Build number (e.g. 5956) or {uuid}. Omit to use the latest run on `branch`."),
+      branch: z.string().optional().describe("Watch the most recent run on this branch."),
+      interval_seconds: z
+        .number()
+        .int()
+        .min(MIN_INTERVAL_SECONDS)
+        .max(300)
+        .optional()
+        .describe(`Poll interval. Default ${DEFAULT_INTERVAL_SECONDS}; each poll is 2 API calls.`),
+      max_minutes: z
+        .number()
+        .int()
+        .min(1)
+        .max(1440)
+        .optional()
+        .describe(
+          `Watcher gives up with WATCH_TIMEOUT this long after this call. Default ${DEFAULT_MAX_MINUTES}. ` +
+            `The limit is baked into monitor_command, so re-arming the same command keeps it.`,
+        ),
+      workspace: z.string().optional(),
+    }),
+    execute: async (args: any) =>
+      safeExecute(async () => {
+        if (!args.pipeline && !args.branch) {
+          throw new Error("Pass pipeline (build number or {uuid}) or branch.");
+        }
+        const workspace = workspaceOf(ctx, args.workspace);
+        const pipelines = `${repoBase(args.workspace, args.repo_slug)}/pipelines/`;
+        let p: Pipeline | undefined;
+        if (args.pipeline) {
+          p = await ctx.http.get<Pipeline>(`${pipelines}${encodeURIComponent(args.pipeline)}`);
+        } else {
+          // `target.branch` matches branch pipelines and PR pipelines by their
+          // source branch; `target.ref_name` misses the PR ones.
+          const list = await ctx.http.get<{ values?: Pipeline[] }>(pipelines, {
+            sort: "-created_on",
+            pagelen: 1,
+            "target.branch": args.branch,
+          });
+          p = list?.values?.[0];
+          if (!p) throw new Error(`No pipeline runs on branch ${args.branch} in ${workspace}/${args.repo_slug}.`);
+        }
+        const stepList = await ctx.http.get<{ values?: PipelineStep[] }>(
+          `${pipelines}${encodeURIComponent(p.uuid ?? args.pipeline)}/steps/`,
+          { pagelen: 100 },
+        );
+        const steps = Array.isArray(stepList?.values) ? stepList.values : [];
+        const buildNumber = p.build_number ?? args.pipeline;
+        const tag = `[pipeline #${buildNumber}]`;
+        const url = pipelineUrl(workspace, args.repo_slug, buildNumber);
+        const { label, terminal } = classifyPipeline(p.state);
+        const out: Record<string, unknown> = {
+          build_number: p.build_number,
+          uuid: p.uuid,
+          target: describeTarget(p),
+          state: label,
+          terminal,
+          summary: terminal ? doneLine(tag, p, steps, url) : progressLine(tag, args.repo_slug, p, steps),
+          url,
+        };
+        if (!terminal) {
+          out.monitor_command = buildWatchCommand({
+            node: process.execPath,
+            nodeArgs: process.execArgv,
+            entry: resolvePath(process.argv[1] ?? ""),
+            workspace,
+            repo: args.repo_slug,
+            buildNumber,
+            intervalSeconds: args.interval_seconds,
+            deadlineEpochSeconds:
+              Math.floor(Date.now() / 1000) + (args.max_minutes ?? DEFAULT_MAX_MINUTES) * 60,
+          });
+          out.monitor_description = `Bitbucket pipeline ${args.repo_slug} #${buildNumber}`;
+          const fromEnv = CREDENTIAL_ENV_VARS.filter((k) => process.env[k]);
+          if (fromEnv.length > 0) {
+            out.credentials_note =
+              `Bitbucket settings come partly from env vars (${fromEnv.join(", ")}). The watch command runs in ` +
+              `your shell, not in this server, so those must be set there too, or stored with /atlassian-suite:as-init.`;
+          }
+        }
+        return out;
+      }),
   });
 
   server.addTool({

@@ -20,7 +20,7 @@ allowed-tools: mcp__plugin_atlassian-suite_acendas-atlassian__trigger_pipeline, 
 3. If the user wants to pass variables, ask which (and which should be `secured`).
 4. Confirm before calling — pipelines consume build minutes and can deploy.
 5. Call `mcp__plugin_atlassian-suite_acendas-atlassian__trigger_pipeline`. Print the new pipeline UUID and URL.
-6. Offer to poll `get_pipeline` until done (`/atlassian-suite:as-pipeline-status`).
+6. Offer to watch it. On yes, run `/atlassian-suite:as-pipeline-watch <repo> <build_number>`, which notifies on each finished step and reports the outcome. Don't poll `get_pipeline` in a loop.
 
 ## Notes
 

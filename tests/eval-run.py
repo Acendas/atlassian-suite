@@ -697,6 +697,7 @@ PUBLISH_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_publish.test.t
 MERMAID_TEST = PROJECT_ROOT / "server" / "src" / "confluence" / "_mermaid.test.ts"
 ADF_TEST = PROJECT_ROOT / "server" / "src" / "common" / "adf.test.ts"
 BACKLOG_TEST = PROJECT_ROOT / "server" / "src" / "jira" / "_backlog.test.ts"
+PIPELINE_WATCH_TEST = PROJECT_ROOT / "server" / "src" / "bitbucket" / "_pipelineWatch.test.ts"
 
 
 def _run_tsx_unit_test(result, check_id, test_path):
@@ -758,6 +759,14 @@ def check_jira_backlog_tests(result):
     # and ORDER BY inside the projects-filter parentheses is invalid JQL. Only
     # assertions on the serialized request catch these.
     _run_tsx_unit_test(result, "jira:backlog_tests", BACKLOG_TEST)
+
+
+def check_pipeline_watch_tests(result):
+    # The follower's stdout IS the user's build notification. Every way it can
+    # go quiet — a run paused on a manual step, a state shape we have never
+    # seen, bad credentials, a network blip — is a missed outcome that looks
+    # exactly like "still running", so each is pinned line by line.
+    _run_tsx_unit_test(result, "bitbucket:pipeline_watch_tests", PIPELINE_WATCH_TEST)
 
 
 def check_publish_unit_tests(result):
@@ -903,6 +912,7 @@ def main():
         check_qmetry_write_tests(result)
         check_adf_unit_tests(result)
         check_jira_backlog_tests(result)
+        check_pipeline_watch_tests(result)
         check_publish_unit_tests(result)
 
     sys.exit(print_report(result, verbose))

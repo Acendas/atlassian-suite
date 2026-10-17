@@ -15,15 +15,15 @@ Comprehensive Claude Code plugin for **Jira Cloud + Confluence Cloud + Bitbucket
 
 | Product | Tools | Coverage |
 |---------|-------|----------|
-| Bitbucket Cloud | **122** | PRs, branches, branch restrictions, repos, file contents, forks, commits, comments, tags, pipelines, schedules, pipeline variables (repo/workspace/project), deployments, environments, env variables, code insights (reports + annotations + build statuses), native issues, snippets, webhooks, projects, code search, deploy keys, SSH keys, users, workspace metadata + members + permissions |
+| Bitbucket Cloud | **123** | PRs, branches, branch restrictions, repos, file contents, forks, commits, comments, tags, pipelines (incl. watching a run to its outcome), schedules, pipeline variables (repo/workspace/project), deployments, environments, env variables, code insights (reports + annotations + build statuses), native issues, snippets, webhooks, projects, code search, deploy keys, SSH keys, users, workspace metadata + members + permissions |
 | Jira Cloud | **53** | Issues (CRUD + batch), transitions, comments, worklogs, watchers, links, remote links, changelogs, fields, custom fields, projects, components, versions (create/update/release), users, agile boards, board configuration, backlog ordering (rank), sprints, JQL search (token paging) |
 | Confluence Cloud | **19** | Pages (CRUD), search (CQL), space tree, version history, version diff, comments + replies, labels, attachments, spaces, user search |
 
-### Skills (29)
+### Skills (30)
 
 **Cross-product (11):** `init`, `link-pr-to-issue`, `pr-summary-to-jira`, `sprint-status`, `standup-notes`, `sprint-retro`, `release-notes`, `publish-release-notes`, `review-pr`, `create-issue`, `triage-issue`
 
-**Bitbucket (8):** `pr-list`, `pr-create`, `pipeline-status`, `pipeline-trigger`, `deployments`, `code-search`, `commit-show`, `branch-protection`
+**Bitbucket (9):** `pr-list`, `pr-create`, `pipeline-status`, `pipeline-trigger`, `pipeline-watch`, `deployments`, `code-search`, `commit-show`, `branch-protection`
 
 **Jira (6):** `jql-search`, `jira-issue`, `jira-backlog`, `jira-sprint`, `jira-link`, `jira-worklog`
 

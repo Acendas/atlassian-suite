@@ -132742,10 +132742,10 @@ var handleResponseError = async (error$1, res) => {
   }
   return false;
 };
-var cleanupServer = async (server2, onClose) => {
-  if (onClose) await onClose(server2);
+var cleanupServer = async (server, onClose) => {
+  if (onClose) await onClose(server);
   try {
-    await server2.close();
+    await server.close();
   } catch (error$1) {
     console.error("[mcp-proxy] error closing server", error$1);
   }
@@ -132797,7 +132797,7 @@ var handleStreamRequest = async ({ activeTransports, authenticate, authMiddlewar
     try {
       const sessionId = stateless ? void 0 : Array.isArray(req.headers["mcp-session-id"]) ? req.headers["mcp-session-id"][0] : req.headers["mcp-session-id"];
       let transport;
-      let server2;
+      let server;
       body = await getBody(req);
       let authResult;
       if (authenticate) try {
@@ -132848,15 +132848,15 @@ var handleStreamRequest = async ({ activeTransports, authenticate, authMiddlewar
           return true;
         }
         transport = activeTransport.transport;
-        server2 = activeTransport.server;
-        if (authResult && typeof server2 === "object" && server2 !== null && "updateAuth" in server2 && typeof server2.updateAuth === "function") server2.updateAuth(authResult);
+        server = activeTransport.server;
+        if (authResult && typeof server === "object" && server !== null && "updateAuth" in server && typeof server.updateAuth === "function") server.updateAuth(authResult);
       } else if (!sessionId && isInitializeRequest(body)) {
         transport = new StreamableHTTPServerTransport({
           enableJsonResponse,
           eventStore: eventStore || new InMemoryEventStore(),
           onsessioninitialized: (_sessionId) => {
             if (!stateless && _sessionId) activeTransports[_sessionId] = {
-              server: server2,
+              server,
               transport
             };
           },
@@ -132868,12 +132868,12 @@ var handleStreamRequest = async ({ activeTransports, authenticate, authMiddlewar
           if (isCleaningUp) return;
           isCleaningUp = true;
           if (!stateless && sid && activeTransports[sid]) {
-            await cleanupServer(server2, onClose);
+            await cleanupServer(server, onClose);
             delete activeTransports[sid];
-          } else if (stateless) await cleanupServer(server2, onClose);
+          } else if (stateless) await cleanupServer(server, onClose);
         };
         try {
-          server2 = await createServer(req);
+          server = await createServer(req);
         } catch (error$1) {
           if (await handleResponseError(error$1, res)) return true;
           const errorMessage = error$1 instanceof Error ? error$1.message : String(error$1);
@@ -132897,8 +132897,8 @@ var handleStreamRequest = async ({ activeTransports, authenticate, authMiddlewar
           res.writeHead(500).end("Error creating server");
           return true;
         }
-        server2.connect(transport);
-        if (onConnect) await onConnect(server2);
+        server.connect(transport);
+        if (onConnect) await onConnect(server);
         await transport.handleRequest(req, res, body);
         return true;
       } else if (stateless && !sessionId && !isInitializeRequest(body)) {
@@ -132910,7 +132910,7 @@ var handleStreamRequest = async ({ activeTransports, authenticate, authMiddlewar
           sessionIdGenerator: void 0
         });
         try {
-          server2 = await createServer(req);
+          server = await createServer(req);
         } catch (error$1) {
           if (await handleResponseError(error$1, res)) return true;
           const errorMessage = error$1 instanceof Error ? error$1.message : String(error$1);
@@ -132934,8 +132934,8 @@ var handleStreamRequest = async ({ activeTransports, authenticate, authMiddlewar
           res.writeHead(500).end("Error creating server");
           return true;
         }
-        server2.connect(transport);
-        if (onConnect) await onConnect(server2);
+        server.connect(transport);
+        if (onConnect) await onConnect(server);
         await transport.handleRequest(req, res, body);
         return true;
       } else {
@@ -133001,9 +133001,9 @@ var handleStreamRequest = async ({ activeTransports, authenticate, authMiddlewar
 var handleSSERequest = async ({ activeTransports, createServer, endpoint, onClose, onConnect, req, res }) => {
   if (req.method === "GET" && new URL(req.url, "http://localhost").pathname === endpoint) {
     const transport = new SSEServerTransport("/messages", res);
-    let server2;
+    let server;
     try {
-      server2 = await createServer(req);
+      server = await createServer(req);
     } catch (error$1) {
       if (await handleResponseError(error$1, res)) return true;
       res.writeHead(500).end("Error creating server");
@@ -133016,11 +133016,11 @@ var handleSSERequest = async ({ activeTransports, createServer, endpoint, onClos
       closed = true;
       if (isCleaningUp) return;
       isCleaningUp = true;
-      await cleanupServer(server2, onClose);
+      await cleanupServer(server, onClose);
       delete activeTransports[transport.sessionId];
     });
     try {
-      await server2.connect(transport);
+      await server.connect(transport);
       await transport.send({
         jsonrpc: "2.0",
         method: "notifications/message",
@@ -133029,7 +133029,7 @@ var handleSSERequest = async ({ activeTransports, createServer, endpoint, onClos
           level: "info"
         }
       });
-      if (onConnect) await onConnect(server2);
+      if (onConnect) await onConnect(server);
     } catch (error$1) {
       if (!closed) {
         console.error("[mcp-proxy] error connecting to server", error$1);
@@ -145820,9 +145820,9 @@ function ensureWritable(ctx) {
 }
 
 // src/bitbucket/pullRequests.ts
-function registerPullRequestTools(server2, ctx) {
+function registerPullRequestTools(server, ctx) {
   const repoBase = (workspace, repo) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}/pullrequests`;
-  server2.addTool({
+  server.addTool({
     name: "list_pull_requests",
     description: "List pull requests in a Bitbucket repository, filtered by state.",
     parameters: external_exports4.object({
@@ -145844,7 +145844,7 @@ function registerPullRequestTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_pull_request",
     description: "Get full details of a single pull request.",
     parameters: external_exports4.object({
@@ -145856,7 +145856,7 @@ function registerPullRequestTools(server2, ctx) {
       () => ctx.http.get(`${repoBase(args.workspace, args.repo_slug)}/${args.pull_request_id}`)
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_pull_request_diff",
     description: "Get the unified diff for a pull request.",
     parameters: external_exports4.object({
@@ -145868,7 +145868,7 @@ function registerPullRequestTools(server2, ctx) {
       () => ctx.http.request("GET", `${repoBase(args.workspace, args.repo_slug)}/${args.pull_request_id}/diff`, { headers: { Accept: "text/plain" } })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_pull_request_diffstat",
     description: "Get a summary of files changed in a pull request (counts of additions/deletions per file).",
     parameters: external_exports4.object({
@@ -145884,7 +145884,7 @@ function registerPullRequestTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_pull_request_commits",
     description: "List commits included in a pull request.",
     parameters: external_exports4.object({
@@ -145900,7 +145900,7 @@ function registerPullRequestTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_pull_request_activity",
     description: "Get the activity timeline of a pull request (approvals, change requests, comments).",
     parameters: external_exports4.object({
@@ -145916,7 +145916,7 @@ function registerPullRequestTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_pull_request_merge_status",
     description: "Check whether a pull request can be merged. Inspects PR state, conflicts, and required reviewer approvals (read-only \u2014 does not initiate a merge).",
     parameters: external_exports4.object({
@@ -145946,7 +145946,7 @@ function registerPullRequestTools(server2, ctx) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "get_default_reviewers",
     description: "List default reviewers configured on a repository.",
     parameters: external_exports4.object({
@@ -145959,7 +145959,7 @@ function registerPullRequestTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_pull_request",
     description: "Create a Bitbucket pull request.",
     parameters: external_exports4.object({
@@ -146041,7 +146041,7 @@ function registerPullRequestTools(server2, ctx) {
       }
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "update_pull_request",
     description: "Update title, description, destination branch, or reviewers on a pull request.",
     parameters: external_exports4.object({
@@ -146072,7 +146072,7 @@ function registerPullRequestTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "approve_pull_request",
     description: "Approve a pull request as the authenticated user.",
     parameters: external_exports4.object({
@@ -146087,7 +146087,7 @@ function registerPullRequestTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "unapprove_pull_request",
     description: "Remove your approval from a pull request.",
     parameters: external_exports4.object({
@@ -146102,7 +146102,7 @@ function registerPullRequestTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "request_changes_pull_request",
     description: "Mark a pull request as requesting changes.",
     parameters: external_exports4.object({
@@ -146117,7 +146117,7 @@ function registerPullRequestTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "unrequest_changes_pull_request",
     description: "Withdraw a previous request-changes review from a pull request.",
     parameters: external_exports4.object({
@@ -146132,7 +146132,7 @@ function registerPullRequestTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "decline_pull_request",
     description: "Decline (close without merging) a pull request.",
     parameters: external_exports4.object({
@@ -146147,7 +146147,7 @@ function registerPullRequestTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "merge_pull_request",
     description: "Merge a pull request using the configured merge strategy.",
     parameters: external_exports4.object({
@@ -146170,7 +146170,7 @@ function registerPullRequestTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "add_reviewer",
     description: "Add a reviewer to a pull request (supports UUID in {braces} or account_id).",
     parameters: external_exports4.object({
@@ -146189,7 +146189,7 @@ function registerPullRequestTools(server2, ctx) {
       return ctx.http.put(path, { reviewers: merged });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "remove_reviewer",
     description: "Remove a reviewer from a pull request.",
     parameters: external_exports4.object({
@@ -146211,9 +146211,9 @@ function registerPullRequestTools(server2, ctx) {
 }
 
 // src/bitbucket/branches.ts
-function registerBranchTools(server2, ctx) {
+function registerBranchTools(server, ctx) {
   const repoBase = (workspace, repo) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}`;
-  server2.addTool({
+  server.addTool({
     name: "list_branches",
     description: "List branches in a Bitbucket repository.",
     parameters: external_exports4.object({
@@ -146233,7 +146233,7 @@ function registerBranchTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_branch",
     description: "Create a new branch from a target commit/branch.",
     parameters: external_exports4.object({
@@ -146250,7 +146250,7 @@ function registerBranchTools(server2, ctx) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_branch",
     description: "Delete a branch.",
     parameters: external_exports4.object({
@@ -146265,7 +146265,7 @@ function registerBranchTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "get_branching_model",
     description: "Get the branching model configured on a repository (development/production branches, types).",
     parameters: external_exports4.object({
@@ -146279,9 +146279,9 @@ function registerBranchTools(server2, ctx) {
 }
 
 // src/bitbucket/repositories.ts
-function registerRepositoryTools(server2, ctx) {
+function registerRepositoryTools(server, ctx) {
   const repoBase = (workspace, repo) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}`;
-  server2.addTool({
+  server.addTool({
     name: "list_repositories",
     description: "List repositories in the configured Bitbucket workspace.",
     parameters: external_exports4.object({
@@ -146302,7 +146302,7 @@ function registerRepositoryTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_repository",
     description: "Get details for a single Bitbucket repository.",
     parameters: external_exports4.object({
@@ -146311,7 +146311,7 @@ function registerRepositoryTools(server2, ctx) {
     }),
     execute: async (args) => safeExecute(() => ctx.http.get(repoBase(args.workspace, args.repo_slug)))
   });
-  server2.addTool({
+  server.addTool({
     name: "get_file_contents",
     description: "Read a file at a specific commit/branch/tag from a Bitbucket repository.",
     parameters: external_exports4.object({
@@ -146324,7 +146324,7 @@ function registerRepositoryTools(server2, ctx) {
       () => ctx.http.request("GET", `${repoBase(args.workspace, args.repo_slug)}/src/${encodeURIComponent(args.commit)}/${args.path}`, { headers: { Accept: "*/*" } })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_repository",
     description: "Create a new repository in the workspace.",
     parameters: external_exports4.object({
@@ -146352,7 +146352,7 @@ function registerRepositoryTools(server2, ctx) {
       return ctx.http.post(repoBase(args.workspace, args.repo_slug), payload);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "update_repository",
     description: "Update repository metadata (description, privacy, default branch, project).",
     parameters: external_exports4.object({
@@ -146377,7 +146377,7 @@ function registerRepositoryTools(server2, ctx) {
       return ctx.http.put(repoBase(args.workspace, args.repo_slug), payload);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_repository",
     description: "Delete a repository (irreversible).",
     parameters: external_exports4.object({
@@ -146392,7 +146392,7 @@ function registerRepositoryTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "fork_repository",
     description: "Fork a repository into a workspace.",
     parameters: external_exports4.object({
@@ -146412,7 +146412,7 @@ function registerRepositoryTools(server2, ctx) {
       return ctx.http.post(`${repoBase(args.workspace, args.repo_slug)}/forks`, payload);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "list_repository_forks",
     description: "List forks of a repository.",
     parameters: external_exports4.object({
@@ -146429,8 +146429,8 @@ function registerRepositoryTools(server2, ctx) {
 }
 
 // src/bitbucket/workspace.ts
-function registerWorkspaceTools(server2, ctx) {
-  server2.addTool({
+function registerWorkspaceTools(server, ctx) {
+  server.addTool({
     name: "list_workspace_members",
     description: "List members of a Bitbucket workspace.",
     parameters: external_exports4.object({
@@ -146448,8 +146448,8 @@ function registerWorkspaceTools(server2, ctx) {
 }
 
 // src/bitbucket/config.ts
-function registerConfigTools(server2, ctx) {
-  server2.addTool({
+function registerConfigTools(server, ctx) {
+  server.addTool({
     name: "setup_bitbucket",
     description: "Validate Bitbucket Cloud credentials by hitting /user and the workspace endpoint. Does not persist anything \u2014 env-var-based configuration is used at server startup. Use this to verify a token works before relying on it.",
     parameters: external_exports4.object({
@@ -146487,7 +146487,7 @@ function registerConfigTools(server2, ctx) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "get_config_status",
     description: "Check whether Bitbucket is configured (env vars present) and which workspace is active.",
     parameters: external_exports4.object({}),
@@ -146504,9 +146504,9 @@ function registerConfigTools(server2, ctx) {
 }
 
 // src/bitbucket/comments.ts
-function registerCommentTools(server2, ctx) {
+function registerCommentTools(server, ctx) {
   const repoBase = (workspace, repo, prId) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}/pullrequests/${prId}`;
-  server2.addTool({
+  server.addTool({
     name: "get_pull_request_comments",
     description: "List comments on a pull request.",
     parameters: external_exports4.object({
@@ -146522,7 +146522,7 @@ function registerCommentTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "add_pull_request_comment",
     description: "Add a top-level (non-inline) comment to a pull request.",
     parameters: external_exports4.object({
@@ -146539,7 +146539,7 @@ function registerCommentTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "add_inline_comment",
     description: "Add an inline comment anchored to a file/line in a pull request diff.",
     parameters: external_exports4.object({
@@ -146562,7 +146562,7 @@ function registerCommentTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "reply_to_comment",
     description: "Reply to an existing pull request comment.",
     parameters: external_exports4.object({
@@ -146583,7 +146583,7 @@ function registerCommentTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "resolve_pull_request_comment",
     description: "Mark a pull request comment thread as resolved.",
     parameters: external_exports4.object({
@@ -146599,7 +146599,7 @@ function registerCommentTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "reopen_pull_request_comment",
     description: "Reopen (un-resolve) a pull request comment thread.",
     parameters: external_exports4.object({
@@ -146615,7 +146615,7 @@ function registerCommentTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_comment",
     description: "Delete a pull request comment by ID.",
     parameters: external_exports4.object({
@@ -146634,9 +146634,9 @@ function registerCommentTools(server2, ctx) {
 }
 
 // src/bitbucket/commits.ts
-function registerCommitTools(server2, ctx) {
+function registerCommitTools(server, ctx) {
   const repoBase = (workspace, repo) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}`;
-  server2.addTool({
+  server.addTool({
     name: "list_commits",
     description: "List commits in a Bitbucket repository, optionally filtered by branch/path.",
     parameters: external_exports4.object({
@@ -146658,7 +146658,7 @@ function registerCommitTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_commit",
     description: "Get details for a single commit.",
     parameters: external_exports4.object({
@@ -146670,7 +146670,7 @@ function registerCommitTools(server2, ctx) {
       () => ctx.http.get(`${repoBase(args.workspace, args.repo_slug)}/commit/${args.commit}`)
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_commit_diff",
     description: "Get the unified diff for a commit.",
     parameters: external_exports4.object({
@@ -146682,7 +146682,7 @@ function registerCommitTools(server2, ctx) {
       () => ctx.http.request("GET", `${repoBase(args.workspace, args.repo_slug)}/diff/${args.commit}`, { headers: { Accept: "text/plain" } })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_commit_diffstat",
     description: "Get the diffstat (per-file change counts) for a commit.",
     parameters: external_exports4.object({
@@ -146698,7 +146698,7 @@ function registerCommitTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "list_commit_comments",
     description: "List comments on a commit.",
     parameters: external_exports4.object({
@@ -146714,7 +146714,7 @@ function registerCommitTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "list_commit_statuses",
     description: "List build/CI statuses attached to a commit.",
     parameters: external_exports4.object({
@@ -146730,7 +146730,7 @@ function registerCommitTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "add_commit_comment",
     description: "Add a comment on a commit (top-level or inline on a file/line).",
     parameters: external_exports4.object({
@@ -146756,7 +146756,7 @@ function registerCommitTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "create_build_status",
     description: "Attach a build/CI status to a commit (state, name, url, description).",
     parameters: external_exports4.object({
@@ -146786,9 +146786,9 @@ function registerCommitTools(server2, ctx) {
 }
 
 // src/bitbucket/tags.ts
-function registerTagTools(server2, ctx) {
+function registerTagTools(server, ctx) {
   const repoBase = (workspace, repo) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}`;
-  server2.addTool({
+  server.addTool({
     name: "list_tags",
     description: "List git tags in a Bitbucket repository.",
     parameters: external_exports4.object({
@@ -146808,7 +146808,7 @@ function registerTagTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_tag",
     description: "Create a tag pointing at a target commit/branch.",
     parameters: external_exports4.object({
@@ -146827,7 +146827,7 @@ function registerTagTools(server2, ctx) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_tag",
     description: "Delete a git tag.",
     parameters: external_exports4.object({
@@ -146845,11 +146845,264 @@ function registerTagTools(server2, ctx) {
 }
 
 // src/bitbucket/pipelines.ts
+import { resolve as resolvePath } from "node:path";
 init_http();
-function registerPipelineTools(server2, ctx) {
+
+// src/bitbucket/_pipelineWatch.ts
+import { parseArgs } from "node:util";
+init_http();
+var DEFAULT_INTERVAL_SECONDS = 30;
+var MIN_INTERVAL_SECONDS = 10;
+var DEFAULT_MAX_MINUTES = 240;
+var FATAL_STATUSES = /* @__PURE__ */ new Set([400, 401, 403, 404, 410]);
+var WARN_AFTER_FAILURES = 3;
+var GIVE_UP_AFTER_FAILURES = 10;
+function classifyPipeline(state) {
+  const name = state?.name;
+  if (name === "COMPLETED") return { label: state?.result?.name ?? "COMPLETED", terminal: true };
+  if (name === "IN_PROGRESS") {
+    const stage = state?.stage?.name;
+    if (stage === "PAUSED") return { label: "PAUSED", terminal: true };
+    return { label: !stage || stage === "RUNNING" ? "RUNNING" : stage, terminal: false };
+  }
+  return { label: name ?? state?.type ?? "UNKNOWN", terminal: false };
+}
+function stepLabel(step) {
+  const s = step.state;
+  if (s?.name === "COMPLETED") return s.result?.name ?? "COMPLETED";
+  if (s?.name === "IN_PROGRESS") return "RUNNING";
+  if (s?.name === "PENDING" && s.stage?.name === "PAUSED") return "WAITING_MANUAL";
+  return s?.name ?? s?.type ?? "UNKNOWN";
+}
+var isDone = (step) => step.state?.name === "COMPLETED";
+var stepKey = (step, i) => step.uuid ?? `${i}:${step.name ?? ""}`;
+var quoted = (names) => names.map((n) => `"${n}"`).join(", ");
+function formatDuration(seconds) {
+  if (seconds === void 0 || !Number.isFinite(seconds) || seconds < 0) return "?";
+  const s = Math.round(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor(s % 3600 / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h${String(m).padStart(2, "0")}m`;
+  if (m > 0) return `${m}m${String(sec).padStart(2, "0")}s`;
+  return `${sec}s`;
+}
+function pipelineUrl(workspace, repo, buildNumber) {
+  return `https://bitbucket.org/${workspace}/${repo}/pipelines/results/${buildNumber}`;
+}
+function describeTarget(p) {
+  const t = p.target ?? {};
+  let where;
+  if (t.type === "pipeline_pullrequest_target") {
+    where = `PR #${t.pullrequest?.id ?? "?"} ${t.source ?? "?"} \u2192 ${t.destination ?? "?"}`;
+  } else if (t.ref_name) {
+    where = t.ref_name;
+  } else {
+    where = t.commit?.hash?.slice(0, 12) ?? "?";
+  }
+  if (t.selector?.type === "custom" && t.selector.pattern) where += ` (custom: ${t.selector.pattern})`;
+  return where;
+}
+var failedSteps = (steps) => steps.filter((s) => ["FAILED", "ERROR"].includes(stepLabel(s))).map((s) => s.name ?? "?");
+function progressLine(tag, repo, p, steps) {
+  const { label } = classifyPipeline(p.state);
+  const done = steps.filter(isDone).length;
+  const running = steps.filter((s) => s.state?.name === "IN_PROGRESS").map((s) => s.name ?? "?");
+  const failed = failedSteps(steps);
+  let line = `${tag} watching ${repo} @ ${describeTarget(p)} \u2014 ${label}, ${done}/${steps.length} steps done`;
+  if (failed.length > 0) line += `, failed so far: ${quoted(failed)}`;
+  if (running.length > 0) line += `, running: ${quoted(running)}`;
+  return line;
+}
+function doneLine(tag, p, steps, url4) {
+  const { label } = classifyPipeline(p.state);
+  if (label === "PAUSED") {
+    const waiting = steps.filter((s) => stepLabel(s) === "WAITING_MANUAL").map((s) => s.name ?? "?");
+    const done = steps.filter(isDone).length;
+    const what = waiting.length > 0 ? `waiting for manual step ${quoted(waiting)}` : "waiting for a manual step";
+    return `${tag} DONE PAUSED \u2014 ${done}/${steps.length} steps done, ${what} \u2014 ${url4}`;
+  }
+  const stoppedBy = p.state?.result?.terminator?.display_name;
+  let line = `${tag} DONE ${label}`;
+  if (label === "STOPPED" && stoppedBy) line += ` by ${stoppedBy}`;
+  line += ` after ${formatDuration(p.duration_in_seconds)}`;
+  const failed = failedSteps(steps);
+  if (failed.length > 0) line += ` \u2014 failed step${failed.length > 1 ? "s" : ""}: ${quoted(failed)}`;
+  return `${line} \u2014 ${url4}`;
+}
+function stepEvents(tag, prev, steps) {
+  const lines = [];
+  steps.forEach((step, i) => {
+    const label = stepLabel(step);
+    if (isDone(step) && prev.get(stepKey(step, i)) !== label) {
+      lines.push(`${tag} step "${step.name ?? "?"}" ${label} (${formatDuration(step.duration_in_seconds)})`);
+    }
+  });
+  return lines;
+}
+var stepSnapshot = (steps) => new Map(steps.map((s, i) => [stepKey(s, i), stepLabel(s)]));
+function shellQuote(arg) {
+  return `'${arg.replace(/'/g, `'\\''`)}'`;
+}
+function buildWatchCommand(spec, platform = process.platform) {
+  const path = (p) => platform === "win32" ? p.replace(/\\/g, "/") : p;
+  const args = [
+    path(spec.node),
+    ...spec.nodeArgs,
+    path(spec.entry),
+    "watch-pipeline",
+    "--workspace",
+    spec.workspace,
+    "--repo",
+    spec.repo,
+    "--pipeline",
+    String(spec.buildNumber)
+  ];
+  if (spec.intervalSeconds !== void 0) args.push("--interval", String(spec.intervalSeconds));
+  if (spec.deadlineEpochSeconds !== void 0) args.push("--deadline", String(spec.deadlineEpochSeconds));
+  return args.map(shellQuote).join(" ");
+}
+var WATCH_EXIT = { done: 0, error: 2, timeout: 3 };
+function describeError(err, opts) {
+  const status = typeof err?.status === "number" ? err.status : void 0;
+  if (status === 401) return "401 \u2014 Bitbucket rejected the credentials; re-run /atlassian-suite:as-init";
+  if (status === 403) return "403 \u2014 these credentials can't read pipelines in this repo (token scope or repo access)";
+  if (status === 404) return `404 \u2014 no pipeline ${opts.pipeline} in ${opts.workspace}/${opts.repo}`;
+  const msg = err?.message ?? String(err);
+  return status !== void 0 ? `${status} \u2014 ${msg}` : msg;
+}
+async function runPipelineWatch(deps, opts) {
+  const base = `/repositories/${opts.workspace}/${opts.repo}/pipelines/`;
+  let tag = `[pipeline ${/^\d+$/.test(opts.pipeline) ? "#" : ""}${opts.pipeline}]`;
+  let prevLabel;
+  let prevSteps = /* @__PURE__ */ new Map();
+  let failures = 0;
+  for (; ; ) {
+    let p;
+    let steps = [];
+    try {
+      p = await deps.get(`${base}${encodeURIComponent(opts.pipeline)}`);
+      const list2 = await deps.get(
+        `${base}${encodeURIComponent(p.uuid ?? opts.pipeline)}/steps/`,
+        { pagelen: 100 }
+      );
+      steps = Array.isArray(list2?.values) ? list2.values : [];
+      failures = 0;
+    } catch (err) {
+      if (FATAL_STATUSES.has(err?.status)) {
+        deps.emit(`${tag} WATCH_ERROR ${describeError(err, opts)}`);
+        return WATCH_EXIT.error;
+      }
+      failures++;
+      if (failures >= GIVE_UP_AFTER_FAILURES) {
+        deps.emit(`${tag} WATCH_ERROR gave up after ${failures} failed polls in a row: ${describeError(err, opts)}`);
+        return WATCH_EXIT.error;
+      }
+      if (failures === WARN_AFTER_FAILURES) {
+        deps.emit(`${tag} warning: ${failures} polls failed in a row (${describeError(err, opts)}); still trying`);
+      }
+    }
+    if (p) {
+      if (p.build_number !== void 0) tag = `[pipeline #${p.build_number}]`;
+      const url4 = pipelineUrl(opts.workspace, opts.repo, p.build_number ?? opts.pipeline);
+      const { label, terminal } = classifyPipeline(p.state);
+      if (prevLabel !== void 0) {
+        for (const line of stepEvents(tag, prevSteps, steps)) deps.emit(line);
+      }
+      if (terminal) {
+        deps.emit(doneLine(tag, p, steps, url4));
+        return WATCH_EXIT.done;
+      }
+      if (prevLabel === void 0) deps.emit(progressLine(tag, opts.repo, p, steps));
+      else if (label !== prevLabel) deps.emit(`${tag} now ${label} (was ${prevLabel})`);
+      prevLabel = label;
+      prevSteps = stepSnapshot(steps);
+    }
+    if (deps.now() >= opts.deadlineMs) {
+      const at = new Date(opts.deadlineMs).toISOString().slice(0, 16) + "Z";
+      deps.emit(`${tag} WATCH_TIMEOUT still ${prevLabel ?? "unknown"} at the watch's time limit (${at}) \u2014 watch again to keep following it`);
+      return WATCH_EXIT.timeout;
+    }
+    await deps.sleep(opts.intervalMs);
+  }
+}
+async function runPipelineWatchCli(argv) {
+  const emit = (line) => {
+    process.stdout.write(line + "\n");
+  };
+  let values;
+  try {
+    ({ values } = parseArgs({
+      args: argv,
+      options: {
+        workspace: { type: "string" },
+        repo: { type: "string" },
+        pipeline: { type: "string" },
+        interval: { type: "string" },
+        deadline: { type: "string" },
+        "max-minutes": { type: "string" }
+      },
+      strict: true
+    }));
+  } catch (err) {
+    emit(`[pipeline ?] WATCH_ERROR bad arguments: ${err?.message ?? err}`);
+    process.exitCode = WATCH_EXIT.error;
+    return;
+  }
+  const tag = `[pipeline ${values.pipeline ?? "?"}]`;
+  if (!values.repo || !values.pipeline) {
+    emit(
+      `${tag} WATCH_ERROR usage: watch-pipeline --repo <slug> --pipeline <build-number> [--workspace <ws>] [--interval <s>] [--deadline <epoch-seconds> | --max-minutes <m>]`
+    );
+    process.exitCode = WATCH_EXIT.error;
+    return;
+  }
+  const cfg = loadBitbucketConfig();
+  if (!cfg) {
+    emit(
+      `${tag} WATCH_ERROR Bitbucket credentials not found in this shell. The watcher runs in your shell, not inside the MCP server, so env vars set only for the server don't reach it; store them with /atlassian-suite:as-init.`
+    );
+    process.exitCode = WATCH_EXIT.error;
+    return;
+  }
+  const http3 = createBitbucketHttp(cfg);
+  const intervalSeconds = Math.max(MIN_INTERVAL_SECONDS, Number(values.interval) || DEFAULT_INTERVAL_SECONDS);
+  const deadlineSeconds = Number(values.deadline);
+  const deadlineMs = deadlineSeconds > 0 ? deadlineSeconds * 1e3 : Date.now() + (Number(values["max-minutes"]) || DEFAULT_MAX_MINUTES) * 6e4;
+  try {
+    process.exitCode = await runPipelineWatch(
+      {
+        get: (path, query) => http3.get(path, query),
+        emit,
+        sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+        now: Date.now
+      },
+      {
+        workspace: values.workspace || cfg.workspace,
+        repo: values.repo,
+        pipeline: values.pipeline,
+        intervalMs: intervalSeconds * 1e3,
+        deadlineMs
+      }
+    );
+  } catch (err) {
+    emit(`${tag} WATCH_ERROR watcher crashed: ${err?.message ?? err}`);
+    process.exitCode = WATCH_EXIT.error;
+  }
+}
+
+// src/bitbucket/pipelines.ts
+var CREDENTIAL_ENV_VARS = [
+  "BITBUCKET_WORKSPACE",
+  "BITBUCKET_USERNAME",
+  "BITBUCKET_API_TOKEN",
+  "ATLASSIAN_USERNAME",
+  "ATLASSIAN_API_TOKEN"
+];
+function registerPipelineTools(server, ctx) {
   const repoBase = (workspace, repo) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}`;
   const stepBase = (workspace, repo, pipeline3, step) => `${repoBase(workspace, repo)}/pipelines/${encodeURIComponent(pipeline3)}/steps/${encodeURIComponent(step)}`;
-  server2.addTool({
+  server.addTool({
     name: "list_pipelines",
     description: "List pipeline runs for a repository.",
     parameters: external_exports4.object({
@@ -146869,7 +147122,7 @@ function registerPipelineTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_pipeline",
     description: "Get details for a single pipeline run.",
     parameters: external_exports4.object({
@@ -146883,7 +147136,76 @@ function registerPipelineTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
+    name: "watch_pipeline",
+    description: "Resolve a pipeline run and return a Monitor command that streams its step results and ends with one DONE / WATCH_ERROR / WATCH_TIMEOUT line. Pass a build number or {uuid}, or a branch to watch its latest run (branch and PR pipelines, by source branch). Read-only.",
+    parameters: external_exports4.object({
+      repo_slug: external_exports4.string(),
+      pipeline: external_exports4.string().optional().describe("Build number (e.g. 5956) or {uuid}. Omit to use the latest run on `branch`."),
+      branch: external_exports4.string().optional().describe("Watch the most recent run on this branch."),
+      interval_seconds: external_exports4.number().int().min(MIN_INTERVAL_SECONDS).max(300).optional().describe(`Poll interval. Default ${DEFAULT_INTERVAL_SECONDS}; each poll is 2 API calls.`),
+      max_minutes: external_exports4.number().int().min(1).max(1440).optional().describe(
+        `Watcher gives up with WATCH_TIMEOUT this long after this call. Default ${DEFAULT_MAX_MINUTES}. The limit is baked into monitor_command, so re-arming the same command keeps it.`
+      ),
+      workspace: external_exports4.string().optional()
+    }),
+    execute: async (args) => safeExecute(async () => {
+      if (!args.pipeline && !args.branch) {
+        throw new Error("Pass pipeline (build number or {uuid}) or branch.");
+      }
+      const workspace = workspaceOf(ctx, args.workspace);
+      const pipelines = `${repoBase(args.workspace, args.repo_slug)}/pipelines/`;
+      let p;
+      if (args.pipeline) {
+        p = await ctx.http.get(`${pipelines}${encodeURIComponent(args.pipeline)}`);
+      } else {
+        const list2 = await ctx.http.get(pipelines, {
+          sort: "-created_on",
+          pagelen: 1,
+          "target.branch": args.branch
+        });
+        p = list2?.values?.[0];
+        if (!p) throw new Error(`No pipeline runs on branch ${args.branch} in ${workspace}/${args.repo_slug}.`);
+      }
+      const stepList = await ctx.http.get(
+        `${pipelines}${encodeURIComponent(p.uuid ?? args.pipeline)}/steps/`,
+        { pagelen: 100 }
+      );
+      const steps = Array.isArray(stepList?.values) ? stepList.values : [];
+      const buildNumber = p.build_number ?? args.pipeline;
+      const tag = `[pipeline #${buildNumber}]`;
+      const url4 = pipelineUrl(workspace, args.repo_slug, buildNumber);
+      const { label, terminal } = classifyPipeline(p.state);
+      const out = {
+        build_number: p.build_number,
+        uuid: p.uuid,
+        target: describeTarget(p),
+        state: label,
+        terminal,
+        summary: terminal ? doneLine(tag, p, steps, url4) : progressLine(tag, args.repo_slug, p, steps),
+        url: url4
+      };
+      if (!terminal) {
+        out.monitor_command = buildWatchCommand({
+          node: process.execPath,
+          nodeArgs: process.execArgv,
+          entry: resolvePath(process.argv[1] ?? ""),
+          workspace,
+          repo: args.repo_slug,
+          buildNumber,
+          intervalSeconds: args.interval_seconds,
+          deadlineEpochSeconds: Math.floor(Date.now() / 1e3) + (args.max_minutes ?? DEFAULT_MAX_MINUTES) * 60
+        });
+        out.monitor_description = `Bitbucket pipeline ${args.repo_slug} #${buildNumber}`;
+        const fromEnv = CREDENTIAL_ENV_VARS.filter((k) => process.env[k]);
+        if (fromEnv.length > 0) {
+          out.credentials_note = `Bitbucket settings come partly from env vars (${fromEnv.join(", ")}). The watch command runs in your shell, not in this server, so those must be set there too, or stored with /atlassian-suite:as-init.`;
+        }
+      }
+      return out;
+    })
+  });
+  server.addTool({
     name: "trigger_pipeline",
     description: "Trigger a new pipeline run on a branch, commit, or tag.",
     parameters: external_exports4.object({
@@ -146926,7 +147248,7 @@ function registerPipelineTools(server2, ctx) {
       return ctx.http.post(`${repoBase(args.workspace, args.repo_slug)}/pipelines/`, payload);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "stop_pipeline",
     description: "Stop a running pipeline.",
     parameters: external_exports4.object({
@@ -146941,7 +147263,7 @@ function registerPipelineTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "list_pipeline_steps",
     description: "List steps for a pipeline run.",
     parameters: external_exports4.object({
@@ -146957,7 +147279,7 @@ function registerPipelineTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_pipeline_step_log",
     description: "Get the raw log output for a single pipeline step. Auto-falls back to per-command logs if the unified /log endpoint returns 406 (common for steps with large logs or test reports).",
     parameters: external_exports4.object({
@@ -147008,7 +147330,7 @@ function registerPipelineTools(server2, ctx) {
       }
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "get_pipeline_step_test_report",
     description: "Get the summary of a step's test report (totals: passed, failed, error, skipped). Returns empty body if no test report exists for the step.",
     parameters: external_exports4.object({
@@ -147021,7 +147343,7 @@ function registerPipelineTools(server2, ctx) {
       () => ctx.http.get(`${stepBase(args.workspace, args.repo_slug, args.pipeline_uuid, args.step_uuid)}/test_reports`)
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "list_pipeline_step_test_cases",
     description: "List individual test cases from a step's test report. Filter by status (FAILED/ERROR/PASSED/SKIPPED/UNKNOWN) \u2014 for triage, request status=FAILED to get just the failing test names and classes. Each returned case carries its `reason` inline (assertion message + stack trace), so for typical failure triage this single call is sufficient \u2014 only fall back to list_pipeline_step_test_case_reasons if a case's inline reason is missing or truncated.",
     parameters: external_exports4.object({
@@ -147045,7 +147367,7 @@ function registerPipelineTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "list_pipeline_step_test_case_reasons",
     description: "Fetch the reason (assertion message + stack trace) for one specific test case in a step. test_case_uuid is required \u2014 Bitbucket does not expose a bare collection endpoint. Typical triage uses the inline `reason` block returned by list_pipeline_step_test_cases instead of this tool; reach for this only when the inline reason is missing or truncated.",
     parameters: external_exports4.object({
@@ -147066,7 +147388,7 @@ function registerPipelineTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "list_pipeline_variables",
     description: "List repository-level pipeline variables.",
     parameters: external_exports4.object({
@@ -147081,7 +147403,7 @@ function registerPipelineTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_pipeline_variable",
     description: "Create a repository-level pipeline variable.",
     parameters: external_exports4.object({
@@ -147102,9 +147424,9 @@ function registerPipelineTools(server2, ctx) {
 }
 
 // src/bitbucket/codeInsights.ts
-function registerCodeInsightsTools(server2, ctx) {
+function registerCodeInsightsTools(server, ctx) {
   const reportBase = (workspace, repo, commit) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}/commit/${commit}/reports`;
-  server2.addTool({
+  server.addTool({
     name: "list_commit_reports",
     description: "List code insight reports attached to a commit.",
     parameters: external_exports4.object({
@@ -147119,7 +147441,7 @@ function registerCodeInsightsTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_commit_report",
     description: "Get a specific code insight report on a commit.",
     parameters: external_exports4.object({
@@ -147134,7 +147456,7 @@ function registerCodeInsightsTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_or_update_commit_report",
     description: "Create or replace a code insight report on a commit.",
     parameters: external_exports4.object({
@@ -147166,7 +147488,7 @@ function registerCodeInsightsTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_commit_report",
     description: "Delete a code insight report from a commit.",
     parameters: external_exports4.object({
@@ -147182,7 +147504,7 @@ function registerCodeInsightsTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "list_report_annotations",
     description: "List annotations on a code insight report.",
     parameters: external_exports4.object({
@@ -147199,7 +147521,7 @@ function registerCodeInsightsTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_report_annotation",
     description: "Get a single annotation by id.",
     parameters: external_exports4.object({
@@ -147215,7 +147537,7 @@ function registerCodeInsightsTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_or_update_report_annotation",
     description: "Create or replace a single annotation on a code insight report.",
     parameters: external_exports4.object({
@@ -147248,7 +147570,7 @@ function registerCodeInsightsTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "bulk_create_report_annotations",
     description: "Create multiple annotations on a report in one call.",
     parameters: external_exports4.object({
@@ -147276,7 +147598,7 @@ function registerCodeInsightsTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_report_annotation",
     description: "Delete a single annotation.",
     parameters: external_exports4.object({
@@ -147296,9 +147618,9 @@ function registerCodeInsightsTools(server2, ctx) {
 }
 
 // src/bitbucket/issues.ts
-function registerBitbucketIssueTools(server2, ctx) {
+function registerBitbucketIssueTools(server, ctx) {
   const repoBase = (workspace, repo) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}`;
-  server2.addTool({
+  server.addTool({
     name: "list_issues",
     description: "List Bitbucket native issues in a repository.",
     parameters: external_exports4.object({
@@ -147318,7 +147640,7 @@ function registerBitbucketIssueTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_issue",
     description: "Get a Bitbucket native issue by id.",
     parameters: external_exports4.object({
@@ -147330,7 +147652,7 @@ function registerBitbucketIssueTools(server2, ctx) {
       () => ctx.http.get(`${repoBase(args.workspace, args.repo_slug)}/issues/${args.issue_id}`)
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_issue",
     description: "Create a Bitbucket native issue.",
     parameters: external_exports4.object({
@@ -147352,7 +147674,7 @@ function registerBitbucketIssueTools(server2, ctx) {
       return ctx.http.post(`${repoBase(args.workspace, args.repo_slug)}/issues`, payload);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "update_issue",
     description: "Update a Bitbucket native issue.",
     parameters: external_exports4.object({
@@ -147381,7 +147703,7 @@ function registerBitbucketIssueTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "list_issue_comments",
     description: "List comments on a Bitbucket native issue.",
     parameters: external_exports4.object({
@@ -147397,7 +147719,7 @@ function registerBitbucketIssueTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "add_issue_comment",
     description: "Add a comment to a Bitbucket native issue.",
     parameters: external_exports4.object({
@@ -147417,9 +147739,9 @@ function registerBitbucketIssueTools(server2, ctx) {
 }
 
 // src/bitbucket/snippets.ts
-function registerSnippetTools(server2, ctx) {
+function registerSnippetTools(server, ctx) {
   const wsBase = (workspace) => `/snippets/${workspaceOf(ctx, workspace)}`;
-  server2.addTool({
+  server.addTool({
     name: "list_snippets",
     description: "List snippets in the workspace.",
     parameters: external_exports4.object({
@@ -147436,7 +147758,7 @@ function registerSnippetTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_snippet",
     description: "Get details for a single snippet.",
     parameters: external_exports4.object({
@@ -147445,7 +147767,7 @@ function registerSnippetTools(server2, ctx) {
     }),
     execute: async (args) => safeExecute(() => ctx.http.get(`${wsBase(args.workspace)}/${args.snippet_id}`))
   });
-  server2.addTool({
+  server.addTool({
     name: "create_snippet",
     description: "Create a snippet (file content provided inline).",
     parameters: external_exports4.object({
@@ -147464,7 +147786,7 @@ function registerSnippetTools(server2, ctx) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_snippet",
     description: "Delete a snippet.",
     parameters: external_exports4.object({
@@ -147479,8 +147801,8 @@ function registerSnippetTools(server2, ctx) {
 }
 
 // src/bitbucket/webhooks.ts
-function registerWebhookTools(server2, ctx) {
-  server2.addTool({
+function registerWebhookTools(server, ctx) {
+  server.addTool({
     name: "list_webhooks",
     description: "List webhooks configured on a repository.",
     parameters: external_exports4.object({
@@ -147495,7 +147817,7 @@ function registerWebhookTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "list_workspace_webhooks",
     description: "List webhooks configured at the workspace level.",
     parameters: external_exports4.object({
@@ -147508,7 +147830,7 @@ function registerWebhookTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_webhook",
     description: "Create a webhook on a repository.",
     parameters: external_exports4.object({
@@ -147532,7 +147854,7 @@ function registerWebhookTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_webhook",
     description: "Delete a webhook from a repository.",
     parameters: external_exports4.object({
@@ -147550,9 +147872,9 @@ function registerWebhookTools(server2, ctx) {
 }
 
 // src/bitbucket/projects.ts
-function registerProjectTools(server2, ctx) {
+function registerProjectTools(server, ctx) {
   const wsBase = (workspace) => `/workspaces/${workspaceOf(ctx, workspace)}/projects`;
-  server2.addTool({
+  server.addTool({
     name: "list_projects",
     description: "List projects in a workspace.",
     parameters: external_exports4.object({
@@ -147567,7 +147889,7 @@ function registerProjectTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_project",
     description: "Get a single project by key.",
     parameters: external_exports4.object({
@@ -147576,7 +147898,7 @@ function registerProjectTools(server2, ctx) {
     }),
     execute: async (args) => safeExecute(() => ctx.http.get(`${wsBase(args.workspace)}/${args.project_key}`))
   });
-  server2.addTool({
+  server.addTool({
     name: "create_project",
     description: "Create a project in a workspace.",
     parameters: external_exports4.object({
@@ -147599,8 +147921,8 @@ function registerProjectTools(server2, ctx) {
 }
 
 // src/bitbucket/search.ts
-function registerSearchTools(server2, ctx) {
-  server2.addTool({
+function registerSearchTools(server, ctx) {
+  server.addTool({
     name: "search_code",
     description: "Search code across all repositories in a workspace.",
     parameters: external_exports4.object({
@@ -147622,14 +147944,14 @@ function registerSearchTools(server2, ctx) {
 }
 
 // src/bitbucket/users.ts
-function registerUserTools(server2, ctx) {
-  server2.addTool({
+function registerUserTools(server, ctx) {
+  server.addTool({
     name: "get_current_user",
     description: "Get the authenticated Bitbucket user.",
     parameters: external_exports4.object({}),
     execute: async () => safeExecute(() => ctx.http.get(`/user`))
   });
-  server2.addTool({
+  server.addTool({
     name: "get_user_profile",
     description: "Look up a Bitbucket user by UUID, account_id, or username.",
     parameters: external_exports4.object({
@@ -147637,7 +147959,7 @@ function registerUserTools(server2, ctx) {
     }),
     execute: async (args) => safeExecute(() => ctx.http.get(`/users/${encodeURIComponent(args.selector)}`))
   });
-  server2.addTool({
+  server.addTool({
     name: "get_user_permissions",
     description: "Get the authenticated user's repository permissions in the workspace.",
     parameters: external_exports4.object({
@@ -147654,14 +147976,14 @@ function registerUserTools(server2, ctx) {
 }
 
 // src/bitbucket/workspaces.ts
-function registerWorkspaceMetadataTools(server2, ctx) {
-  server2.addTool({
+function registerWorkspaceMetadataTools(server, ctx) {
+  server.addTool({
     name: "get_workspace_details",
     description: "Get details for a workspace.",
     parameters: external_exports4.object({ workspace: external_exports4.string().optional() }),
     execute: async (args) => safeExecute(() => ctx.http.get(`/workspaces/${workspaceOf(ctx, args.workspace)}`))
   });
-  server2.addTool({
+  server.addTool({
     name: "list_workspace_permissions",
     description: "List members and their permissions in the workspace.",
     parameters: external_exports4.object({
@@ -147677,9 +147999,9 @@ function registerWorkspaceMetadataTools(server2, ctx) {
 }
 
 // src/bitbucket/deployments.ts
-function registerDeploymentTools(server2, ctx) {
+function registerDeploymentTools(server, ctx) {
   const repoBase = (workspace, repo) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}`;
-  server2.addTool({
+  server.addTool({
     name: "list_deployments",
     description: "List deployments for a repository.",
     parameters: external_exports4.object({
@@ -147695,7 +148017,7 @@ function registerDeploymentTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_deployment",
     description: "Get a single deployment by UUID.",
     parameters: external_exports4.object({
@@ -147709,7 +148031,7 @@ function registerDeploymentTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "list_environments",
     description: "List deployment environments for a repository.",
     parameters: external_exports4.object({
@@ -147723,7 +148045,7 @@ function registerDeploymentTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "get_environment",
     description: "Get a single environment by UUID.",
     parameters: external_exports4.object({
@@ -147737,7 +148059,7 @@ function registerDeploymentTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_environment",
     description: "Delete a deployment environment.",
     parameters: external_exports4.object({
@@ -147752,7 +148074,7 @@ function registerDeploymentTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "list_environment_variables",
     description: "List variables for a deployment environment.",
     parameters: external_exports4.object({
@@ -147768,7 +148090,7 @@ function registerDeploymentTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_environment_variable",
     description: "Add a variable to a deployment environment.",
     parameters: external_exports4.object({
@@ -147787,7 +148109,7 @@ function registerDeploymentTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_environment_variable",
     description: "Delete a deployment environment variable.",
     parameters: external_exports4.object({
@@ -147806,9 +148128,9 @@ function registerDeploymentTools(server2, ctx) {
 }
 
 // src/bitbucket/branchRestrictions.ts
-function registerBranchRestrictionTools(server2, ctx) {
+function registerBranchRestrictionTools(server, ctx) {
   const repoBase = (workspace, repo) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}`;
-  server2.addTool({
+  server.addTool({
     name: "list_branch_restrictions",
     description: "List branch restrictions on a repository.",
     parameters: external_exports4.object({
@@ -147837,7 +148159,7 @@ function registerBranchRestrictionTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_branch_restriction",
     description: "Create a branch restriction (e.g. block force push, require approvals).",
     parameters: external_exports4.object({
@@ -147879,7 +148201,7 @@ function registerBranchRestrictionTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "update_branch_restriction",
     description: "Update an existing branch restriction.",
     parameters: external_exports4.object({
@@ -147902,7 +148224,7 @@ function registerBranchRestrictionTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_branch_restriction",
     description: "Delete a branch restriction.",
     parameters: external_exports4.object({
@@ -147917,7 +148239,7 @@ function registerBranchRestrictionTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "get_branching_model_settings",
     description: "Get branching model settings (default reviewers, branch types) for a repo.",
     parameters: external_exports4.object({
@@ -147928,7 +148250,7 @@ function registerBranchRestrictionTools(server2, ctx) {
       () => ctx.http.get(`${repoBase(args.workspace, args.repo_slug)}/branching-model/settings`)
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "update_branching_model_settings",
     description: "Update branching model settings (development/production branches, branch types).",
     parameters: external_exports4.object({
@@ -147959,9 +148281,9 @@ function registerBranchRestrictionTools(server2, ctx) {
 }
 
 // src/bitbucket/deployKeys.ts
-function registerKeyTools(server2, ctx) {
+function registerKeyTools(server, ctx) {
   const repoBase = (workspace, repo) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}`;
-  server2.addTool({
+  server.addTool({
     name: "list_deploy_keys",
     description: "List repository deploy keys.",
     parameters: external_exports4.object({
@@ -147975,7 +148297,7 @@ function registerKeyTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_deploy_key",
     description: "Add a deploy key to a repository.",
     parameters: external_exports4.object({
@@ -147992,7 +148314,7 @@ function registerKeyTools(server2, ctx) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_deploy_key",
     description: "Delete a deploy key from a repository.",
     parameters: external_exports4.object({
@@ -148007,7 +148329,7 @@ function registerKeyTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "list_user_ssh_keys",
     description: "List SSH keys for a user.",
     parameters: external_exports4.object({
@@ -148020,7 +148342,7 @@ function registerKeyTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "add_user_ssh_key",
     description: "Add an SSH key to a user.",
     parameters: external_exports4.object({
@@ -148036,7 +148358,7 @@ function registerKeyTools(server2, ctx) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_user_ssh_key",
     description: "Delete an SSH key from a user.",
     parameters: external_exports4.object({
@@ -148053,9 +148375,9 @@ function registerKeyTools(server2, ctx) {
 }
 
 // src/bitbucket/pipelineExtras.ts
-function registerPipelineExtraTools(server2, ctx) {
+function registerPipelineExtraTools(server, ctx) {
   const repoBase = (workspace, repo) => `/repositories/${workspaceOf(ctx, workspace)}/${repo}`;
-  server2.addTool({
+  server.addTool({
     name: "list_pipeline_schedules",
     description: "List scheduled pipeline runs for a repository.",
     parameters: external_exports4.object({
@@ -148069,7 +148391,7 @@ function registerPipelineExtraTools(server2, ctx) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_pipeline_schedule",
     description: "Create a new scheduled pipeline run.",
     parameters: external_exports4.object({
@@ -148098,7 +148420,7 @@ function registerPipelineExtraTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "update_pipeline_schedule",
     description: "Update a pipeline schedule (e.g. enable/disable).",
     parameters: external_exports4.object({
@@ -148119,7 +148441,7 @@ function registerPipelineExtraTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_pipeline_schedule",
     description: "Delete a pipeline schedule.",
     parameters: external_exports4.object({
@@ -148134,7 +148456,7 @@ function registerPipelineExtraTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "list_workspace_pipeline_variables",
     description: "List workspace-level pipeline variables.",
     parameters: external_exports4.object({
@@ -148148,7 +148470,7 @@ function registerPipelineExtraTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_workspace_pipeline_variable",
     description: "Create a workspace-level pipeline variable.",
     parameters: external_exports4.object({
@@ -148165,7 +148487,7 @@ function registerPipelineExtraTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_workspace_pipeline_variable",
     description: "Delete a workspace-level pipeline variable.",
     parameters: external_exports4.object({
@@ -148179,7 +148501,7 @@ function registerPipelineExtraTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "list_project_pipeline_variables",
     description: "List project-level pipeline variables.",
     parameters: external_exports4.object({
@@ -148194,7 +148516,7 @@ function registerPipelineExtraTools(server2, ctx) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_project_pipeline_variable",
     description: "Create a project-level pipeline variable.",
     parameters: external_exports4.object({
@@ -148215,9 +148537,9 @@ function registerPipelineExtraTools(server2, ctx) {
 }
 
 // src/bitbucket/pullRequestTasks.ts
-function registerPullRequestTaskTools(server2, ctx) {
+function registerPullRequestTaskTools(server, ctx) {
   const base = (workspace, repo, prId) => `/repositories/${workspaceOf(ctx, workspace)}/${encodeURIComponent(repo)}/pullrequests/${prId}/tasks`;
-  server2.addTool({
+  server.addTool({
     name: "list_pull_request_tasks",
     description: "List tasks (actionable TODOs) on a pull request. Distinct from comments \u2014 tasks have state (RESOLVED/UNRESOLVED) and show in the reviewer checklist. Supports filtering by state (`open` shows unresolved only).",
     parameters: external_exports4.object({
@@ -148236,7 +148558,7 @@ function registerPullRequestTaskTools(server2, ctx) {
       return ctx.http.get(base(args.workspace, args.repo_slug, args.pull_request_id), query);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "get_pull_request_task",
     description: "Get a single PR task by its numeric id.",
     parameters: external_exports4.object({
@@ -148249,7 +148571,7 @@ function registerPullRequestTaskTools(server2, ctx) {
       () => ctx.http.get(`${base(args.workspace, args.repo_slug, args.pull_request_id)}/${args.task_id}`)
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "create_pull_request_task",
     description: "Create a new task on a pull request. If `comment_id` is given, the task is anchored to that comment (reply-task). Otherwise it's a standalone PR-level task. Markdown content supported in `content`.",
     parameters: external_exports4.object({
@@ -148271,7 +148593,7 @@ function registerPullRequestTaskTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "update_pull_request_task",
     description: "Update a PR task \u2014 resolve it, reopen it, or edit its content. Pass `state` to change resolution; pass `content` to edit the body.",
     parameters: external_exports4.object({
@@ -148296,7 +148618,7 @@ function registerPullRequestTaskTools(server2, ctx) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "delete_pull_request_task",
     description: "Permanently delete a PR task. Destructive \u2014 no trash.",
     parameters: external_exports4.object({
@@ -148316,7 +148638,7 @@ function registerPullRequestTaskTools(server2, ctx) {
 }
 
 // src/bitbucket/source.ts
-function registerSourceTools(server2, ctx) {
+function registerSourceTools(server, ctx) {
   const srcBase = (workspace, repo, commit) => `/repositories/${workspaceOf(ctx, workspace)}/${encodeURIComponent(repo)}/src/${encodeURIComponent(commit)}`;
   const resolveCommit = async (workspace, repo, commit) => {
     if (commit && commit !== "HEAD" && commit !== "") return commit;
@@ -148326,7 +148648,7 @@ function registerSourceTools(server2, ctx) {
     );
     return meta3?.mainbranch?.name || "main";
   };
-  server2.addTool({
+  server.addTool({
     name: "list_source_tree",
     description: "List files + subdirectories at a path in a Bitbucket repo at a given commit (or branch/tag). Lets you browse the repo without cloning. Returns paginated `values[]` with {type, path, size, commit, mimetype} per entry.",
     parameters: external_exports4.object({
@@ -148351,7 +148673,7 @@ function registerSourceTools(server2, ctx) {
       return ctx.http.get(url4, query);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "get_file_blame",
     description: "Get per-line blame annotations for a file \u2014 which commit + author last modified each line. Use for 'who wrote this' investigation. Returns `values[]` where each entry has {commit, path, hunks:[{lines:[...]}]}.",
     parameters: external_exports4.object({
@@ -148372,7 +148694,7 @@ function registerSourceTools(server2, ctx) {
 }
 
 // src/bitbucket/index.ts
-function registerBitbucketTools(server2, opts) {
+function registerBitbucketTools(server, opts) {
   const cfg = loadBitbucketConfig();
   if (!cfg) {
     console.error("[acendas-atlassian] Bitbucket: not configured, skipping tool registration.");
@@ -148383,29 +148705,29 @@ function registerBitbucketTools(server2, opts) {
     http: createBitbucketHttp(cfg),
     readOnly: opts.readOnly
   };
-  registerConfigTools(server2, ctx);
-  registerUserTools(server2, ctx);
-  registerWorkspaceTools(server2, ctx);
-  registerWorkspaceMetadataTools(server2, ctx);
-  registerProjectTools(server2, ctx);
-  registerRepositoryTools(server2, ctx);
-  registerBranchTools(server2, ctx);
-  registerTagTools(server2, ctx);
-  registerCommitTools(server2, ctx);
-  registerPullRequestTools(server2, ctx);
-  registerPullRequestTaskTools(server2, ctx);
-  registerCommentTools(server2, ctx);
-  registerSourceTools(server2, ctx);
-  registerPipelineTools(server2, ctx);
-  registerPipelineExtraTools(server2, ctx);
-  registerCodeInsightsTools(server2, ctx);
-  registerDeploymentTools(server2, ctx);
-  registerBranchRestrictionTools(server2, ctx);
-  registerKeyTools(server2, ctx);
-  registerBitbucketIssueTools(server2, ctx);
-  registerSnippetTools(server2, ctx);
-  registerWebhookTools(server2, ctx);
-  registerSearchTools(server2, ctx);
+  registerConfigTools(server, ctx);
+  registerUserTools(server, ctx);
+  registerWorkspaceTools(server, ctx);
+  registerWorkspaceMetadataTools(server, ctx);
+  registerProjectTools(server, ctx);
+  registerRepositoryTools(server, ctx);
+  registerBranchTools(server, ctx);
+  registerTagTools(server, ctx);
+  registerCommitTools(server, ctx);
+  registerPullRequestTools(server, ctx);
+  registerPullRequestTaskTools(server, ctx);
+  registerCommentTools(server, ctx);
+  registerSourceTools(server, ctx);
+  registerPipelineTools(server, ctx);
+  registerPipelineExtraTools(server, ctx);
+  registerCodeInsightsTools(server, ctx);
+  registerDeploymentTools(server, ctx);
+  registerBranchRestrictionTools(server, ctx);
+  registerKeyTools(server, ctx);
+  registerBitbucketIssueTools(server, ctx);
+  registerSnippetTools(server, ctx);
+  registerWebhookTools(server, ctx);
+  registerSearchTools(server, ctx);
 }
 
 // node_modules/.pnpm/axios@1.15.0_debug@4.4.3/node_modules/axios/lib/helpers/bind.js
@@ -150559,10 +150881,10 @@ var isHttpAdapterSupported = typeof process !== "undefined" && utils_default.kin
 var wrapAsync = (asyncExecutor) => {
   return new Promise((resolve, reject) => {
     let onDone;
-    let isDone;
+    let isDone2;
     const done = (value, isRejected) => {
-      if (isDone) return;
-      isDone = true;
+      if (isDone2) return;
+      isDone2 = true;
       onDone && onDone(value, isRejected);
     };
     const _resolve = (value) => {
@@ -150618,7 +150940,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config4) {
     let { data, lookup: lookup2, family, httpVersion = 1, http2Options } = config4;
     const { responseType, responseEncoding } = config4;
     const method = config4.method.toUpperCase();
-    let isDone;
+    let isDone2;
     let rejected = false;
     let req;
     httpVersion = +httpVersion;
@@ -150669,7 +150991,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config4) {
       }
     }
     onDone((response, isRejected) => {
-      isDone = true;
+      isDone2 = true;
       if (isRejected) {
         rejected = true;
         onFinished();
@@ -151054,7 +151376,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config4) {
         return;
       }
       req.setTimeout(timeout, function handleRequestTimeout() {
-        if (isDone) return;
+        if (isDone2) return;
         let timeoutErrorMessage = config4.timeout ? "timeout of " + config4.timeout + "ms exceeded" : "timeout exceeded";
         const transitional2 = config4.transitional || transitional_default;
         if (config4.timeoutErrorMessage) {
@@ -161828,8 +162150,8 @@ async function safeJira(fn) {
     );
   }
 }
-function ensureWritable2(readOnly2) {
-  if (readOnly2) throw new Error("READ_ONLY_MODE is enabled \u2014 write operations are blocked.");
+function ensureWritable2(readOnly) {
+  if (readOnly) throw new Error("READ_ONLY_MODE is enabled \u2014 write operations are blocked.");
 }
 
 // src/jira/_backlog.ts
@@ -161917,8 +162239,8 @@ function estimationFieldId(boardConfig) {
 }
 
 // src/jira/search.ts
-function registerSearchTools2(server2) {
-  server2.addTool({
+function registerSearchTools2(server) {
+  server.addTool({
     name: "jira_search",
     description: "Search Jira issues using JQL. Honors JIRA_PROJECTS_FILTER if set (auto-prepends `project in (...)`, keeping any ORDER BY last). Pages by token: pass the result's `nextPageToken` back as next_page_token until `isLast` is true \u2014 a single call never returns more than max_results issues.",
     parameters: external_exports4.object({
@@ -161940,13 +162262,13 @@ function registerSearchTools2(server2) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_search_fields",
     description: "List available Jira fields (system + custom). Use to discover custom field IDs.",
     parameters: external_exports4.object({}),
     execute: async () => safeJira(() => jiraClient().issueFields.getFields())
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_field_options",
     description: "Get the allowed values for a custom field (where applicable).",
     parameters: external_exports4.object({
@@ -162199,8 +162521,8 @@ function qmetryClient() {
 }
 
 // src/jira/issues.ts
-function registerIssueTools(server2, opts) {
-  server2.addTool({
+function registerIssueTools(server, opts) {
+  server.addTool({
     name: "jira_get_issue",
     description: "Get a single Jira issue by key or id. Automatically includes QMetry test cycle coverage when QMetry is configured \u2014 no extra tool calls needed. Pass include_qmetry: false for raw Jira data only (e.g. internal pipeline lookups).",
     parameters: external_exports4.object({
@@ -162258,7 +162580,7 @@ function registerIssueTools(server2, opts) {
       return issue3;
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_issue_dates",
     description: "Get the date-typed fields on an issue (created, updated, duedate, resolutiondate, plus custom date fields).",
     parameters: external_exports4.object({ issue_key: external_exports4.string() }),
@@ -162313,7 +162635,7 @@ function registerIssueTools(server2, opts) {
     if (raw2.custom_fields) Object.assign(fields, raw2.custom_fields);
     return fields;
   };
-  server2.addTool({
+  server.addTool({
     name: "jira_create_issue",
     description: "Create a Jira issue. Description is treated as Markdown and converted to ADF.",
     parameters: issueFields,
@@ -162322,7 +162644,7 @@ function registerIssueTools(server2, opts) {
       return jiraClient().issues.createIssue({ fields: buildFields(args) });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_batch_create_issues",
     description: "Create multiple Jira issues in one call.",
     parameters: external_exports4.object({ issues: external_exports4.array(issueFields).min(1).max(50) }),
@@ -162333,7 +162655,7 @@ function registerIssueTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_update_issue",
     description: "Update fields on an existing Jira issue. `labels`/`components` replace the whole list; use add_*/remove_* to change single values. Backlog order is not a field \u2014 use jira_rank_issues.",
     parameters: external_exports4.object({
@@ -162379,7 +162701,7 @@ function registerIssueTools(server2, opts) {
       return { updated: true, issue_key: args.issue_key };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_delete_issue",
     description: "Delete a Jira issue.",
     parameters: external_exports4.object({
@@ -162394,7 +162716,7 @@ function registerIssueTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_transitions",
     description: "List available workflow transitions for an issue.",
     parameters: external_exports4.object({ issue_key: external_exports4.string() }),
@@ -162402,7 +162724,7 @@ function registerIssueTools(server2, opts) {
       () => jiraClient().issues.getTransitions({ issueIdOrKey: args.issue_key })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_transition_issue",
     description: "Transition an issue to a new workflow state.",
     parameters: external_exports4.object({
@@ -162424,7 +162746,7 @@ function registerIssueTools(server2, opts) {
       return jiraClient().issues.doTransition(payload);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_add_comment",
     description: 'Add a comment to an issue. Provide body via Markdown (auto-converted to ADF) OR body_adf (pre-built ADF, preferred for charts/panels/media). To @-mention someone in Markdown, write [~accountid:<accountId>] (optionally [~accountid:<accountId>|Display Name]) \u2014 resolve the accountId with jira_get_user_profile. Plain text like "@Name" does NOT notify anyone.',
     parameters: external_exports4.object({
@@ -162447,7 +162769,7 @@ function registerIssueTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_edit_comment",
     description: "Edit an existing comment. Body is Markdown by default; use body_adf for ADF. Markdown supports @-mentions as [~accountid:<accountId>].",
     parameters: external_exports4.object({
@@ -162470,7 +162792,7 @@ function registerIssueTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_delete_comment",
     description: "Permanently delete a comment from an issue. Destructive \u2014 Jira has no comment trash.",
     parameters: external_exports4.object({
@@ -162486,7 +162808,7 @@ function registerIssueTools(server2, opts) {
       return { deleted: true, issue_key: args.issue_key, comment_id: args.comment_id };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_add_worklog",
     description: "Log work against an issue (e.g. '30m', '2h', '1d').",
     parameters: external_exports4.object({
@@ -162515,7 +162837,7 @@ function registerIssueTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_worklog",
     description: "Get worklogs for an issue.",
     parameters: external_exports4.object({ issue_key: external_exports4.string() }),
@@ -162523,13 +162845,13 @@ function registerIssueTools(server2, opts) {
       () => jiraClient().issueWorklogs.getIssueWorklog({ issueIdOrKey: args.issue_key })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_link_types",
     description: "List Jira issue link types (e.g. Blocks, Relates, Duplicates).",
     parameters: external_exports4.object({}),
     execute: async () => safeJira(() => jiraClient().issueLinkTypes.getIssueLinkTypes())
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_create_issue_link",
     description: "Link two Jira issues with a given link type.",
     parameters: external_exports4.object({
@@ -162548,7 +162870,7 @@ function registerIssueTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_remove_issue_link",
     description: "Remove an issue link by link id.",
     parameters: external_exports4.object({ link_id: external_exports4.string() }),
@@ -162557,7 +162879,7 @@ function registerIssueTools(server2, opts) {
       return jiraClient().issueLinks.deleteIssueLink({ linkId: args.link_id });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_create_remote_issue_link",
     description: "Add a remote (web) link to an issue, e.g. linking a Bitbucket PR.",
     parameters: external_exports4.object({
@@ -162580,7 +162902,7 @@ function registerIssueTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_list_remote_issue_links",
     description: "List all remote (web) links on an issue \u2014 useful for investigating what PRs, docs, or external resources are attached. Returns an array of {id, self, relationship, object: {url, title, icon, ...}}.",
     parameters: external_exports4.object({
@@ -162596,7 +162918,7 @@ function registerIssueTools(server2, opts) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_delete_remote_issue_link",
     description: "Remove a remote (web) link from an issue. Accepts either the numeric link_id (from jira_list_remote_issue_links) OR a globalId via the global_id arg. Destructive.",
     parameters: external_exports4.object({
@@ -162623,7 +162945,7 @@ function registerIssueTools(server2, opts) {
       return { deleted: true, issue_key: args.issue_key, global_id: args.global_id };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_link_to_epic",
     description: "Set the parent (Epic Link) on an issue.",
     parameters: external_exports4.object({
@@ -162638,7 +162960,7 @@ function registerIssueTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_issue_watchers",
     description: "List watchers on an issue.",
     parameters: external_exports4.object({ issue_key: external_exports4.string() }),
@@ -162646,7 +162968,7 @@ function registerIssueTools(server2, opts) {
       () => jiraClient().issueWatchers.getIssueWatchers({ issueIdOrKey: args.issue_key })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_add_watcher",
     description: "Add a watcher (account id) to an issue.",
     parameters: external_exports4.object({
@@ -162661,7 +162983,7 @@ function registerIssueTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_remove_watcher",
     description: "Remove a watcher (account id) from an issue.",
     parameters: external_exports4.object({
@@ -162676,7 +162998,7 @@ function registerIssueTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_issue_property_keys",
     description: "List all entity property keys stored on an issue. Connect apps (e.g. QMetry) store data here \u2014 invisible to jira_get_issue. Use this first to discover what keys exist, then fetch values with jira_get_issue_property.",
     parameters: external_exports4.object({ issue_key: external_exports4.string() }),
@@ -162686,7 +163008,7 @@ function registerIssueTools(server2, opts) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_issue_property",
     description: "Get the value of a specific entity property on an issue. Use jira_get_issue_property_keys first to find available keys. QMetry stores test cycle links under a key like 'com.qmetry.*'.",
     parameters: external_exports4.object({
@@ -162700,7 +163022,7 @@ function registerIssueTools(server2, opts) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_batch_get_changelogs",
     description: "Get changelogs for an issue (paginated).",
     parameters: external_exports4.object({
@@ -162717,14 +163039,14 @@ function registerIssueTools(server2, opts) {
 }
 
 // src/jira/projects.ts
-function registerProjectTools2(server2, opts) {
-  server2.addTool({
+function registerProjectTools2(server, opts) {
+  server.addTool({
     name: "jira_get_all_projects",
     description: "List all Jira projects visible to the authenticated user.",
     parameters: external_exports4.object({}),
     execute: async () => safeJira(() => jiraClient().projects.searchProjects({ maxResults: 100 }))
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_project_components",
     description: "List components for a project.",
     parameters: external_exports4.object({ project_key: external_exports4.string() }),
@@ -162734,7 +163056,7 @@ function registerProjectTools2(server2, opts) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_project_versions",
     description: "List versions (e.g. fixVersions) for a project.",
     parameters: external_exports4.object({ project_key: external_exports4.string() }),
@@ -162744,7 +163066,7 @@ function registerProjectTools2(server2, opts) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_create_version",
     description: "Create a new version on a project.",
     parameters: external_exports4.object({
@@ -162765,7 +163087,7 @@ function registerProjectTools2(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_update_version",
     description: "Update a version (release): rename, change dates, mark released/unreleased, or archive.",
     parameters: external_exports4.object({
@@ -162802,7 +163124,7 @@ function registerProjectTools2(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_batch_create_versions",
     description: "Create multiple versions on a project (sequential calls).",
     parameters: external_exports4.object({
@@ -162832,7 +163154,7 @@ function registerProjectTools2(server2, opts) {
       return { created_count: created.length, versions: created };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_user_profile",
     description: "Look up a user by accountId or query.",
     parameters: external_exports4.object({
@@ -162849,7 +163171,7 @@ function registerProjectTools2(server2, opts) {
       return jiraClient().myself.getCurrentUser();
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "getJiraProjectIssueTypesMetadata",
     description: "List the issue types available in a project, with required fields per type. Useful before jira_create_issue.",
     parameters: external_exports4.object({ project_key: external_exports4.string() }),
@@ -162862,8 +163184,8 @@ function registerProjectTools2(server2, opts) {
 }
 
 // src/jira/agile.ts
-function registerAgileTools(server2, opts) {
-  server2.addTool({
+function registerAgileTools(server, opts) {
+  server.addTool({
     name: "jira_get_agile_boards",
     description: "List agile boards (Scrum/Kanban).",
     parameters: external_exports4.object({
@@ -162881,7 +163203,7 @@ function registerAgileTools(server2, opts) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_board_issues",
     description: "List issues on a board (across sprints + backlog).",
     parameters: external_exports4.object({
@@ -162901,7 +163223,7 @@ function registerAgileTools(server2, opts) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_sprints_from_board",
     description: "List sprints for a board, filtered by state.",
     parameters: external_exports4.object({
@@ -162917,7 +163239,7 @@ function registerAgileTools(server2, opts) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_sprint_issues",
     description: "List issues in a sprint.",
     parameters: external_exports4.object({
@@ -162935,7 +163257,7 @@ function registerAgileTools(server2, opts) {
       })
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_create_sprint",
     description: "Create a new sprint on a board.",
     parameters: external_exports4.object({
@@ -162956,7 +163278,7 @@ function registerAgileTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_update_sprint",
     description: "Partially update a sprint. Use to start (state=active+dates), close (state=closed), rename, or update goal.",
     parameters: external_exports4.object({
@@ -162979,7 +163301,7 @@ function registerAgileTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_add_issues_to_sprint",
     description: "Move issues into a sprint, optionally ranking them before/after an anchor issue. Max 50 per call.",
     parameters: external_exports4.object({
@@ -163000,7 +163322,7 @@ function registerAgileTools(server2, opts) {
       return { moved: args.issue_keys, sprint_id: args.sprint_id };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_backlog_issues",
     description: "List a board's backlog (issues in no active/future sprint) in rank order, top first. Adds the board's story-points field automatically and reports its id as estimation_field.",
     parameters: external_exports4.object({
@@ -163032,7 +163354,7 @@ function registerAgileTools(server2, opts) {
       return { estimation_field: estimation_field ?? null, ...page };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_rank_issues",
     description: "Reorder the backlog: rank issues before or after an anchor issue. The listed issues keep their relative order. Max 50 per call. Reports per-issue failures; never trust a rank not in `ranked`.",
     parameters: external_exports4.object({
@@ -163056,7 +163378,7 @@ function registerAgileTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_move_issues_to_backlog",
     description: "Remove issues from their sprint and put them back on the backlog. Max 50 per call.",
     parameters: external_exports4.object({
@@ -163069,7 +163391,7 @@ function registerAgileTools(server2, opts) {
       return { moved_to_backlog: args.issue_keys };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_board_configuration",
     description: "Get a board's configuration: filter, columns, ranking field and estimation (story points) field id.",
     parameters: external_exports4.object({ board_id: external_exports4.number().int().positive() }),
@@ -163082,7 +163404,7 @@ function registerAgileTools(server2, opts) {
 
 // src/jira/attachments.ts
 import { createWriteStream, existsSync as existsSync2, statSync as statSync2 } from "node:fs";
-import { dirname, basename, resolve as resolvePath } from "node:path";
+import { dirname, basename, resolve as resolvePath2 } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { Readable as Readable3 } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -163119,10 +163441,10 @@ function resolveSavePath(userPath) {
     throw new Error("save_path must be a non-empty string");
   }
   const expanded = userPath.startsWith("~") ? process.env.HOME + userPath.slice(1) : userPath;
-  return resolvePath(expanded);
+  return resolvePath2(expanded);
 }
-function registerJiraAttachmentTools(server2, opts) {
-  server2.addTool({
+function registerJiraAttachmentTools(server, opts) {
+  server.addTool({
     name: "jira_list_issue_attachments",
     description: "List attachments on a Jira issue. Returns an array of {id, filename, size, mimeType, author, created, contentUrl} \u2014 use the id with jira_download_attachment to fetch content.",
     parameters: external_exports4.object({
@@ -163141,7 +163463,7 @@ function registerJiraAttachmentTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_get_attachment",
     description: "Get metadata for a single Jira attachment by id. Returns filename, size, mimeType, author, created, contentUrl. Use jira_download_attachment to fetch the actual content.",
     parameters: external_exports4.object({
@@ -163154,7 +163476,7 @@ function registerJiraAttachmentTools(server2, opts) {
       return toAttachmentProjection(raw2);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_download_attachment",
     description: "Download a Jira attachment's content to a local file path. Streams directly to disk \u2014 safe for multi-GB attachments. Creates intermediate directories as needed. Returns {path, bytes_written, mimeType, filename}.",
     parameters: external_exports4.object({
@@ -163176,7 +163498,7 @@ function registerJiraAttachmentTools(server2, opts) {
             "save_path is a directory but attachment has no filename \u2014 pass a full file path instead"
           );
         }
-        targetPath = resolvePath(targetPath, meta3.filename);
+        targetPath = resolvePath2(targetPath, meta3.filename);
       }
       await mkdir(dirname(targetPath), { recursive: true });
       const contentUrl = `${gatewayBase()}/rest/api/3/attachment/content/${encodeURIComponent(args.attachment_id)}`;
@@ -163211,7 +163533,7 @@ function registerJiraAttachmentTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_add_attachment",
     description: "Upload a file to a Jira issue as an attachment. Uses multipart/form-data with the X-Atlassian-Token: no-check header Atlassian requires for CSRF-exempt uploads. Returns the created attachment's projection.",
     parameters: external_exports4.object({
@@ -163256,7 +163578,7 @@ function registerJiraAttachmentTools(server2, opts) {
       return toAttachmentProjection(first);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "jira_delete_attachment",
     description: "Permanently delete a Jira attachment. There is no trash for Jira attachments \u2014 this is destructive. Returns {deleted: true, id}.",
     parameters: external_exports4.object({
@@ -163273,16 +163595,16 @@ function registerJiraAttachmentTools(server2, opts) {
 }
 
 // src/jira/index.ts
-function registerJiraTools(server2, opts) {
+function registerJiraTools(server, opts) {
   if (!jiraIsConfigured()) {
     console.error("[acendas-atlassian] Jira: not configured, skipping tool registration.");
     return;
   }
-  registerSearchTools2(server2);
-  registerIssueTools(server2, opts);
-  registerProjectTools2(server2, opts);
-  registerAgileTools(server2, opts);
-  registerJiraAttachmentTools(server2, opts);
+  registerSearchTools2(server);
+  registerIssueTools(server, opts);
+  registerProjectTools2(server, opts);
+  registerAgileTools(server, opts);
+  registerJiraAttachmentTools(server, opts);
 }
 
 // src/common/confluenceHttp.ts
@@ -163413,8 +163735,8 @@ async function safeConfluence(fn) {
     );
   }
 }
-function ensureWritable3(readOnly2) {
-  if (readOnly2) throw new Error("READ_ONLY_MODE is enabled \u2014 write operations are blocked.");
+function ensureWritable3(readOnly) {
+  if (readOnly) throw new Error("READ_ONLY_MODE is enabled \u2014 write operations are blocked.");
 }
 function buildConfluenceBodyV2(opts) {
   if (opts.body_adf !== void 0) {
@@ -163562,8 +163884,8 @@ var BodyFormat = external_exports4.enum([
   "anonymous_export_view",
   "styled_view"
 ]);
-function registerPageTools(server2, opts) {
-  server2.addTool({
+function registerPageTools(server, opts) {
+  server.addTool({
     name: "confluence_search",
     description: "Search Confluence using CQL (Confluence Query Language). Honors CONFLUENCE_SPACES_FILTER if set. Returns search entries; each may wrap a page/user/comment under `content` or `user`.",
     parameters: external_exports4.object({
@@ -163583,7 +163905,7 @@ function registerPageTools(server2, opts) {
       });
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_get_page",
     description: "Get a Confluence page by id. Returns a normalized PageProjection (id, title, spaceId, parentId, versionNumber, body). body_format defaults to atlas_doc_format; pass 'storage' for raw XML edits or 'view' for rendered HTML.",
     parameters: external_exports4.object({
@@ -163603,7 +163925,7 @@ function registerPageTools(server2, opts) {
       return toPageProjection(raw2);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_get_page_by_title",
     description: "Resolve a Confluence page by exact title within a space. Faster than CQL search for the common 'fetch the page named X' pattern. Returns the first matching page as a PageProjection, or null if none found.",
     parameters: external_exports4.object({
@@ -163629,7 +163951,7 @@ function registerPageTools(server2, opts) {
       return { match: toPageProjection(first) };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_get_page_children",
     description: "List immediate child pages of a Confluence page. Cursor-paginated \u2014 pass the `cursor` from a prior response to fetch the next page. Returns `{ pages: PageProjection[], nextCursor: string | null }`.",
     parameters: external_exports4.object({
@@ -163652,7 +163974,7 @@ function registerPageTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_get_page_ancestors",
     description: "List the ancestor pages of a Confluence page (from root down to the immediate parent). Returns PageProjection[].",
     parameters: external_exports4.object({
@@ -163667,7 +163989,7 @@ function registerPageTools(server2, opts) {
       return { ancestors: (res.results ?? []).map(toPageProjection) };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_get_page_history",
     description: "List version history for a Confluence page. Returns VersionProjection[] (number, authorId, createdAt, minorEdit, message). Restore via confluence_restore_version.",
     parameters: external_exports4.object({
@@ -163686,7 +164008,7 @@ function registerPageTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_get_space_page_tree",
     description: "Render a page's descendant tree. Provide `root_page_id` (the homepage id of a space, or any subtree root). Single /descendants API call + client-side rebuild \u2014 far cheaper than recursive children. Result: nested tree with {id, title, children: [...]}.",
     parameters: external_exports4.object({
@@ -163737,7 +164059,7 @@ function registerPageTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_create_page",
     description: "Create a Confluence page under a space. Provide content via ONE of: body_adf (raw ADF JSON), body_storage (raw storage XML, preserves macros/images), body_wiki (wiki markup), or body_markdown (converted to ADF \u2014 may strip macros). Returns a PageProjection.",
     parameters: external_exports4.object({
@@ -163769,7 +164091,7 @@ function registerPageTools(server2, opts) {
       return toPageProjection(raw2);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_update_page",
     description: "Update (full replace) a Confluence page. For targeted edits preserving macros/images, prefer confluence_replace_section / confluence_append_to_page / confluence_insert_after_heading / confluence_replace_text. Returns the new PageProjection.",
     parameters: external_exports4.object({
@@ -163808,7 +164130,7 @@ function registerPageTools(server2, opts) {
       return toPageProjection(raw2);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_delete_page",
     description: "Trash a Confluence page (moves to trash; recoverable). Pass `purge: true` to permanently delete a page that is already in the trash (not a live page \u2014 purge on a current page returns 400).",
     parameters: external_exports4.object({
@@ -163825,7 +164147,7 @@ function registerPageTools(server2, opts) {
       return { deleted: args.page_id, purged: args.purge };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_move_page",
     description: "Move a Confluence page to a different parent (or reorder relative to a sibling). Uses v1 \u2014 v2 has no move endpoint. `position: append` makes the page the last child of target_id; `before`/`after` places it as a sibling of target_id.",
     parameters: external_exports4.object({
@@ -163840,7 +164162,7 @@ function registerPageTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_get_page_diff",
     description: "Compute a unified diff between two versions of a Confluence page (rendered as Markdown for readability). Use confluence_get_page_history to list versions.",
     parameters: external_exports4.object({
@@ -164080,8 +164402,8 @@ async function postPageStorage(state, newStorage) {
   );
   return toPageProjection(raw2);
 }
-function registerEditTools(server2, opts) {
-  server2.addTool({
+function registerEditTools(server, opts) {
+  server.addTool({
     name: "confluence_append_to_page",
     description: "Append storage-format content to the end of a page. Preserves all existing content (macros, images, charts).",
     parameters: external_exports4.object({
@@ -164094,7 +164416,7 @@ function registerEditTools(server2, opts) {
       return postPageStorage(state, appendContent(state.storage, args.content_storage));
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_prepend_to_page",
     description: "Prepend storage-format content to the start of a page.",
     parameters: external_exports4.object({
@@ -164107,7 +164429,7 @@ function registerEditTools(server2, opts) {
       return postPageStorage(state, prependContent(state.storage, args.content_storage));
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_insert_after_heading",
     description: "Insert content immediately after a heading (matched by level + text substring, case-insensitive). Throws if no heading matches.",
     parameters: external_exports4.object({
@@ -164128,7 +164450,7 @@ function registerEditTools(server2, opts) {
       return postPageStorage(state, next);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_replace_section",
     description: "Replace the body of a section (heading preserved; everything from end-of-heading until next same-or-shallower heading gets replaced). Preferred over confluence_replace_text for structured edits.",
     parameters: external_exports4.object({
@@ -164149,7 +164471,7 @@ function registerEditTools(server2, opts) {
       return postPageStorage(state, next);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_remove_section",
     description: "Remove an entire section including its heading (from heading start to next same-or-shallower heading).",
     parameters: external_exports4.object({
@@ -164164,7 +164486,7 @@ function registerEditTools(server2, opts) {
       return postPageStorage(state, next);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_replace_text",
     description: "Find/replace in the raw storage XML using a regex. Good for URL updates, version strings, or other one-off substitutions. Avoid for structured edits \u2014 prefer confluence_replace_section. Note: regex runs against storage XML (tags, macros, attributes), so patterns that assume attribute ordering can be brittle across tenants.",
     parameters: external_exports4.object({
@@ -164193,7 +164515,7 @@ function registerEditTools(server2, opts) {
       return { ...result, _replacements_made: count };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_render_image_macro",
     description: "Produce the Confluence storage XML for embedding an attached image. Returns the snippet; pair with confluence_insert_after_heading or confluence_append_to_page to place it on the page.",
     parameters: external_exports4.object({
@@ -170022,8 +170344,8 @@ async function renderAndAttachDiagrams(pageId, diagrams, mermaidOpts, force) {
   }
   return { outcomes, failures: outcomes.filter((o) => o.error) };
 }
-function registerPublishTools(server2, opts) {
-  server2.addTool({
+function registerPublishTools(server, opts) {
+  server.addTool({
     name: "confluence_markdown_to_storage",
     description: "Render Markdown to Confluence storage XML without touching any page. Code fences become code macros, ```mermaid fences become <ac:image> references to PRE-RENDERED SVG attachments (this tool does not render diagrams), > [!NOTE] blockquotes become info/note/tip/warning macros, and relative links become <ac:link> page references. Returns the storage plus diagrams[], missing_assets[] and unresolved_links[] so the caller can fix gaps before publishing. Use this to preview what confluence_publish_page would write.",
     parameters: external_exports4.object({
@@ -170046,7 +170368,7 @@ function registerPublishTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_render_mermaid",
     description: "Render the ```mermaid fences in a Markdown document to SVG and attach them to a page, named to match what confluence_publish_page references (<diagram_prefix>-<n>.svg, zero-indexed). Uses a local mermaid CLI (mmdc) if present, else a Kroki-compatible endpoint named by MERMAID_RENDER_URL; diagram sources are never sent to any third-party service by default. Skips diagrams whose source is unchanged since the last render. Pass page_id to upload, or omit it to just check which backend is available and what would be rendered.",
     parameters: external_exports4.object({
@@ -170097,7 +170419,7 @@ function registerPublishTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_publish_preflight",
     description: "READ-ONLY. Report what publishing new content to a page would cost before anything is written: existing inline-comment anchors and whether each would survive, plus the macros, attachments and page links currently on the page. Pass `markdown` to get a per-anchor survives/at-risk verdict; omit it to just inventory the page. Nothing is modified. Run this before confluence_publish_page on any page that has been reviewed.",
     parameters: external_exports4.object({
@@ -170155,7 +170477,7 @@ function registerPublishTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_publish_page",
     description: "Publish Markdown to an existing Confluence page, carrying inline-comment anchors across the rewrite and verifying afterwards that none went dangling. REFUSES by default if any anchor cannot be re-applied or any asset is unmapped \u2014 pass accept_anchor_loss / accept_missing_assets to override deliberately. Returns the version number to roll back to via confluence_restore_version if verification reports damage. Prefer confluence_publish_preflight first.",
     parameters: external_exports4.object({
@@ -170281,7 +170603,7 @@ function registerPublishTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_sync_attachments",
     description: "Upload local files as page attachments, skipping any whose content is already there. Each upload records a sha256 of the content in the attachment's version comment; a file whose hash matches the stored one is left alone, so re-running a publish does not churn attachment versions or bump every diagram on every sync. Returns per-file uploaded/skipped. Use for diagram SVGs rendered by your own toolchain before confluence_publish_page.",
     parameters: external_exports4.object({
@@ -170348,8 +170670,8 @@ function guessType(filename) {
 }
 
 // src/confluence/comments.ts
-function registerCommentTools2(server2, opts) {
-  server2.addTool({
+function registerCommentTools2(server, opts) {
+  server.addTool({
     name: "confluence_get_comments",
     description: "List FOOTER comments on a Confluence page (page-level annotations). Cursor-paginated. For text-anchored comments on selections, use confluence_get_inline_comments.",
     parameters: external_exports4.object({
@@ -170374,7 +170696,7 @@ function registerCommentTools2(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_add_comment",
     description: "Add a footer comment to a Confluence page. Body accepts one of: body_adf, body_storage, body_wiki, or body_markdown (default). Returns a CommentProjection.",
     parameters: external_exports4.object({
@@ -170399,7 +170721,7 @@ function registerCommentTools2(server2, opts) {
       return toCommentProjection(raw2, "footer");
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_reply_to_comment",
     description: "Reply to an existing footer comment (nests under parent_comment_id).",
     parameters: external_exports4.object({
@@ -170427,8 +170749,8 @@ function registerCommentTools2(server2, opts) {
 }
 
 // src/confluence/inlineComments.ts
-function registerInlineCommentTools(server2, opts) {
-  server2.addTool({
+function registerInlineCommentTools(server, opts) {
+  server.addTool({
     name: "confluence_get_inline_comments",
     description: "List inline (text-anchored) comments on a Confluence page. Each comment points to a selection of text; `textSelection` in the response identifies the anchor. Cursor-paginated.",
     parameters: external_exports4.object({
@@ -170457,7 +170779,7 @@ function registerInlineCommentTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_add_inline_comment",
     description: "Add an inline comment anchored to selected text on a page. `selection_text` must match text in the page body (use the text-as-seen, not XML). `selection_match_count` is which occurrence to anchor to (1-based; default 1). Body via body_markdown (default), body_adf, body_storage, or body_wiki.",
     parameters: external_exports4.object({
@@ -170488,7 +170810,7 @@ function registerInlineCommentTools(server2, opts) {
       return toCommentProjection(raw2, "inline");
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_reply_to_inline_comment",
     description: "Reply to an existing inline comment thread.",
     parameters: external_exports4.object({
@@ -170513,7 +170835,7 @@ function registerInlineCommentTools(server2, opts) {
       return toCommentProjection(raw2, "inline");
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_resolve_inline_comment",
     description: "Resolve or reopen an inline comment thread. Resolving hides the comment from the default view. Useful when a reviewer's concern has been addressed by a page edit.",
     parameters: external_exports4.object({
@@ -170532,8 +170854,8 @@ function registerInlineCommentTools(server2, opts) {
 }
 
 // src/confluence/spaces.ts
-function registerSpaceTools(server2) {
-  server2.addTool({
+function registerSpaceTools(server) {
+  server.addTool({
     name: "getConfluenceSpaces",
     description: "List Confluence spaces visible to the authenticated user. Cursor-paginated. Returns SpaceProjection[] ({id, key, name, type, homepageId}). The numeric `id` is needed for v2 create-page calls.",
     parameters: external_exports4.object({
@@ -170556,7 +170878,7 @@ function registerSpaceTools(server2) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_get_space",
     description: "Get a single Confluence space by id (or, if you only have a key, use getConfluenceSpaces to find the id first). Returns a SpaceProjection including homepageId \u2014 useful as the `root_page_id` input to confluence_get_space_page_tree.",
     parameters: external_exports4.object({
@@ -170572,8 +170894,8 @@ function registerSpaceTools(server2) {
 }
 
 // src/confluence/labels.ts
-function registerLabelTools(server2, opts) {
-  server2.addTool({
+function registerLabelTools(server, opts) {
+  server.addTool({
     name: "confluence_get_labels",
     description: "List labels on a Confluence page. Returns LabelProjection[] ({id, name, prefix}).",
     parameters: external_exports4.object({
@@ -170592,7 +170914,7 @@ function registerLabelTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_add_label",
     description: "Add one or more labels to a Confluence page. v1-backed (v2 labels are read-only). Requires `write:confluence-content`.",
     parameters: external_exports4.object({
@@ -170609,7 +170931,7 @@ function registerLabelTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_remove_label",
     description: "Remove a single label from a Confluence page. v1-backed (v2 labels are read-only). Requires `write:confluence-content`.",
     parameters: external_exports4.object({
@@ -170630,7 +170952,7 @@ function registerLabelTools(server2, opts) {
 // src/confluence/attachments.ts
 import { readFile as readFile2, mkdir as mkdir2 } from "node:fs/promises";
 import { createWriteStream as createWriteStream2, existsSync as existsSync3, statSync as statSync3 } from "node:fs";
-import { basename as basename3, dirname as dirname2, resolve as resolvePath2 } from "node:path";
+import { basename as basename3, dirname as dirname2, resolve as resolvePath3 } from "node:path";
 import { Readable as Readable4 } from "node:stream";
 import { pipeline as pipeline2 } from "node:stream/promises";
 function guessContentType(filename) {
@@ -170673,10 +170995,10 @@ function resolveSavePath2(userPath) {
     throw new Error("save_path must be a non-empty string");
   }
   const expanded = userPath.startsWith("~") ? (process.env.HOME ?? "") + userPath.slice(1) : userPath;
-  return resolvePath2(expanded);
+  return resolvePath3(expanded);
 }
-function registerAttachmentTools(server2, opts) {
-  server2.addTool({
+function registerAttachmentTools(server, opts) {
+  server.addTool({
     name: "confluence_get_attachments",
     description: "List attachments on a Confluence page. Cursor-paginated. Returns AttachmentProjection[] ({id, title, mediaType, fileSize, downloadLink}). downloadLink is an absolute URL \u2014 use confluence_download_attachment to fetch the content.",
     parameters: external_exports4.object({
@@ -170699,7 +171021,7 @@ function registerAttachmentTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_get_attachment",
     description: "Get metadata for a single Confluence attachment by id. downloadLink in the result is absolute \u2014 pass it to confluence_download_attachment to fetch the content.",
     parameters: external_exports4.object({ attachment_id: external_exports4.string() }),
@@ -170712,7 +171034,7 @@ function registerAttachmentTools(server2, opts) {
       return proj;
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_download_attachment",
     description: "Download a Confluence attachment's content to a local file path. Streams directly to disk \u2014 safe for large files. Creates intermediate directories as needed. Returns {path, bytes_written, mediaType, title}. Get attachment ids from confluence_get_attachments.",
     parameters: external_exports4.object({
@@ -170741,7 +171063,7 @@ function registerAttachmentTools(server2, opts) {
             "save_path is a directory but attachment has no title \u2014 pass a full file path instead"
           );
         }
-        targetPath = resolvePath2(targetPath, filename);
+        targetPath = resolvePath3(targetPath, filename);
       }
       await mkdir2(dirname2(targetPath), { recursive: true });
       const res = await fetch(downloadUrl, {
@@ -170773,7 +171095,7 @@ function registerAttachmentTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_upload_attachment",
     description: "Upload or replace an attachment on a Confluence page from a local file path. Uses PUT (create-or-update), so re-uploading an existing filename adds a new version instead of failing. v1-backed (v2 has no upload endpoint). Requires `write:confluence-content` classic scope. Returns the attachment id + download link; pair with confluence_render_image_macro to embed.",
     parameters: external_exports4.object({
@@ -170800,7 +171122,7 @@ function registerAttachmentTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_delete_attachment",
     description: "Delete an attachment by id. Moves to trash (recoverable). Pass `purge: true` to permanently delete from trash.",
     parameters: external_exports4.object({
@@ -170827,8 +171149,8 @@ async function cqlSingleUser(cql) {
   });
   return res.results?.[0]?.user ?? null;
 }
-function registerUserTools2(server2) {
-  server2.addTool({
+function registerUserTools2(server) {
+  server.addTool({
     name: "confluence_get_current_user",
     description: "Get the currently authenticated user \u2014 a real whoami that returns {accountId, displayName, email}. Useful for 'assign to me' flows and for verifying the configured token. Uses v1 CQL `user = currentUser()`; requires `search:confluence` classic scope.",
     parameters: external_exports4.object({}),
@@ -170842,7 +171164,7 @@ function registerUserTools2(server2) {
       return toUserProjection(user);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_get_user",
     description: 'Get a Confluence user by accountId. Returns a UserProjection, or throws if not found. Uses v1 CQL `user.accountid = "..."`; requires `search:confluence` classic scope.',
     parameters: external_exports4.object({
@@ -170859,7 +171181,7 @@ function registerUserTools2(server2) {
       return toUserProjection(user);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_search_user",
     description: "Search Confluence users by display-name substring via v1 CQL. Results are search entries with each user nested at `results[i].user`. Email search is NOT supported via CQL \u2014 only `user.fullname` accepts the `~` operator. For exact accountId lookup, use confluence_get_user. Requires `search:confluence` classic scope.",
     parameters: external_exports4.object({
@@ -170875,8 +171197,8 @@ function registerUserTools2(server2) {
 }
 
 // src/confluence/likes.ts
-function registerLikeTools(server2, _opts) {
-  server2.addTool({
+function registerLikeTools(server, _opts) {
+  server.addTool({
     name: "confluence_get_page_likes",
     description: "List users who have liked a Confluence page. Returns `{ count, likers: [accountId...], nextCursor }`. Cursor-paginated. Requires `read:page:confluence`.",
     parameters: external_exports4.object({
@@ -170901,8 +171223,8 @@ function registerLikeTools(server2, _opts) {
 }
 
 // src/confluence/watchers.ts
-function registerWatcherTools(server2, opts) {
-  server2.addTool({
+function registerWatcherTools(server, opts) {
+  server.addTool({
     name: "confluence_watch_page",
     description: "Watch a Confluence page (subscribe to change notifications) as the authenticated user. v1-backed \u2014 v2 has no watchers endpoint. Requires `write:confluence-content`.",
     parameters: external_exports4.object({ page_id: external_exports4.string() }),
@@ -170914,7 +171236,7 @@ function registerWatcherTools(server2, opts) {
       return { watching: args.page_id };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_unwatch_page",
     description: "Stop watching a Confluence page.",
     parameters: external_exports4.object({ page_id: external_exports4.string() }),
@@ -170926,7 +171248,7 @@ function registerWatcherTools(server2, opts) {
       return { unwatched: args.page_id };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_watch_space",
     description: "Watch a Confluence space \u2014 subscribe to notifications on any page change in the space. v1-backed.",
     parameters: external_exports4.object({
@@ -170940,7 +171262,7 @@ function registerWatcherTools(server2, opts) {
       return { watching_space: args.space_key };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_unwatch_space",
     description: "Stop watching a Confluence space.",
     parameters: external_exports4.object({ space_key: external_exports4.string() }),
@@ -170955,8 +171277,8 @@ function registerWatcherTools(server2, opts) {
 }
 
 // src/confluence/copy.ts
-function registerCopyTools(server2, opts) {
-  server2.addTool({
+function registerCopyTools(server, opts) {
+  server.addTool({
     name: "confluence_copy_page",
     description: "Copy a single Confluence page to a new parent (or a different space). Synchronous \u2014 returns the new page id. v1-backed. Requires `write:confluence-content`.",
     parameters: external_exports4.object({
@@ -170991,7 +171313,7 @@ function registerCopyTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_copy_page_hierarchy_start",
     description: "Start copying a Confluence page AND all its descendants. Returns a long-task id. Poll status with confluence_copy_page_hierarchy_status until `successful: true`. v1-backed.",
     parameters: external_exports4.object({
@@ -171025,7 +171347,7 @@ function registerCopyTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_copy_page_hierarchy_status",
     description: "Poll a long-running hierarchy-copy task started by confluence_copy_page_hierarchy_start. Returns Atlassian's longtask shape \u2014 `successful: true` when done; `percentageComplete` for progress.",
     parameters: external_exports4.object({
@@ -171052,8 +171374,8 @@ function projectProperty(raw2) {
     }
   };
 }
-function registerPropertyTools(server2, opts) {
-  server2.addTool({
+function registerPropertyTools(server, opts) {
+  server.addTool({
     name: "confluence_get_page_properties",
     description: "List all properties on a Confluence page (structured key/value metadata). Cursor-paginated. Use confluence_get_page_property to read a single key's value.",
     parameters: external_exports4.object({
@@ -171072,7 +171394,7 @@ function registerPropertyTools(server2, opts) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_get_page_property",
     description: "Read a single page property by key. Returns `{key, value, version: {number}}` or null if the key doesn't exist on this page.",
     parameters: external_exports4.object({
@@ -171088,7 +171410,7 @@ function registerPropertyTools(server2, opts) {
       return first ? projectProperty(first) : null;
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_set_page_property",
     description: "Upsert a page property. If the key doesn't exist, creates it. If it exists, updates \u2014 requires the current `version_number` (from confluence_get_page_property's version.number, + 1). Value can be any JSON (object/array/primitive).",
     parameters: external_exports4.object({
@@ -171129,7 +171451,7 @@ function registerPropertyTools(server2, opts) {
       return projectProperty(raw2);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_delete_page_property",
     description: "Delete a page property by key.",
     parameters: external_exports4.object({
@@ -171155,8 +171477,8 @@ function registerPropertyTools(server2, opts) {
 }
 
 // src/confluence/versions.ts
-function registerVersionTools(server2, opts) {
-  server2.addTool({
+function registerVersionTools(server, opts) {
+  server.addTool({
     name: "confluence_restore_version",
     description: "Restore a Confluence page to a prior version. Fetches the historical body and writes it as a NEW version on top of current \u2014 the old versions remain in history. Requires `write:confluence-content` (classic) because the v2 restore endpoint does not exist.",
     parameters: external_exports4.object({
@@ -171198,8 +171520,8 @@ function registerVersionTools(server2, opts) {
 }
 
 // src/confluence/pageLinks.ts
-function registerPageLinkTools(server2) {
-  server2.addTool({
+function registerPageLinkTools(server) {
+  server.addTool({
     name: "confluence_get_page_backlinks",
     description: "List Confluence pages that link TO the given page. Best-effort via CQL text search on the target's title (Cloud has no `linkedto` operator). May include false positives (pages mentioning the title in prose, not as a link). Requires `search:confluence` classic scope. Returns {backlinks: PageProjection[], confidence, method}.",
     parameters: external_exports4.object({
@@ -171260,7 +171582,7 @@ function registerPageLinkTools(server2) {
       };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "confluence_get_page_outbound_links",
     description: "List pages + attachments that the given page links TO. Parses the page's storage-format body for <ac:link> elements. Returns categorized {page_links: [...], attachment_links: [...], external_urls: [...]}. Best-effort XML regex \u2014 nested macros may confuse it.",
     parameters: external_exports4.object({
@@ -171326,26 +171648,26 @@ function extractOutboundLinks(storage) {
 }
 
 // src/confluence/index.ts
-function registerConfluenceTools(server2, opts) {
+function registerConfluenceTools(server, opts) {
   if (!confluenceIsConfigured()) {
     console.error("[acendas-atlassian] Confluence: not configured, skipping tool registration.");
     return;
   }
-  registerPageTools(server2, opts);
-  registerEditTools(server2, opts);
-  registerPublishTools(server2, opts);
-  registerCommentTools2(server2, opts);
-  registerInlineCommentTools(server2, opts);
-  registerSpaceTools(server2);
-  registerLabelTools(server2, opts);
-  registerAttachmentTools(server2, opts);
-  registerUserTools2(server2);
-  registerLikeTools(server2, opts);
-  registerWatcherTools(server2, opts);
-  registerCopyTools(server2, opts);
-  registerPropertyTools(server2, opts);
-  registerVersionTools(server2, opts);
-  registerPageLinkTools(server2);
+  registerPageTools(server, opts);
+  registerEditTools(server, opts);
+  registerPublishTools(server, opts);
+  registerCommentTools2(server, opts);
+  registerInlineCommentTools(server, opts);
+  registerSpaceTools(server);
+  registerLabelTools(server, opts);
+  registerAttachmentTools(server, opts);
+  registerUserTools2(server);
+  registerLikeTools(server, opts);
+  registerWatcherTools(server, opts);
+  registerCopyTools(server, opts);
+  registerPropertyTools(server, opts);
+  registerVersionTools(server, opts);
+  registerPageLinkTools(server);
 }
 
 // src/qmetry/_helpers.ts
@@ -171417,8 +171739,8 @@ async function safeQMetry(fn) {
     return JSON.stringify({ error: true, message: err?.message ?? String(err) }, null, 2);
   }
 }
-function ensureWritable4(readOnly2) {
-  if (readOnly2) throw new Error("READ_ONLY_MODE is enabled \u2014 write operations are blocked.");
+function ensureWritable4(readOnly) {
+  if (readOnly) throw new Error("READ_ONLY_MODE is enabled \u2014 write operations are blocked.");
 }
 function sanitizeErrorBody(body) {
   if (typeof body === "string" && body.length > 50 && !body.includes(" ")) {
@@ -171435,8 +171757,8 @@ function sanitizeErrorBody(body) {
 }
 
 // src/qmetry/projects.ts
-function registerQMetryProjectTools(server2) {
-  server2.addTool({
+function registerQMetryProjectTools(server) {
+  server.addTool({
     name: "qmetry_list_projects",
     description: "List all QMetry-enabled projects. Returns project id, key, name, and favorite flag. The numeric id is required by every other QMetry endpoint.",
     parameters: external_exports4.object({}),
@@ -171451,8 +171773,8 @@ var paginationParams = {
   start_at: external_exports4.number().int().min(0).default(0).describe("0-based page offset"),
   max_results: external_exports4.number().int().min(1).max(100).default(50).describe("Items per page, max 100")
 };
-function registerQMetryTestCaseTools(server2, opts) {
-  server2.addTool({
+function registerQMetryTestCaseTools(server, opts) {
+  server.addTool({
     name: "qmetry_search_test_cases",
     description: "Search test cases in a QMetry project. Filter by key, summary text, status, priority, or folder. Returns lean objects by default; use fields param to expand.",
     parameters: external_exports4.object({
@@ -171487,7 +171809,7 @@ function registerQMetryTestCaseTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_get_test_case",
     description: "Get full details for a single test case by key, including the step grid (action/expected-result rows), status, priority, description, and linked items. Steps are fetched automatically from the testcases/{id}/versions/{v}/teststeps/search sub-resource. Automatically includes Jira project context when Jira is configured.",
     parameters: external_exports4.object({
@@ -171533,7 +171855,7 @@ function registerQMetryTestCaseTools(server2, opts) {
       return result;
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_get_test_case_steps",
     description: "Get the step grid (action + expected-result rows) for a specific test case version. Use qmetry_get_test_case instead for a combined view; call this directly when you already have the internal test case ID and version number.",
     parameters: external_exports4.object({
@@ -171548,7 +171870,7 @@ function registerQMetryTestCaseTools(server2, opts) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_create_test_case",
     description: "Create a new test case in a QMetry project.",
     parameters: external_exports4.object({
@@ -171589,7 +171911,7 @@ function registerQMetryTestCaseTools(server2, opts) {
       return qmetryClient().post("/testcases", body);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_update_test_case",
     description: "Update fields on an existing test case version (status, priority, summary, description).",
     parameters: external_exports4.object({
@@ -171629,7 +171951,7 @@ function registerQMetryTestCaseTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_list_test_case_versions",
     description: "Get the test case detail by its internal ID, including version information. Use this when you have the opaque ID (not the human-readable key) and need version numbers before fetching steps.",
     parameters: external_exports4.object({
@@ -171643,7 +171965,7 @@ function registerQMetryTestCaseTools(server2, opts) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_create_test_step",
     description: "Add a new step to a test case version. Steps have an action (what to do) and an expected result.",
     parameters: external_exports4.object({
@@ -171664,7 +171986,7 @@ function registerQMetryTestCaseTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_update_test_step",
     description: "Update an existing test step's action, expected result, or test data. The step ID must come from qmetry_get_test_case_steps results.",
     parameters: external_exports4.object({
@@ -171687,7 +172009,7 @@ function registerQMetryTestCaseTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_delete_test_step",
     description: "Delete a test step from a test case version.",
     parameters: external_exports4.object({
@@ -171704,7 +172026,7 @@ function registerQMetryTestCaseTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_get_test_case_requirements",
     description: "Get the Jira issues (requirements) linked to a test case for traceability. This is the authoritative QMetry API for the 'Directly Linked to Stories' relationship.",
     parameters: external_exports4.object({
@@ -171719,7 +172041,7 @@ function registerQMetryTestCaseTools(server2, opts) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_link_requirement",
     description: "Link a test case version to a Jira issue (requirement) for traceability. Creates the 'Directly Linked to Stories' relationship visible in Jira's QMetry panel.",
     parameters: external_exports4.object({
@@ -171735,7 +172057,7 @@ function registerQMetryTestCaseTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_unlink_requirement",
     description: "Remove the traceability link between a test case version and a Jira issue.",
     parameters: external_exports4.object({
@@ -171755,8 +172077,8 @@ function registerQMetryTestCaseTools(server2, opts) {
 }
 
 // src/qmetry/testcycles.ts
-function registerQMetryTestCycleTools(server2, opts) {
-  server2.addTool({
+function registerQMetryTestCycleTools(server, opts) {
+  server.addTool({
     name: "qmetry_search_test_cycles",
     description: "Search test cycles in a QMetry project. Returns cycle id, key, name, status, and dates.",
     parameters: external_exports4.object({
@@ -171779,7 +172101,7 @@ function registerQMetryTestCycleTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_get_test_cycle",
     description: "Get details for a single test cycle by its key (e.g. PROJ-TR-50) and project ID. Uses POST /testcycles/search internally \u2014 there is no GET-by-ID endpoint in the QMetry API. Automatically includes Jira project context when Jira is configured.",
     parameters: external_exports4.object({
@@ -171809,7 +172131,7 @@ function registerQMetryTestCycleTools(server2, opts) {
       return cycle;
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_create_test_cycle",
     description: "Create a new test cycle in a QMetry project (e.g. for a new release regression run).",
     parameters: external_exports4.object({
@@ -171845,7 +172167,7 @@ function registerQMetryTestCycleTools(server2, opts) {
       return qmetryClient().post("/testcycles", body);
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_update_test_cycle",
     description: "Update an existing test cycle's summary, status, or dates.",
     parameters: external_exports4.object({
@@ -171888,7 +172210,7 @@ function registerQMetryTestCycleTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_get_test_cycle_test_cases",
     description: "List the test cases assigned to a specific test cycle, including their execution status within that cycle.",
     parameters: external_exports4.object({
@@ -171908,7 +172230,7 @@ function registerQMetryTestCycleTools(server2, opts) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_add_test_cases_to_cycle",
     description: "Add one or more test cases to a test cycle by their internal IDs.",
     parameters: external_exports4.object({
@@ -171924,7 +172246,7 @@ function registerQMetryTestCycleTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_remove_test_cases_from_cycle",
     description: "Remove (unlink) one or more test cases from a test cycle by their internal IDs. This unlinks them from the cycle \u2014 it does NOT delete the test cases themselves.",
     parameters: external_exports4.object({
@@ -171944,8 +172266,8 @@ function registerQMetryTestCycleTools(server2, opts) {
 }
 
 // src/qmetry/testplans.ts
-function registerQMetryTestPlanTools(server2) {
-  server2.addTool({
+function registerQMetryTestPlanTools(server) {
+  server.addTool({
     name: "qmetry_search_test_plans",
     description: "Search test plans in a QMetry project.",
     parameters: external_exports4.object({
@@ -171968,7 +172290,7 @@ function registerQMetryTestPlanTools(server2) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_get_test_plan",
     description: "Get details for a single test plan by its key and project ID, including linked test cycles. Uses POST /testplans/search internally \u2014 there is no GET-by-ID endpoint in the QMetry API.",
     parameters: external_exports4.object({
@@ -171989,8 +172311,8 @@ function registerQMetryTestPlanTools(server2) {
 // src/qmetry/executions.ts
 import { readFile as readFile3, stat } from "fs/promises";
 import { basename as basename4 } from "path";
-function registerQMetryExecutionTools(server2, opts) {
-  server2.addTool({
+function registerQMetryExecutionTools(server, opts) {
+  server.addTool({
     name: "qmetry_get_execution_results",
     description: "List execution result statuses (Pass, Fail, Blocked, etc.) with their numeric IDs for a project.",
     parameters: external_exports4.object({
@@ -172000,7 +172322,7 @@ function registerQMetryExecutionTools(server2, opts) {
       () => qmetryClient().get(`/projects/${args.project_id}/execution-results`)
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_search_executions",
     description: "Search test case executions within a specific test cycle. Returns each test case's execution status, assignee, and execution IDs.",
     parameters: external_exports4.object({
@@ -172021,7 +172343,7 @@ function registerQMetryExecutionTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_get_execution",
     description: "Get execution history for a test case within a test cycle. Returns the full execution record: status, comment, assignee, attachments flag, step count, timestamps. Use test_cycle_map_id (testCycleTestCaseMapId) from qmetry_search_executions results.",
     parameters: external_exports4.object({
@@ -172034,7 +172356,7 @@ function registerQMetryExecutionTools(server2, opts) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_update_execution",
     description: "Update a test case execution within a test cycle: set execution result (Pass/Fail/etc.), add a comment, set the assignee. At least one of status_name, comment, or assignee_account_id is required. Get execution_id (testCaseExecutionId) from qmetry_get_execution or qmetry_search_executions.",
     parameters: external_exports4.object({
@@ -172076,7 +172398,7 @@ function registerQMetryExecutionTools(server2, opts) {
       return { updated: true, fields: Object.keys(body) };
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_delete_execution",
     description: "Delete a test case execution record within a test cycle. Irreversible \u2014 removes the execution and its result/comment/attachments. Get execution_id (testCaseExecutionId) from qmetry_get_execution.",
     parameters: external_exports4.object({
@@ -172090,7 +172412,7 @@ function registerQMetryExecutionTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_list_execution_attachments",
     description: "List files attached to a test case execution (at execution or step level).",
     parameters: external_exports4.object({
@@ -172106,7 +172428,7 @@ function registerQMetryExecutionTools(server2, opts) {
       )
     )
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_upload_execution_attachment",
     description: "Attach a local file to a specific test case execution (2-step: get an execution-scoped S3 policy from QMetry, POST the file to S3). The uploaded file links to the given execution and appears in qmetry_list_execution_attachments (hasAttachment becomes true). Requires execution_id (testCaseExecutionId from qmetry_get_execution).",
     parameters: external_exports4.object({
@@ -172182,8 +172504,8 @@ Content-Type: application/octet-stream\r
 }
 
 // src/qmetry/requirements.ts
-function registerQMetryRequirementTools(server2) {
-  server2.addTool({
+function registerQMetryRequirementTools(server) {
+  server.addTool({
     name: "qmetry_search_requirements",
     description: "Get test cases linked to a specific Jira requirement (issue). In QMetry, 'requirements' are Jira issues \u2014 this returns all test cases that cover a given Jira issue key. Uses POST /requirements/{id}/testcases where {id} is the Jira issue key.",
     parameters: external_exports4.object({
@@ -172202,8 +172524,8 @@ function registerQMetryRequirementTools(server2) {
 }
 
 // src/qmetry/folders.ts
-function registerQMetryFolderTools(server2, opts) {
-  server2.addTool({
+function registerQMetryFolderTools(server, opts) {
+  server.addTool({
     name: "qmetry_search_folders",
     description: "Search test case folders in a QMetry project by name. Folders organise test cases into suites \u2014 use the returned folder IDs to filter test case searches.",
     parameters: external_exports4.object({
@@ -172219,7 +172541,7 @@ function registerQMetryFolderTools(server2, opts) {
       );
     })
   });
-  server2.addTool({
+  server.addTool({
     name: "qmetry_create_folder",
     description: "Create a new test case folder in a QMetry project for organising test cases.",
     parameters: external_exports4.object({
@@ -172237,19 +172559,19 @@ function registerQMetryFolderTools(server2, opts) {
 }
 
 // src/qmetry/index.ts
-function registerQMetryTools(server2, opts) {
-  registerQMetryProjectTools(server2);
-  registerQMetryTestCaseTools(server2, opts);
-  registerQMetryTestCycleTools(server2, opts);
-  registerQMetryTestPlanTools(server2);
-  registerQMetryExecutionTools(server2, opts);
-  registerQMetryRequirementTools(server2);
-  registerQMetryFolderTools(server2, opts);
+function registerQMetryTools(server, opts) {
+  registerQMetryProjectTools(server);
+  registerQMetryTestCaseTools(server, opts);
+  registerQMetryTestCycleTools(server, opts);
+  registerQMetryTestPlanTools(server);
+  registerQMetryExecutionTools(server, opts);
+  registerQMetryRequirementTools(server);
+  registerQMetryFolderTools(server, opts);
 }
 
 // src/common/configTools.ts
-function registerCredentialTools(server2) {
-  server2.addTool({
+function registerCredentialTools(server) {
+  server.addTool({
     name: "configure_credentials",
     description: `Persist Atlassian Cloud + Bitbucket Cloud credentials to ${CONFIG_FILE_PATH} (mode 0600). Subsequent server starts will use these without env vars. Env vars still take precedence when set, letting you override per-session for CI or temporary use. Pass only the fields you want to set/update; existing fields are preserved.`,
     parameters: external_exports4.object({
@@ -172332,7 +172654,7 @@ function registerCredentialTools(server2) {
       );
     }
   });
-  server2.addTool({
+  server.addTool({
     name: "get_credentials_status",
     description: "Report which credentials are currently configured: file path, file permissions, what's stored on file (tokens masked), what's currently effective per product, and resolution source for each value.",
     parameters: external_exports4.object({}),
@@ -172390,7 +172712,7 @@ function registerCredentialTools(server2) {
       );
     }
   });
-  server2.addTool({
+  server.addTool({
     name: "clear_credentials",
     description: `Delete the credential file at ${CONFIG_FILE_PATH}. Env vars are unaffected. Restart Claude Code afterwards.`,
     parameters: external_exports4.object({
@@ -172442,27 +172764,34 @@ function resolutionSource(product) {
 }
 
 // src/server.ts
-var server = new FastMCP({
-  name: "Acendas Atlassian Suite",
-  version: "0.2.1"
-});
-var jiraReady = loadJiraConfig() !== null;
-var confluenceReady = loadConfluenceConfig() !== null;
-var bitbucketReady = loadBitbucketConfig() !== null;
-var qmetryReady = loadQMetryConfig() !== null;
-var readOnly = isReadOnly();
-console.error(
-  `[acendas-atlassian] starting. jira=${jiraReady} confluence=${confluenceReady} bitbucket=${bitbucketReady} qmetry=${qmetryReady} read_only=${readOnly}`
-);
-registerCredentialTools(server);
-if (jiraReady) registerJiraTools(server, { readOnly });
-if (confluenceReady) registerConfluenceTools(server, { readOnly });
-if (bitbucketReady) registerBitbucketTools(server, { readOnly });
-if (qmetryReady) registerQMetryTools(server, { readOnly });
-if (!jiraReady && !confluenceReady && !bitbucketReady) {
-  console.error(
-    "[acendas-atlassian] WARNING: no products configured. Set JIRA_URL, CONFLUENCE_URL, and/or BITBUCKET_WORKSPACE plus credentials."
-  );
+if (process.argv[2] === "watch-pipeline") {
+  void runPipelineWatchCli(process.argv.slice(3));
+} else {
+  startServer();
 }
-server.start({ transportType: "stdio" });
+function startServer() {
+  const server = new FastMCP({
+    name: "Acendas Atlassian Suite",
+    version: "0.2.1"
+  });
+  const jiraReady = loadJiraConfig() !== null;
+  const confluenceReady = loadConfluenceConfig() !== null;
+  const bitbucketReady = loadBitbucketConfig() !== null;
+  const qmetryReady = loadQMetryConfig() !== null;
+  const readOnly = isReadOnly();
+  console.error(
+    `[acendas-atlassian] starting. jira=${jiraReady} confluence=${confluenceReady} bitbucket=${bitbucketReady} qmetry=${qmetryReady} read_only=${readOnly}`
+  );
+  registerCredentialTools(server);
+  if (jiraReady) registerJiraTools(server, { readOnly });
+  if (confluenceReady) registerConfluenceTools(server, { readOnly });
+  if (bitbucketReady) registerBitbucketTools(server, { readOnly });
+  if (qmetryReady) registerQMetryTools(server, { readOnly });
+  if (!jiraReady && !confluenceReady && !bitbucketReady) {
+    console.error(
+      "[acendas-atlassian] WARNING: no products configured. Set JIRA_URL, CONFLUENCE_URL, and/or BITBUCKET_WORKSPACE plus credentials."
+    );
+  }
+  server.start({ transportType: "stdio" });
+}
 //# sourceMappingURL=server.js.map
