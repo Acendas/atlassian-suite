@@ -238,23 +238,37 @@ export function registerQMetryTestCaseTools(server: FastMCP, opts: { readOnly: b
 
   server.addTool({
     name: "qmetry_create_test_step",
-    description: "Add a new step to a test case version. Steps have an action (what to do) and an expected result.",
+    description: "Add one or more steps to a test case version. Pass step (+ expected_result, test_data) for one step, or steps for several in one call.",
     parameters: z.object({
       test_case_id: z.string().describe("Internal QMetry test case ID"),
       version: z.number().int().min(1).default(1),
-      step: z.string().describe("Step action — what the tester should do"),
+      step: z.string().optional().describe("Step action — what the tester should do"),
       expected_result: z.string().optional().describe("Expected outcome for this step"),
       test_data: z.string().optional().describe("Optional test data or preconditions for this step"),
+      steps: z.array(z.object({
+        step: z.string().describe("Step action — what the tester should do"),
+        expected_result: z.string().optional(),
+        test_data: z.string().optional(),
+      })).optional().describe("Several steps to create in order, instead of the single step fields"),
     }),
     execute: async (args) =>
       safeQMetry(() => {
         ensureWritable(opts.readOnly);
+        const items = [
+          ...(args.step ? [{ step: args.step, expected_result: args.expected_result, test_data: args.test_data }] : []),
+          ...(args.steps ?? []),
+        ];
+        if (items.length === 0) throw new Error("Provide step or steps.");
         // CreateTestStepRequest: the action field is `stepDetails` (required),
         // not `step`. Sending `step` leaves the action blank.
-        const body: Record<string, unknown> = { stepDetails: args.step };
-        if (args.expected_result) body.expectedResult = args.expected_result;
-        if (args.test_data) body.testData = args.test_data;
-        // POST /testcases/{id}/versions/{no}/teststeps creates one or more steps
+        const body = items.map((i) => {
+          const o: Record<string, unknown> = { stepDetails: i.step };
+          if (i.expected_result) o.expectedResult = i.expected_result;
+          if (i.test_data) o.testData = i.test_data;
+          return o;
+        });
+        // POST /testcases/{id}/versions/{no}/teststeps takes a JSON ARRAY of steps.
+        // A single object returns 400 "Invalid request body" (verified on QMetry Cloud).
         return qmetryClient().post<unknown>(
           `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
           body,

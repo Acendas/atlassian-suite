@@ -106,11 +106,15 @@ const tests: Test[] = [
     eq(w.body.status, 102, "status integer id"); eq(w.body.summary, "S2", "summary");
     assert(!("labels" in w.body), "update must not send a flat labels array (spec uses MetaDataUpdateRequest)");
   } },
-  { name: "create_test_step: action field is stepDetails not step", fn: async () => {
+  { name: "create_test_step: body is an array; action field is stepDetails not step", fn: async () => {
     const w = await write("qmetry_create_test_step", { test_case_id: "abc", version: 1, step: "do x", expected_result: "y", test_data: "d" });
     eq(w.method, "POST", "method"); assert(w.url.endsWith("/versions/1/teststeps"), `path ${w.url}`);
-    eq(w.body.stepDetails, "do x", "stepDetails (required CreateTestStepRequest field)");
-    assert(!("step" in w.body), "must NOT send `step`"); eq(w.body.expectedResult, "y", "expectedResult"); eq(w.body.testData, "d", "testData");
+    assert(Array.isArray(w.body), "body must be an array (single object -> 400 on QMetry Cloud)");
+    eq(w.body, [{ stepDetails: "do x", expectedResult: "y", testData: "d" }], "array of CreateTestStepRequest");
+  } },
+  { name: "create_test_step: steps[] creates several in order", fn: async () => {
+    const w = await write("qmetry_create_test_step", { test_case_id: "abc", version: 1, steps: [{ step: "a" }, { step: "b", expected_result: "ok" }] });
+    eq(w.body, [{ stepDetails: "a" }, { stepDetails: "b", expectedResult: "ok" }], "two steps");
   } },
   { name: "update_test_step: stepDetails + id", fn: async () => {
     const w = await write("qmetry_update_test_step", { test_case_id: "abc", version: 1, step_id: 9, step: "new", expected_result: "z" });

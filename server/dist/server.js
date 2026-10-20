@@ -171967,19 +171967,32 @@ function registerQMetryTestCaseTools(server, opts) {
   });
   server.addTool({
     name: "qmetry_create_test_step",
-    description: "Add a new step to a test case version. Steps have an action (what to do) and an expected result.",
+    description: "Add one or more steps to a test case version. Pass step (+ expected_result, test_data) for one step, or steps for several in one call.",
     parameters: external_exports4.object({
       test_case_id: external_exports4.string().describe("Internal QMetry test case ID"),
       version: external_exports4.number().int().min(1).default(1),
-      step: external_exports4.string().describe("Step action \u2014 what the tester should do"),
+      step: external_exports4.string().optional().describe("Step action \u2014 what the tester should do"),
       expected_result: external_exports4.string().optional().describe("Expected outcome for this step"),
-      test_data: external_exports4.string().optional().describe("Optional test data or preconditions for this step")
+      test_data: external_exports4.string().optional().describe("Optional test data or preconditions for this step"),
+      steps: external_exports4.array(external_exports4.object({
+        step: external_exports4.string().describe("Step action \u2014 what the tester should do"),
+        expected_result: external_exports4.string().optional(),
+        test_data: external_exports4.string().optional()
+      })).optional().describe("Several steps to create in order, instead of the single step fields")
     }),
     execute: async (args) => safeQMetry(() => {
       ensureWritable4(opts.readOnly);
-      const body = { stepDetails: args.step };
-      if (args.expected_result) body.expectedResult = args.expected_result;
-      if (args.test_data) body.testData = args.test_data;
+      const items = [
+        ...args.step ? [{ step: args.step, expected_result: args.expected_result, test_data: args.test_data }] : [],
+        ...args.steps ?? []
+      ];
+      if (items.length === 0) throw new Error("Provide step or steps.");
+      const body = items.map((i) => {
+        const o = { stepDetails: i.step };
+        if (i.expected_result) o.expectedResult = i.expected_result;
+        if (i.test_data) o.testData = i.test_data;
+        return o;
+      });
       return qmetryClient().post(
         `/testcases/${encodeURIComponent(args.test_case_id)}/versions/${args.version}/teststeps`,
         body
